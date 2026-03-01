@@ -13,12 +13,44 @@ interface Job {
   rawJD: string;
 }
 
+interface Interview {
+  id: string;
+  candidateId: string;
+  candidate: {
+    id: string;
+    fullName: string;
+    email: string | null;
+  };
+  transcriptText: string;
+  createdAt: string;
+}
+
+interface Evaluation {
+  id: string;
+  candidateId: string;
+  candidate: {
+    id: string;
+    fullName: string;
+    email: string | null;
+  };
+  signalsJson: any;
+  finalScoreJson: any;
+  createdAt: string;
+}
+
 export default function JobDetailsPage() {
   const params = useParams();
   const router = useRouter();
   const [job, setJob] = useState<Job | null>(null);
+  const [interviews, setInterviews] = useState<Interview[]>([]);
+  const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showInterviewModal, setShowInterviewModal] = useState(false);
+  const [candidates, setCandidates] = useState<any[]>([]);
+  const [selectedCandidate, setSelectedCandidate] = useState("");
+  const [transcript, setTranscript] = useState("");
+  const [isCreatingInterview, setIsCreatingInterview] = useState(false);
 
   // Fetch job details
   const fetchJob = async () => {
@@ -40,16 +72,113 @@ export default function JobDetailsPage() {
     } catch (error) {
       console.error("Error fetching job:", error);
       setError("Failed to load job details");
-    } finally {
-      setLoading(false);
+    }
+  };
+
+  // Fetch interviews for this job
+  const fetchInterviews = async () => {
+    try {
+      const response = await fetch(`/api/interviews?jobId=${params.id}`, {
+        headers: {
+          "x-org-id": "cmm87bloy0000v9nvvzyt6aqn"
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setInterviews(data.interviews || []);
+      }
+    } catch (error) {
+      console.error("Error fetching interviews:", error);
+    }
+  };
+
+  // Fetch evaluations for this job
+  const fetchEvaluations = async () => {
+    try {
+      const response = await fetch(`/api/evaluations?jobId=${params.id}`, {
+        headers: {
+          "x-org-id": "cmm87bloy0000v9nvvzyt6aqn"
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setEvaluations(data.evaluations || []);
+      }
+    } catch (error) {
+      console.error("Error fetching evaluations:", error);
+    }
+  };
+
+  // Fetch candidates for interview creation
+  const fetchCandidates = async () => {
+    try {
+      const response = await fetch("/api/candidates", {
+        headers: {
+          "x-org-id": "cmm87bloy0000v9nvvzyt6aqn"
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setCandidates(data.candidates || []);
+      }
+    } catch (error) {
+      console.error("Error fetching candidates:", error);
     }
   };
 
   useEffect(() => {
     if (params.id) {
-      fetchJob();
+      setLoading(true);
+      Promise.all([fetchJob(), fetchInterviews(), fetchEvaluations(), fetchCandidates()])
+        .finally(() => setLoading(false));
     }
   }, [params.id]);
+
+  // Handle interview creation
+  const handleCreateInterview = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!selectedCandidate || !transcript.trim()) {
+      return;
+    }
+
+    setIsCreatingInterview(true);
+    
+    try {
+      const response = await fetch("/api/interviews", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-org-id": "cmm87bloy0000v9nvvzyt6aqn"
+        },
+        body: JSON.stringify({
+          jobId: params.id,
+          candidateId: selectedCandidate,
+          transcriptText: transcript.trim()
+        })
+      });
+
+      if (response.ok) {
+        // Reset form and close modal
+        setSelectedCandidate("");
+        setTranscript("");
+        setShowInterviewModal(false);
+        
+        // Refresh interviews list
+        await fetchInterviews();
+      } else {
+        const error = await response.json();
+        console.error("Error creating interview:", error);
+      }
+    } catch (error) {
+      console.error("Error creating interview:", error);
+    } finally {
+      setIsCreatingInterview(false);
+    }
+  };
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -60,24 +189,64 @@ export default function JobDetailsPage() {
     }
   };
 
+  // Loading state
   if (loading) {
     return (
-      <div className="text-center py-12">
-        <div className="text-gray-500">Loading job details...</div>
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
+          <div className="text-gray-500">Loading job details...</div>
+        </div>
       </div>
     );
   }
 
-  if (error || !job) {
+  // 404 error state
+  if (error === "Job not found" || !job) {
     return (
-      <div className="text-center py-12">
-        <div className="text-red-600 mb-4">{error || "Job not found"}</div>
-        <Link
-          href="/app/jobs"
-          className="text-indigo-600 hover:text-indigo-900"
-        >
-          ← Back to Jobs
-        </Link>
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="text-gray-400 text-6xl mb-4">🔍</div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Job Not Found</h1>
+          <p className="text-gray-600 mb-6">
+            The job you're looking for doesn't exist or has been removed.
+          </p>
+          <Link
+            href="/app/jobs"
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 transition-colors"
+          >
+            ← Back to Jobs
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
+  // General error state
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="text-red-400 text-6xl mb-4">⚠️</div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Something went wrong</h1>
+          <p className="text-gray-600 mb-6">
+            {error}
+          </p>
+          <div className="space-x-3">
+            <button
+              onClick={() => window.location.reload()}
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 transition-colors"
+            >
+              Try Again
+            </button>
+            <Link
+              href="/app/jobs"
+              className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 transition-colors"
+            >
+              ← Back to Jobs
+            </Link>
+          </div>
+        </div>
       </div>
     );
   }
@@ -106,6 +275,22 @@ export default function JobDetailsPage() {
         </p>
       </div>
 
+      {/* Action Buttons */}
+      <div className="mb-8 flex flex-wrap gap-3">
+        <Link
+          href="/app/candidates"
+          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 transition-colors"
+        >
+          👤 Add Candidate
+        </Link>
+        <button
+          onClick={() => setShowInterviewModal(true)}
+          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 transition-colors"
+        >
+          🎤 Create Interview
+        </button>
+      </div>
+
       {/* Job Details */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Main Content */}
@@ -124,20 +309,84 @@ export default function JobDetailsPage() {
             </div>
           </div>
 
-          {/* Actions */}
+          {/* Linked Interviews & Evaluations */}
           <div className="bg-white shadow rounded-lg">
             <div className="px-6 py-4 border-b border-gray-200">
-              <h2 className="text-lg font-medium text-gray-900">Actions</h2>
+              <h2 className="text-lg font-medium text-gray-900">Linked Interviews & Evaluations</h2>
             </div>
             <div className="px-6 py-4">
-              <div className="flex space-x-3">
-                <button className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors">
-                  Edit Job
-                </button>
-                <button className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors">
-                  Archive Job
-                </button>
-              </div>
+              {interviews.length === 0 && evaluations.length === 0 ? (
+                <div className="text-center py-8">
+                  <div className="text-gray-400 text-4xl mb-3">📋</div>
+                  <p className="text-gray-500 mb-4">No interviews or evaluations yet</p>
+                  <div className="space-x-3">
+                    <Link
+                      href="/app/candidates"
+                      className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 transition-colors"
+                    >
+                      Add Candidate
+                    </Link>
+                    <button
+                      onClick={() => setShowInterviewModal(true)}
+                      className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 transition-colors"
+                    >
+                      Create Interview
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* Interviews */}
+                  {interviews.length > 0 && (
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-900 mb-2">Interviews ({interviews.length})</h3>
+                      <div className="space-y-2">
+                        {interviews.map((interview) => (
+                          <div key={interview.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
+                            <div>
+                              <div className="font-medium text-gray-900">{interview.candidate.fullName}</div>
+                              <div className="text-sm text-gray-500">
+                                {new Date(interview.createdAt).toLocaleDateString()}
+                              </div>
+                            </div>
+                            <Link
+                              href={`/app/interviews/${interview.id}`}
+                              className="text-indigo-600 hover:text-indigo-900 text-sm"
+                            >
+                              View Interview
+                            </Link>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Evaluations */}
+                  {evaluations.length > 0 && (
+                    <div>
+                      <h3 className="text-sm font-medium text-gray-900 mb-2">Evaluations ({evaluations.length})</h3>
+                      <div className="space-y-2">
+                        {evaluations.map((evaluation) => (
+                          <div key={evaluation.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
+                            <div>
+                              <div className="font-medium text-gray-900">{evaluation.candidate.fullName}</div>
+                              <div className="text-sm text-gray-500">
+                                {new Date(evaluation.createdAt).toLocaleDateString()}
+                              </div>
+                            </div>
+                            <Link
+                              href={`/app/evaluations/${evaluation.id}`}
+                              className="text-indigo-600 hover:text-indigo-900 text-sm"
+                            >
+                              View Evaluation
+                            </Link>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -186,21 +435,94 @@ export default function JobDetailsPage() {
             </div>
             <div className="px-6 py-4 space-y-4">
               <div className="flex justify-between">
-                <span className="text-sm text-gray-500">Total Applicants</span>
-                <span className="text-sm font-medium text-gray-900">0</span>
+                <span className="text-sm text-gray-500">Total Interviews</span>
+                <span className="text-sm font-medium text-gray-900">{interviews.length}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-sm text-gray-500">Interviews Scheduled</span>
-                <span className="text-sm font-medium text-gray-900">0</span>
+                <span className="text-sm text-gray-500">Evaluations</span>
+                <span className="text-sm font-medium text-gray-900">{evaluations.length}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-sm text-gray-500">Evaluations Completed</span>
-                <span className="text-sm font-medium text-gray-900">0</span>
+                <span className="text-sm text-gray-500">Candidates</span>
+                <span className="text-sm font-medium text-gray-900">
+                  {new Set([...interviews.map(i => i.candidateId), ...evaluations.map(e => e.candidateId)]).size}
+                </span>
               </div>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Create Interview Modal */}
+      {showInterviewModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
+                Create Interview
+              </h3>
+              
+              <form onSubmit={handleCreateInterview} className="space-y-4">
+                <div>
+                  <label htmlFor="candidate" className="block text-sm font-medium text-gray-700 mb-1">
+                    Select Candidate *
+                  </label>
+                  <select
+                    id="candidate"
+                    value={selectedCandidate}
+                    onChange={(e) => setSelectedCandidate(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    required
+                  >
+                    <option value="">Choose a candidate...</option>
+                    {candidates.map((candidate) => (
+                      <option key={candidate.id} value={candidate.id}>
+                        {candidate.fullName} {candidate.email && `(${candidate.email})`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label htmlFor="transcript" className="block text-sm font-medium text-gray-700 mb-1">
+                    Interview Transcript *
+                  </label>
+                  <textarea
+                    id="transcript"
+                    value={transcript}
+                    onChange={(e) => setTranscript(e.target.value)}
+                    rows={6}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    placeholder="Paste or type the interview transcript here..."
+                    required
+                  />
+                </div>
+
+                <div className="flex justify-end space-x-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowInterviewModal(false);
+                      setSelectedCandidate("");
+                      setTranscript("");
+                    }}
+                    className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isCreatingInterview}
+                    className="px-4 py-2 bg-indigo-600 border border-transparent rounded-md text-sm font-medium text-white hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isCreatingInterview ? "Creating..." : "Create Interview"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
