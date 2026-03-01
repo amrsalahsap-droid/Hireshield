@@ -51,6 +51,10 @@ export default function JobDetailsPage() {
   const [selectedCandidate, setSelectedCandidate] = useState("");
   const [transcript, setTranscript] = useState("");
   const [isCreatingInterview, setIsCreatingInterview] = useState(false);
+  const [formErrors, setFormErrors] = useState({
+    candidate: "",
+    transcript: ""
+  });
 
   // Fetch job details
   const fetchJob = async () => {
@@ -141,7 +145,23 @@ export default function JobDetailsPage() {
   const handleCreateInterview = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!selectedCandidate || !transcript.trim()) {
+    // Validate form
+    const newErrors = {
+      candidate: "",
+      transcript: ""
+    };
+
+    if (!selectedCandidate) {
+      newErrors.candidate = "Please select a candidate";
+    }
+
+    if (!transcript.trim()) {
+      newErrors.transcript = "Interview transcript is required";
+    }
+
+    setFormErrors(newErrors);
+
+    if (newErrors.candidate || newErrors.transcript) {
       return;
     }
 
@@ -166,6 +186,7 @@ export default function JobDetailsPage() {
         setSelectedCandidate("");
         setTranscript("");
         setShowInterviewModal(false);
+        setFormErrors({ candidate: "", transcript: "" });
         
         // Refresh interviews list
         await fetchInterviews();
@@ -470,8 +491,15 @@ export default function JobDetailsPage() {
                   <select
                     id="candidate"
                     value={selectedCandidate}
-                    onChange={(e) => setSelectedCandidate(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    onChange={(e) => {
+                      setSelectedCandidate(e.target.value);
+                      if (formErrors.candidate) {
+                        setFormErrors(prev => ({ ...prev, candidate: "" }));
+                      }
+                    }}
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                      formErrors.candidate ? "border-red-500" : "border-gray-300"
+                    }`}
                     required
                   >
                     <option value="">Choose a candidate...</option>
@@ -481,6 +509,9 @@ export default function JobDetailsPage() {
                       </option>
                     ))}
                   </select>
+                  {formErrors.candidate && (
+                    <p className="mt-1 text-sm text-red-600">{formErrors.candidate}</p>
+                  )}
                 </div>
 
                 <div>
@@ -490,12 +521,22 @@ export default function JobDetailsPage() {
                   <textarea
                     id="transcript"
                     value={transcript}
-                    onChange={(e) => setTranscript(e.target.value)}
+                    onChange={(e) => {
+                      setTranscript(e.target.value);
+                      if (formErrors.transcript) {
+                        setFormErrors(prev => ({ ...prev, transcript: "" }));
+                      }
+                    }}
                     rows={6}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                      formErrors.transcript ? "border-red-500" : "border-gray-300"
+                    }`}
                     placeholder="Paste or type the interview transcript here..."
                     required
                   />
+                  {formErrors.transcript && (
+                    <p className="mt-1 text-sm text-red-600">{formErrors.transcript}</p>
+                  )}
                 </div>
 
                 <div className="flex justify-end space-x-3 pt-4">
@@ -505,6 +546,7 @@ export default function JobDetailsPage() {
                       setShowInterviewModal(false);
                       setSelectedCandidate("");
                       setTranscript("");
+                      setFormErrors({ candidate: "", transcript: "" });
                     }}
                     className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
                   >
