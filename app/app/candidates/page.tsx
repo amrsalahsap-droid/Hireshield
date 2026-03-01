@@ -74,6 +74,8 @@ export default function CandidatesPage() {
 
     if (!formData.rawCVText.trim()) {
       newErrors.rawCVText = "CV text is required";
+    } else if (formData.rawCVText.length > 20000) {
+      newErrors.rawCVText = "CV text must be less than 20,000 characters";
     }
 
     setErrors(newErrors);
@@ -115,6 +117,22 @@ export default function CandidatesPage() {
       } else {
         const error = await response.json();
         console.error("Error creating candidate:", error);
+        
+        // Handle validation errors from server
+        if (error.error && response.status === 400) {
+          // Parse error message to set appropriate field errors
+          if (error.error.includes("name")) {
+            setErrors(prev => ({ ...prev, fullName: error.error }));
+          } else if (error.error.includes("CV") || error.error.includes("characters")) {
+            setErrors(prev => ({ ...prev, rawCVText: error.error }));
+          } else if (error.error.includes("email")) {
+            // Email is optional, so show as a general error
+            setErrors(prev => ({ ...prev, fullName: error.error }));
+          } else {
+            // Generic error
+            setErrors({ fullName: error.error, rawCVText: "" });
+          }
+        }
       }
     } catch (error) {
       console.error("Error creating candidate:", error);
@@ -300,9 +318,16 @@ export default function CandidatesPage() {
                     }`}
                     placeholder="Paste the complete CV text here. Supports large content and preserves formatting..."
                   />
-                  {errors.rawCVText && (
-                    <p className="mt-1 text-sm text-red-600">{errors.rawCVText}</p>
-                  )}
+                  <div className="mt-1 flex justify-between">
+                    {errors.rawCVText && (
+                      <p className="text-sm text-red-600">{errors.rawCVText}</p>
+                    )}
+                    <p className={`text-sm ${
+                      formData.rawCVText.length > 20000 ? "text-red-600" : "text-gray-500"
+                    }`}>
+                      {formData.rawCVText.length.toLocaleString()} / 20,000 characters
+                    </p>
+                  </div>
                   <p className="mt-1 text-xs text-gray-500">
                     Supports large text content. Paste the complete CV including all sections, experience, education, etc.
                   </p>

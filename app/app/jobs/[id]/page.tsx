@@ -161,6 +161,8 @@ export default function JobDetailsPage() {
 
     if (!transcript.trim()) {
       newErrors.transcript = "Interview transcript is required";
+    } else if (transcript.length > 50000) {
+      newErrors.transcript = "Interview transcript must be less than 50,000 characters";
     }
 
     setFormErrors(newErrors);
@@ -197,6 +199,19 @@ export default function JobDetailsPage() {
       } else {
         const error = await response.json();
         console.error("Error creating interview:", error);
+        
+        // Handle validation errors from server
+        if (error.error && response.status === 400) {
+          // Parse error message to set appropriate field errors
+          if (error.error.includes("candidate")) {
+            setFormErrors(prev => ({ ...prev, candidate: error.error }));
+          } else if (error.error.includes("transcript") || error.error.includes("characters")) {
+            setFormErrors(prev => ({ ...prev, transcript: error.error }));
+          } else {
+            // Generic error
+            setFormErrors({ candidate: error.error, transcript: "", evaluationCandidate: "" });
+          }
+        }
       }
     } catch (error) {
       console.error("Error creating interview:", error);
@@ -605,9 +620,16 @@ export default function JobDetailsPage() {
                     placeholder="Paste or type the interview transcript here..."
                     required
                   />
-                  {formErrors.transcript && (
-                    <p className="mt-1 text-sm text-red-600">{formErrors.transcript}</p>
-                  )}
+                  <div className="mt-1 flex justify-between">
+                    {formErrors.transcript && (
+                      <p className="text-sm text-red-600">{formErrors.transcript}</p>
+                    )}
+                    <p className={`text-sm ${
+                      transcript.length > 50000 ? "text-red-600" : "text-gray-500"
+                    }`}>
+                      {transcript.length.toLocaleString()} / 50,000 characters
+                    </p>
+                  </div>
                 </div>
 
                 <div className="flex justify-end space-x-3 pt-4">
