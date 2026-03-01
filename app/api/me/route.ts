@@ -1,7 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { requireAuthAndOrg } from "@/lib/server/auth";
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const user = await requireAuthAndOrg();
     
