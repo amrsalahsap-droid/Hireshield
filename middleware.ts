@@ -7,15 +7,11 @@ const isPublicRoute = createRouteMatcher([
   "/api/health(.*)",
 ]);
 
-export default clerkMiddleware(async (auth, req) => {
+export default clerkMiddleware((auth, req) => {
+  // Clerk will automatically handle authentication for non-public routes
   if (!isPublicRoute(req)) {
-    // Check if user is authenticated
-    const { userId } = await auth();
-    if (!userId) {
-      // Redirect to sign-in page
-      const { redirectToSignIn } = await auth();
-      return redirectToSignIn();
-    }
+    // This will trigger Clerk's authentication flow
+    auth();
   }
 });
 
