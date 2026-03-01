@@ -138,16 +138,14 @@ export const POST = withOrgContext(async (request: NextRequest, orgId: string) =
       data: {
         jobId,
         candidateId,
-        signalsJson: null,
-        finalScoreJson: null,
+        signalsJson: null as any,
+        finalScoreJson: null as any,
         orgId,
       },
       include: {
         job: {
           select: {
             id: true,
-            title: true,
-            status: true,
           },
         },
         candidate: {
