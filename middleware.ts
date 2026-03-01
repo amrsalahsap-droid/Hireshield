@@ -1,20 +1,18 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 
-const isProtectedRoute = createRouteMatcher([
-  "/app(.*)",
-  "/api/(.*)",
+const isPublicRoute = createRouteMatcher([
+  "/",
+  "/login(.*)",
+  "/signup(.*)",
+  "/api/health(.*)",
 ]);
 
 export default clerkMiddleware((auth, req) => {
-  // Temporarily disable protection until Clerk is configured
-  // TODO: Re-enable protection after adding Clerk environment variables
-  /*
-  if (process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY && process.env.CLERK_SECRET_KEY) {
-    if (isProtectedRoute(req)) {
-      auth().protect();
-    }
+  if (!isPublicRoute(req)) {
+    auth().protect({
+      redirectToSignIn: true,
+    });
   }
-  */
 });
 
 export const config = {
