@@ -1,13 +1,13 @@
 import { UserButton } from "@clerk/nextjs";
 import Link from "next/link";
-import { auth } from "@clerk/nextjs/server";
+import { auth, currentUser } from "@clerk/nextjs/server";
 
-export default function AppLayout({
+export default async function AppLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const { userId } = auth();
+  const user = await currentUser();
 
   const navigation = [
     { name: "Overview", href: "/app", icon: "📊" },
@@ -42,9 +42,8 @@ export default function AppLayout({
         {/* User info */}
         <div className="absolute bottom-0 w-64 p-6 border-t border-gray-200">
           <div className="flex flex-col space-y-2">
-            {/* Trigger deployment */}
             <div className="text-sm text-gray-500">
-              {userId ? `User: ${userId.slice(0, 8)}...` : "Not authenticated"}
+              {user?.id ? `User: ${user.id.slice(0, 8)}...` : "Not authenticated"}
             </div>
             <UserButton 
               afterSignOutUrl="/"
