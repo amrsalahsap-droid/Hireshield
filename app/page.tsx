@@ -28,6 +28,10 @@ export default function Home() {
         <p className="text-sm text-gray-500 mt-8">
           Join thousands of companies using AI to streamline their hiring process
         </p>
+        
+        <div className="mt-4 text-xs text-gray-400">
+          v2.0
+        </div>
       </div>
     </div>
   );
