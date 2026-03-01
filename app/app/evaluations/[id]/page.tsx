@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { ErrorState, LoadingState } from "@/components/ui/ErrorState";
 
 interface Evaluation {
   id: string;
@@ -45,81 +46,57 @@ export default function EvaluationDetailsPage() {
       } else if (response.status === 404) {
         setError("Evaluation not found");
       } else {
-        setError("Failed to load evaluation details");
+        throw new Error("Failed to load evaluation details");
       }
     } catch (error) {
       console.error("Error fetching evaluation:", error);
-      setError("Failed to load evaluation details");
+      setError("Unable to load evaluation details. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
+  // Refresh data
+  const refreshData = async () => {
+    setLoading(true);
+    setError(null);
+    await fetchEvaluation();
+  };
+
   useEffect(() => {
     if (params.id) {
-      fetchEvaluation();
+      refreshData();
     }
   }, [params.id]);
 
   // Loading state
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto mb-4"></div>
-          <div className="text-gray-500">Loading evaluation details...</div>
-        </div>
-      </div>
-    );
+    return <LoadingState message="Loading evaluation details..." />;
   }
 
   // 404 error state
   if (error === "Evaluation not found" || !evaluation) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="text-gray-400 text-6xl mb-4">📊</div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Evaluation Not Found</h1>
-          <p className="text-gray-600 mb-6">
-            The evaluation you're looking for doesn't exist or has been removed.
-          </p>
-          <Link
-            href="/app/jobs"
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 transition-colors"
-          >
-            ← Back to Jobs
-          </Link>
-        </div>
-      </div>
+      <ErrorState
+        title="Evaluation Not Found"
+        message="The evaluation you're looking for doesn't exist or has been removed."
+        onBack={() => router.push("/app/jobs")}
+        backText="Back to Jobs"
+        icon="📊"
+      />
     );
   }
 
   // General error state
   if (error) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="text-red-400 text-6xl mb-4">⚠️</div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Something went wrong</h1>
-          <p className="text-gray-600 mb-6">
-            {error}
-          </p>
-          <div className="space-x-3">
-            <button
-              onClick={() => window.location.reload()}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 transition-colors"
-            >
-              Try Again
-            </button>
-            <Link
-              href="/app/jobs"
-              className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 transition-colors"
-            >
-              ← Back to Jobs
-            </Link>
-          </div>
-        </div>
-      </div>
+      <ErrorState
+        title="Unable to Load Evaluation"
+        message={error}
+        onRetry={refreshData}
+        onBack={() => router.push("/app/jobs")}
+        backText="Back to Jobs"
+      />
     );
   }
 

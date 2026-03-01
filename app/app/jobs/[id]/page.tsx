@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { ErrorState, LoadingState } from "@/components/ui/ErrorState";
 
 interface Job {
   id: string;
@@ -74,11 +75,11 @@ export default function JobDetailsPage() {
       } else if (response.status === 404) {
         setError("Job not found");
       } else {
-        setError("Failed to load job details");
+        throw new Error("Failed to load job details");
       }
     } catch (error) {
       console.error("Error fetching job:", error);
-      setError("Failed to load job details");
+      setError("Unable to load job details. Please try again.");
     }
   };
 
@@ -94,6 +95,8 @@ export default function JobDetailsPage() {
       if (response.ok) {
         const data = await response.json();
         setInterviews(data.interviews || []);
+      } else {
+        console.error("Error fetching interviews");
       }
     } catch (error) {
       console.error("Error fetching interviews:", error);
@@ -112,6 +115,8 @@ export default function JobDetailsPage() {
       if (response.ok) {
         const data = await response.json();
         setEvaluations(data.evaluations || []);
+      } else {
+        console.error("Error fetching evaluations");
       }
     } catch (error) {
       console.error("Error fetching evaluations:", error);
@@ -130,17 +135,25 @@ export default function JobDetailsPage() {
       if (response.ok) {
         const data = await response.json();
         setCandidates(data.candidates || []);
+      } else {
+        console.error("Error fetching candidates");
       }
     } catch (error) {
       console.error("Error fetching candidates:", error);
     }
   };
 
+  // Refresh all data
+  const refreshData = async () => {
+    setLoading(true);
+    setError(null);
+    await Promise.all([fetchJob(), fetchInterviews(), fetchEvaluations(), fetchCandidates()])
+      .finally(() => setLoading(false));
+  };
+
   useEffect(() => {
     if (params.id) {
-      setLoading(true);
-      Promise.all([fetchJob(), fetchInterviews(), fetchEvaluations(), fetchCandidates()])
-        .finally(() => setLoading(false));
+      refreshData();
     }
   }, [params.id]);
 
@@ -286,63 +299,32 @@ export default function JobDetailsPage() {
 
   // Loading state
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
-          <div className="text-gray-500">Loading job details...</div>
-        </div>
-      </div>
-    );
+    return <LoadingState message="Loading job details..." />;
   }
 
   // 404 error state
   if (error === "Job not found" || !job) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="text-gray-400 text-6xl mb-4">🔍</div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Job Not Found</h1>
-          <p className="text-gray-600 mb-6">
-            The job you're looking for doesn't exist or has been removed.
-          </p>
-          <Link
-            href="/app/jobs"
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 transition-colors"
-          >
-            ← Back to Jobs
-          </Link>
-        </div>
-      </div>
+      <ErrorState
+        title="Job Not Found"
+        message="The job you're looking for doesn't exist or has been removed."
+        onBack={() => router.push("/app/jobs")}
+        backText="Back to Jobs"
+        icon="💼"
+      />
     );
   }
 
   // General error state
   if (error) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="text-red-400 text-6xl mb-4">⚠️</div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Something went wrong</h1>
-          <p className="text-gray-600 mb-6">
-            {error}
-          </p>
-          <div className="space-x-3">
-            <button
-              onClick={() => window.location.reload()}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 transition-colors"
-            >
-              Try Again
-            </button>
-            <Link
-              href="/app/jobs"
-              className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 transition-colors"
-            >
-              ← Back to Jobs
-            </Link>
-          </div>
-        </div>
-      </div>
+      <ErrorState
+        title="Unable to Load Job"
+        message={error}
+        onRetry={refreshData}
+        onBack={() => router.push("/app/jobs")}
+        backText="Back to Jobs"
+      />
     );
   }
 
