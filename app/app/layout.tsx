@@ -42,6 +42,7 @@ export default function AppLayout({
         {/* User info */}
         <div className="absolute bottom-0 w-64 p-6 border-t border-gray-200">
           <div className="flex flex-col space-y-2">
+            {/* Trigger deployment */}
             <div className="text-sm text-gray-500">
               {userId ? `User: ${userId.slice(0, 8)}...` : "Not authenticated"}
             </div>
