@@ -1,0 +1,134 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  clerkUserId  String   @unique
+  email        String
+  name         String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  
+  orgMemberships OrgMember[]
+  
+  @@map("users")
+}
+
+model Org {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  members OrgMember[]
+  jobs     Job[]
+  candidates Candidate[]
+  interviews Interview[]
+  evaluations Evaluation[]
+  
+  @@map("orgs")
+}
+
+model OrgMember {
+  id     String @id @default(cuid())
+  orgId  String
+  userId String
+  role   Role   @default(MEMBER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  org  Org  @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([orgId, userId])
+  @@map("org_members")
+}
+
+model Job {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  orgId       String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  org         Org          @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  candidates  Candidate[]
+  interviews Interview[]
+  evaluations Evaluation[]
+  
+  @@map("jobs")
+}
+
+model Candidate {
+  id        String   @id @default(cuid())
+  name      String
+  email     String?
+  resumeUrl String?
+  orgId     String
+  jobId     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  org        Org          @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  job        Job?         @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  interviews Interview[]
+  evaluations Evaluation[]
+  
+  @@map("candidates")
+}
+
+model Interview {
+  id          String   @id @default(cuid())
+  title       String
+  status      String   @default("scheduled")
+  orgId       String
+  jobId       String?
+  candidateId String?
+  scheduledAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  org       Org       @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  job       Job?      @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  candidate Candidate? @relation(fields: [candidateId], references: [id], onDelete: SetNull)
+  evaluations Evaluation[]
+  
+  @@map("interviews")
+}
+
+model Evaluation {
+  id          String   @id @default(cuid())
+  score       Float
+  feedback    String?
+  orgId       String
+  jobId       String?
+  candidateId String?
+  interviewId String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  org       Org        @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  job       Job?       @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  candidate Candidate? @relation(fields: [candidateId], references: [id], onDelete: SetNull)
+  interview Interview? @relation(fields: [interviewId], references: [id], onDelete: SetNull)
+  
+  @@map("evaluations")
+}
+
+enum Role {
+  OWNER
+  MEMBER
+}
