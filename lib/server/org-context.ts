@@ -41,7 +41,7 @@ export async function getOrgId(request: NextRequest): Promise<string> {
  * Middleware-like function to validate org context and return orgId
  * This can be used in any API route to ensure tenant safety
  */
-export function withOrgContext<T extends any[]>(
+export function withOrgContext<T extends unknown[]>(
   handler: (request: NextRequest, orgId: string, ...args: T) => Promise<Response>
 ) {
   return async (request: NextRequest, ...args: T): Promise<Response> => {

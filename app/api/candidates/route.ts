@@ -6,13 +6,13 @@ import { prisma } from "@/lib/prisma";
 export const GET = withOrgContext(async (request: NextRequest, orgId: string) => {
   try {
     // Parse query parameters for filtering and pagination
-    const { searchParams } = new URL(request.url);
+    const searchParams = new URL(request.url).searchParams;
     const name = searchParams.get("name");
     const email = searchParams.get("email");
     const limit = parseInt(searchParams.get("limit") || "20");
     const offset = parseInt(searchParams.get("offset") || "0");
 
-    const where: any = { orgId };
+    const where: { [key: string]: unknown } = { orgId };
     
     // Add name filtering (case-insensitive partial match)
     if (name) {
@@ -36,6 +36,11 @@ export const GET = withOrgContext(async (request: NextRequest, orgId: string) =>
         orderBy: { createdAt: "desc" },
         take: Math.min(limit, 100), // Max 100 items
         skip: offset,
+        select: {
+          id: true,
+          fullName: true,
+          email: true,
+        },
       }),
       prisma.candidate.count({ where }),
     ]);
@@ -113,6 +118,11 @@ export const POST = withOrgContext(async (request: NextRequest, orgId: string) =
         email: email || null,
         rawCVText: rawCVText || "",
         orgId,
+      },
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
       },
     });
 
