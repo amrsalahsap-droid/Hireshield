@@ -47,13 +47,16 @@ export default function JobDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showInterviewModal, setShowInterviewModal] = useState(false);
+  const [showEvaluationModal, setShowEvaluationModal] = useState(false);
   const [candidates, setCandidates] = useState<any[]>([]);
   const [selectedCandidate, setSelectedCandidate] = useState("");
   const [transcript, setTranscript] = useState("");
   const [isCreatingInterview, setIsCreatingInterview] = useState(false);
+  const [isCreatingEvaluation, setIsCreatingEvaluation] = useState(false);
   const [formErrors, setFormErrors] = useState({
     candidate: "",
-    transcript: ""
+    transcript: "",
+    evaluationCandidate: ""
   });
 
   // Fetch job details
@@ -148,7 +151,8 @@ export default function JobDetailsPage() {
     // Validate form
     const newErrors = {
       candidate: "",
-      transcript: ""
+      transcript: "",
+      evaluationCandidate: ""
     };
 
     if (!selectedCandidate) {
@@ -186,7 +190,7 @@ export default function JobDetailsPage() {
         setSelectedCandidate("");
         setTranscript("");
         setShowInterviewModal(false);
-        setFormErrors({ candidate: "", transcript: "" });
+        setFormErrors({ candidate: "", transcript: "", evaluationCandidate: "" });
         
         // Refresh interviews list
         await fetchInterviews();
@@ -198,6 +202,61 @@ export default function JobDetailsPage() {
       console.error("Error creating interview:", error);
     } finally {
       setIsCreatingInterview(false);
+    }
+  };
+
+  // Handle evaluation creation
+  const handleCreateEvaluation = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    // Validate form
+    const newErrors = {
+      candidate: "",
+      transcript: "",
+      evaluationCandidate: ""
+    };
+
+    if (!selectedCandidate) {
+      newErrors.evaluationCandidate = "Please select a candidate";
+    }
+
+    setFormErrors(newErrors);
+
+    if (newErrors.evaluationCandidate) {
+      return;
+    }
+
+    setIsCreatingEvaluation(true);
+    
+    try {
+      const response = await fetch("/api/evaluations", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-org-id": "cmm87bloy0000v9nvvzyt6aqn"
+        },
+        body: JSON.stringify({
+          jobId: params.id,
+          candidateId: selectedCandidate
+        })
+      });
+
+      if (response.ok) {
+        // Reset form and close modal
+        setSelectedCandidate("");
+        setShowEvaluationModal(false);
+        setFormErrors({ candidate: "", transcript: "", evaluationCandidate: "" });
+        
+        // Refresh evaluations list
+        await fetchEvaluations();
+      } else {
+        const error = await response.json();
+        console.error("Error creating evaluation:", error);
+      }
+    } catch (error) {
+      console.error("Error creating evaluation:", error);
+    } finally {
+      setIsCreatingEvaluation(false);
     }
   };
 
@@ -310,6 +369,12 @@ export default function JobDetailsPage() {
         >
           🎤 Create Interview
         </button>
+        <button
+          onClick={() => setShowEvaluationModal(true)}
+          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 transition-colors"
+        >
+          📊 Create Evaluation
+        </button>
       </div>
 
       {/* Job Details */}
@@ -352,6 +417,12 @@ export default function JobDetailsPage() {
                       className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 transition-colors"
                     >
                       Create Interview
+                    </button>
+                    <button
+                      onClick={() => setShowEvaluationModal(true)}
+                      className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 transition-colors"
+                    >
+                      Create Evaluation
                     </button>
                   </div>
                 </div>
@@ -546,7 +617,7 @@ export default function JobDetailsPage() {
                       setShowInterviewModal(false);
                       setSelectedCandidate("");
                       setTranscript("");
-                      setFormErrors({ candidate: "", transcript: "" });
+                      setFormErrors({ candidate: "", transcript: "", evaluationCandidate: "" });
                     }}
                     className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
                   >
@@ -558,6 +629,79 @@ export default function JobDetailsPage() {
                     className="px-4 py-2 bg-indigo-600 border border-transparent rounded-md text-sm font-medium text-white hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isCreatingInterview ? "Creating..." : "Create Interview"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create Evaluation Modal */}
+      {showEvaluationModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div className="mt-3">
+              <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
+                Create Evaluation
+              </h3>
+              
+              <form onSubmit={handleCreateEvaluation} className="space-y-4">
+                <div>
+                  <label htmlFor="evaluationCandidate" className="block text-sm font-medium text-gray-700 mb-1">
+                    Select Candidate *
+                  </label>
+                  <select
+                    id="evaluationCandidate"
+                    value={selectedCandidate}
+                    onChange={(e) => {
+                      setSelectedCandidate(e.target.value);
+                      if (formErrors.evaluationCandidate) {
+                        setFormErrors(prev => ({ ...prev, evaluationCandidate: "" }));
+                      }
+                    }}
+                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                      formErrors.evaluationCandidate ? "border-red-500" : "border-gray-300"
+                    }`}
+                    required
+                  >
+                    <option value="">Choose a candidate...</option>
+                    {candidates.map((candidate) => (
+                      <option key={candidate.id} value={candidate.id}>
+                        {candidate.fullName} {candidate.email && `(${candidate.email})`}
+                      </option>
+                    ))}
+                  </select>
+                  {formErrors.evaluationCandidate && (
+                    <p className="mt-1 text-sm text-red-600">{formErrors.evaluationCandidate}</p>
+                  )}
+                </div>
+
+                <div className="bg-gray-50 p-4 rounded-md">
+                  <p className="text-sm text-gray-600">
+                    <strong>Note:</strong> This will create an evaluation placeholder. 
+                    AI analysis will be processed later and the results will appear here.
+                  </p>
+                </div>
+
+                <div className="flex justify-end space-x-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowEvaluationModal(false);
+                      setSelectedCandidate("");
+                      setFormErrors({ candidate: "", transcript: "", evaluationCandidate: "" });
+                    }}
+                    className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isCreatingEvaluation}
+                    className="px-4 py-2 bg-purple-600 border border-transparent rounded-md text-sm font-medium text-white hover:bg-purple-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isCreatingEvaluation ? "Creating..." : "Create Evaluation"}
                   </button>
                 </div>
               </form>
