@@ -1,0 +1,191 @@
+{
+  "info": {
+    "name": "HireShield Jobs API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Create Job",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "x-org-id",
+            "value": "cmm87bloy0000v9nvvzyt6aqn"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Senior Software Engineer\",\n  \"rawJD\": \"We are looking for a talented software engineer with experience in React, Node.js, and cloud technologies.\",\n  \"status\": \"DRAFT\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:3000/api/jobs",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "3000",
+          "path": ["api", "jobs"]
+        }
+      }
+    },
+    {
+      "name": "List Jobs",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "x-org-id",
+            "value": "cmm87bloy0000v9nvvzyt6aqn"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:3000/api/jobs?status=ACTIVE&limit=10&offset=0",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "3000",
+          "path": ["api", "jobs"],
+          "query": [
+            {
+              "key": "status",
+              "value": "ACTIVE"
+            },
+            {
+              "key": "limit",
+              "value": "10"
+            },
+            {
+              "key": "offset",
+              "value": "0"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Get Job Details",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "x-org-id",
+            "value": "cmm87bloy0000v9nvvzyt6aqn"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:3000/api/jobs/{{jobId}}",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "3000",
+          "path": ["api", "jobs", "{{jobId}}"]
+        }
+      },
+      "description": "Replace {{jobId}} with actual job ID from create response"
+    },
+    {
+      "name": "Update Job",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "x-org-id",
+            "value": "cmm87bloy0000v9nvvzyt6aqn"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Senior Software Engineer (Remote)\",\n  \"status\": \"ACTIVE\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:3000/api/jobs/{{jobId}}",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "3000",
+          "path": ["api", "jobs", "{{jobId}}"]
+        }
+      },
+      "description": "Replace {{jobId}} with actual job ID"
+    },
+    {
+      "name": "Archive Job",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "x-org-id",
+            "value": "cmm87bloy0000v9nvvzyt6aqn"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:3000/api/jobs/{{jobId}}",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "3000",
+          "path": ["api", "jobs", "{{jobId}}"]
+        }
+      },
+      "description": "This archives the job (soft delete)"
+    },
+    {
+      "name": "Test Validation Error",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "x-org-id",
+            "value": "cmm87bloy0000v9nvvzyt6aqn"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"\",\n  \"rawJD\": \"Missing title should cause 400 error\"\n}"
+        },
+        "url": {
+          "raw": "http://localhost:3000/api/jobs",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "3000",
+          "path": ["api", "jobs"]
+        }
+      },
+      "description": "This should return a 400 error due to empty title"
+    },
+    {
+      "name": "Test Cross-Org Access",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "x-org-id",
+            "value": "fake-org-id-123"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:3000/api/jobs/{{jobId}}",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "3000",
+          "path": ["api", "jobs", "{{jobId}}"]
+        }
+      },
+      "description": "This should return 404 as the job doesn't belong to this org"
+    }
+  ],
+  "variable": [
+    {
+      "key": "jobId",
+      "value": "",
+      "description": "Set this to a valid job ID from create response"
+    }
+  ]
+}
