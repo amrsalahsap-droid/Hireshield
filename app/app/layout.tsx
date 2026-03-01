@@ -7,7 +7,13 @@ export default async function AppLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const user = await currentUser();
+  let user;
+  try {
+    user = await currentUser();
+  } catch (error) {
+    console.error("Error getting current user:", error);
+    user = null;
+  }
 
   const navigation = [
     { name: "Overview", href: "/app", icon: "📊" },
