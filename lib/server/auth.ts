@@ -24,7 +24,7 @@ export async function getCurrentUserOrThrow() {
   }
 
   const primaryEmail = clerkUser.emailAddresses.find(
-    (email: any) => email.id === clerkUser.primaryEmailAddressId
+    (email: { id: string; emailAddress: string }) => email.id === clerkUser.primaryEmailAddressId
   );
 
   if (!primaryEmail) {
