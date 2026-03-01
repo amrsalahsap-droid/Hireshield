@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { ErrorState, EmptyState, LoadingState } from "@/components/ui/ErrorState";
 
 interface Job {
   id: string;
@@ -14,6 +15,7 @@ interface Job {
 export default function JobsPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [formData, setFormData] = useState({
     title: "",
@@ -28,6 +30,7 @@ export default function JobsPage() {
   // Fetch jobs from API
   const fetchJobs = async () => {
     try {
+      setError(null);
       const response = await fetch("/api/jobs", {
         headers: {
           "x-org-id": "cmm87bloy0000v9nvvzyt6aqn" // Demo org ID
@@ -37,9 +40,12 @@ export default function JobsPage() {
       if (response.ok) {
         const data = await response.json();
         setJobs(data.jobs || []);
+      } else {
+        throw new Error("Failed to load jobs");
       }
     } catch (error) {
       console.error("Error fetching jobs:", error);
+      setError("Unable to load jobs. Please check your connection and try again.");
     } finally {
       setLoading(false);
     }
@@ -127,10 +133,13 @@ export default function JobsPage() {
             // Generic error
             setErrors({ title: error.error, rawJD: "" });
           }
+        } else {
+          throw new Error("Failed to create job");
         }
       }
     } catch (error) {
       console.error("Error creating job:", error);
+      setError("Unable to create job. Please try again.");
     } finally {
       setIsCreating(false);
     }
@@ -144,6 +153,24 @@ export default function JobsPage() {
       default: return "bg-gray-100 text-gray-800";
     }
   };
+
+  // Error state
+  if (error) {
+    return (
+      <ErrorState
+        title="Unable to Load Jobs"
+        message={error}
+        onRetry={fetchJobs}
+        onBack={() => window.location.href = "/app"}
+        backText="Back to Dashboard"
+      />
+    );
+  }
+
+  // Loading state
+  if (loading) {
+    return <LoadingState message="Loading jobs..." />;
+  }
 
   return (
     <div>
@@ -162,32 +189,21 @@ export default function JobsPage() {
         </p>
       </div>
 
-      {/* Loading State */}
-      {loading && (
-        <div className="text-center py-12">
-          <div className="text-gray-500">Loading jobs...</div>
-        </div>
-      )}
-
       {/* Empty State */}
-      {!loading && jobs.length === 0 && (
-        <div className="text-center py-12 bg-white rounded-lg shadow">
-          <div className="text-gray-400 text-5xl mb-4">💼</div>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No jobs yet</h3>
-          <p className="text-gray-500 mb-6">
-            Get started by creating your first job posting.
-          </p>
-          <button 
-            onClick={() => setShowCreateModal(true)}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
-          >
-            Create Your First Job
-          </button>
-        </div>
+      {jobs.length === 0 && (
+        <EmptyState
+          title="No jobs yet"
+          message="Get started by creating your first job posting."
+          action={{
+            text: "Create Your First Job",
+            onClick: () => setShowCreateModal(true)
+          }}
+          icon="💼"
+        />
       )}
 
       {/* Jobs Table */}
-      {!loading && jobs.length > 0 && (
+      {jobs.length > 0 && (
         <div className="bg-white shadow overflow-hidden rounded-md">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">

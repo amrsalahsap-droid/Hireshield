@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { ErrorState, LoadingState } from "@/components/ui/ErrorState";
 
 interface Candidate {
   id: string;
@@ -60,11 +61,11 @@ export default function CandidateDetailsPage() {
       } else if (response.status === 404) {
         setError("Candidate not found");
       } else {
-        setError("Failed to load candidate details");
+        throw new Error("Failed to load candidate details");
       }
     } catch (error) {
       console.error("Error fetching candidate:", error);
-      setError("Failed to load candidate details");
+      setError("Unable to load candidate details. Please try again.");
     }
   };
 
@@ -80,6 +81,8 @@ export default function CandidateDetailsPage() {
       if (response.ok) {
         const data = await response.json();
         setInterviews(data.interviews || []);
+      } else {
+        console.error("Error fetching interviews");
       }
     } catch (error) {
       console.error("Error fetching interviews:", error);
@@ -98,79 +101,56 @@ export default function CandidateDetailsPage() {
       if (response.ok) {
         const data = await response.json();
         setEvaluations(data.evaluations || []);
+      } else {
+        console.error("Error fetching evaluations");
       }
     } catch (error) {
       console.error("Error fetching evaluations:", error);
     }
   };
 
+  // Refresh all data
+  const refreshData = async () => {
+    setLoading(true);
+    setError(null);
+    await Promise.all([fetchCandidate(), fetchInterviews(), fetchEvaluations()])
+      .finally(() => setLoading(false));
+  };
+
   useEffect(() => {
     if (params.id) {
-      setLoading(true);
-      Promise.all([fetchCandidate(), fetchInterviews(), fetchEvaluations()])
-        .finally(() => setLoading(false));
+      refreshData();
     }
   }, [params.id]);
 
   // Loading state
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
-          <div className="text-gray-500">Loading candidate details...</div>
-        </div>
-      </div>
-    );
+    return <LoadingState message="Loading candidate details..." />;
   }
 
   // 404 error state
   if (error === "Candidate not found" || !candidate) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="text-gray-400 text-6xl mb-4">👤</div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Candidate Not Found</h1>
-          <p className="text-gray-600 mb-6">
-            The candidate you're looking for doesn't exist or has been removed.
-          </p>
-          <Link
-            href="/app/candidates"
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 transition-colors"
-          >
-            ← Back to Candidates
-          </Link>
-        </div>
-      </div>
+      <ErrorState
+        title="Candidate Not Found"
+        message="The candidate you're looking for doesn't exist or has been removed."
+        onBack={() => router.push("/app/candidates")}
+        backText="Back to Candidates"
+        icon="👤"
+      />
     );
   }
 
   // General error state
   if (error) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="text-red-400 text-6xl mb-4">⚠️</div>
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Something went wrong</h1>
-          <p className="text-gray-600 mb-6">
-            {error}
-          </p>
-          <div className="space-x-3">
-            <button
-              onClick={() => window.location.reload()}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 transition-colors"
-            >
-              Try Again
-            </button>
-            <Link
-              href="/app/candidates"
-              className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 transition-colors"
-            >
-              ← Back to Candidates
-            </Link>
-          </div>
-        </div>
-      </div>
+      <ErrorState
+        title="Unable to Load Candidate"
+        message={error}
+        onRetry={refreshData}
+        onBack={() => router.push("/app/candidates")}
+        backText="Back to Candidates"
+      />
     );
   }
 

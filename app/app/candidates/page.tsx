@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { ErrorState, EmptyState, LoadingState } from "@/components/ui/ErrorState";
 
 interface Candidate {
   id: string;
@@ -14,6 +15,7 @@ interface Candidate {
 export default function CandidatesPage() {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [formData, setFormData] = useState({
     fullName: "",
@@ -29,6 +31,7 @@ export default function CandidatesPage() {
   // Fetch candidates from API
   const fetchCandidates = async () => {
     try {
+      setError(null);
       const response = await fetch("/api/candidates", {
         headers: {
           "x-org-id": "cmm87bloy0000v9nvvzyt6aqn" // Demo org ID
@@ -38,9 +41,12 @@ export default function CandidatesPage() {
       if (response.ok) {
         const data = await response.json();
         setCandidates(data.candidates || []);
+      } else {
+        throw new Error("Failed to load candidates");
       }
     } catch (error) {
       console.error("Error fetching candidates:", error);
+      setError("Unable to load candidates. Please check your connection and try again.");
     } finally {
       setLoading(false);
     }
@@ -132,10 +138,13 @@ export default function CandidatesPage() {
             // Generic error
             setErrors({ fullName: error.error, rawCVText: "" });
           }
+        } else {
+          throw new Error("Failed to create candidate");
         }
       }
     } catch (error) {
       console.error("Error creating candidate:", error);
+      setError("Unable to create candidate. Please try again.");
     } finally {
       setIsCreating(false);
     }
@@ -149,6 +158,24 @@ export default function CandidatesPage() {
       default: return "bg-gray-100 text-gray-800";
     }
   };
+
+  // Error state
+  if (error) {
+    return (
+      <ErrorState
+        title="Unable to Load Candidates"
+        message={error}
+        onRetry={fetchCandidates}
+        onBack={() => window.location.href = "/app"}
+        backText="Back to Dashboard"
+      />
+    );
+  }
+
+  // Loading state
+  if (loading) {
+    return <LoadingState message="Loading candidates..." />;
+  }
 
   return (
     <div>
@@ -167,32 +194,21 @@ export default function CandidatesPage() {
         </p>
       </div>
 
-      {/* Loading State */}
-      {loading && (
-        <div className="text-center py-12">
-          <div className="text-gray-500">Loading candidates...</div>
-        </div>
-      )}
-
       {/* Empty State */}
-      {!loading && candidates.length === 0 && (
-        <div className="text-center py-12 bg-white rounded-lg shadow">
-          <div className="text-gray-400 text-5xl mb-4">👥</div>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No candidates yet</h3>
-          <p className="text-gray-500 mb-6">
-            Get started by adding your first candidate.
-          </p>
-          <button 
-            onClick={() => setShowCreateModal(true)}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
-          >
-            Add Your First Candidate
-          </button>
-        </div>
+      {candidates.length === 0 && (
+        <EmptyState
+          title="No candidates yet"
+          message="Get started by adding your first candidate."
+          action={{
+            text: "Add Your First Candidate",
+            onClick: () => setShowCreateModal(true)
+          }}
+          icon="👥"
+        />
       )}
 
       {/* Candidates Grid */}
-      {!loading && candidates.length > 0 && (
+      {candidates.length > 0 && (
         <div className="bg-white shadow overflow-hidden rounded-md">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
