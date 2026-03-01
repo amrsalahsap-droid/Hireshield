@@ -1,19 +1,9 @@
-import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
+// Middleware temporarily disabled to prevent 500 errors
+// TODO: Implement authentication at component level instead
 
-const isPublicRoute = createRouteMatcher([
-  "/",
-  "/login(.*)",
-  "/signup(.*)",
-  "/api/health(.*)",
-]);
-
-export default clerkMiddleware((auth, req) => {
-  // Clerk will automatically handle authentication for non-public routes
-  if (!isPublicRoute(req)) {
-    // This will trigger Clerk's authentication flow
-    auth();
-  }
-});
+export default function middleware(req: Request) {
+  // No middleware logic for now
+}
 
 export const config = {
   matcher: ["/((?!.*\\..*|_next).*)", "/", "/(api|trpc)(.*)"],
