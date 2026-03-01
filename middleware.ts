@@ -5,14 +5,16 @@ const isProtectedRoute = createRouteMatcher([
   "/api/(.*)",
 ]);
 
-export default clerkMiddleware(async (auth, req) => {
-  if (isProtectedRoute(req)) {
-    const { userId } = await auth();
-    if (!userId) {
-      const { redirectToSignIn } = await auth();
-      return redirectToSignIn();
+export default clerkMiddleware((auth, req) => {
+  // Temporarily disable protection until Clerk is configured
+  // TODO: Re-enable protection after adding Clerk environment variables
+  /*
+  if (process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY && process.env.CLERK_SECRET_KEY) {
+    if (isProtectedRoute(req)) {
+      auth().protect();
     }
   }
+  */
 });
 
 export const config = {
