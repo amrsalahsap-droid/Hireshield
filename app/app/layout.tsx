@@ -1,66 +1,76 @@
 import { UserButton } from "@clerk/nextjs";
 import Link from "next/link";
+import { auth } from "@clerk/nextjs/server";
 
 export default function AppLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const { userId } = auth();
+
+  const navigation = [
+    { name: "Overview", href: "/app", icon: "📊" },
+    { name: "Jobs", href: "/app/jobs", icon: "💼" },
+    { name: "Candidates", href: "/app/candidates", icon: "👥" },
+  ];
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex">
-              <div className="flex-shrink-0 flex items-center">
-                <h1 className="text-xl font-semibold text-gray-900">HireShield</h1>
-              </div>
-              <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
-                <Link
-                  href="/app"
-                  className="border-indigo-500 text-gray-900 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
-                >
-                  Dashboard
-                </Link>
-                <Link
-                  href="/app/jobs"
-                  className="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
-                >
-                  Jobs
-                </Link>
-                <Link
-                  href="/app/candidates"
-                  className="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
-                >
-                  Candidates
-                </Link>
-                <Link
-                  href="/app/interviews"
-                  className="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
-                >
-                  Interviews
-                </Link>
-              </div>
+    <div className="min-h-screen bg-gray-50 flex">
+      {/* Sidebar */}
+      <div className="w-64 bg-white shadow-sm">
+        <div className="p-6">
+          <h1 className="text-xl font-bold text-gray-900 mb-8">
+            HireShield
+          </h1>
+          
+          {/* Navigation */}
+          <nav className="space-y-2">
+            {navigation.map((item) => (
+              <Link
+                key={item.name}
+                href={item.href}
+                className="flex items-center px-3 py-2 text-sm font-medium rounded-md text-gray-600 hover:text-gray-900 hover:bg-gray-50 transition-colors"
+              >
+                <span className="mr-3 text-lg">{item.icon}</span>
+                {item.name}
+              </Link>
+            ))}
+          </nav>
+        </div>
+        
+        {/* User info */}
+        <div className="absolute bottom-0 w-64 p-6 border-t border-gray-200">
+          <div className="flex flex-col space-y-2">
+            <div className="text-sm text-gray-500">
+              {userId ? `User: ${userId.slice(0, 8)}...` : "Not authenticated"}
             </div>
-            <div className="flex items-center">
-              <UserButton 
-                afterSignOutUrl="/"
-                appearance={{
-                  elements: {
-                    avatarBox: "w-8 h-8",
-                  }
-                }}
-              />
-            </div>
+            <UserButton 
+              afterSignOutUrl="/"
+              appearance={{
+                elements: {
+                  avatarBox: "w-8 h-8",
+                }
+              }}
+            />
           </div>
         </div>
-      </nav>
+      </div>
 
-      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="px-4 py-6 sm:px-0">
+      {/* Main content */}
+      <div className="flex-1 flex flex-col">
+        <header className="bg-white shadow-sm border-b border-gray-200">
+          <div className="px-6 py-4">
+            <div className="text-sm text-gray-500">
+              HireShield - Talent Evaluation Platform
+            </div>
+          </div>
+        </header>
+        
+        <main className="flex-1 p-6">
           {children}
-        </div>
-      </main>
+        </main>
+      </div>
     </div>
   );
 }

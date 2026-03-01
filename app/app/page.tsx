@@ -16,32 +16,110 @@ export default async function AppPage() {
     );
   }
 
+  // Mock stats for now - will be replaced with real API calls
+  const stats = [
+    { name: "Total Jobs", value: "12", icon: "💼", color: "bg-blue-500" },
+    { name: "Total Candidates", value: "48", icon: "👥", color: "bg-green-500" },
+    { name: "Interviews Conducted", value: "23", icon: "🎤", color: "bg-purple-500" },
+    { name: "Evaluations Completed", value: "15", icon: "📋", color: "bg-orange-500" },
+  ];
+
+  const recentActivity = [
+    {
+      id: "1",
+      type: "Job Created",
+      description: "Senior Frontend Developer position created",
+      time: "2 hours ago",
+      icon: "💼"
+    },
+    {
+      id: "2", 
+      type: "Candidate Added",
+      description: "Alice Johnson added to candidate pool",
+      time: "4 hours ago",
+      icon: "👥"
+    },
+    {
+      id: "3",
+      type: "Interview Completed", 
+      description: "Interview with Bob Wilson completed",
+      time: "6 hours ago",
+      icon: "🎤"
+    },
+    {
+      id: "4",
+      type: "Evaluation Created",
+      description: "Evaluation for Carol Davis generated",
+      time: "1 day ago", 
+      icon: "📋"
+    },
+  ];
+
   return (
-    <div className="px-4 py-6 sm:px-0">
-      <div className="border-4 border-dashed border-gray-200 rounded-lg h-96 flex items-center justify-center">
-        <div className="text-center">
-          <h1 className="text-2xl font-bold text-gray-900 mb-4">
-            Welcome to HireShield
-          </h1>
-          <p className="text-gray-600 mb-2">
-            Your AI-powered hiring evaluation platform
-          </p>
-          <p className="text-sm text-gray-500 mb-8">
-            Organization ID: {user.orgId}
-          </p>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-4xl mx-auto">
-            <div className="bg-white p-6 rounded-lg shadow">
-              <h3 className="text-lg font-semibold mb-2">Jobs</h3>
-              <p className="text-gray-600">Manage job postings and requirements</p>
+    <div>
+      <div className="mb-8">
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">Overview</h1>
+        <p className="text-gray-600">
+          Welcome to your HireShield dashboard. Here's what's happening with your hiring process.
+        </p>
+        <p className="text-sm text-gray-500 mt-1">
+          Organization ID: {user.orgId}
+        </p>
+      </div>
+
+      {/* Stats Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        {stats.map((stat) => (
+          <div key={stat.name} className="bg-white overflow-hidden shadow rounded-lg">
+            <div className="p-5">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  <span className="text-2xl">{stat.icon}</span>
+                </div>
+                <div className="ml-5 w-0 flex-1">
+                  <dl>
+                    <dt className="text-sm font-medium text-gray-500 truncate">{stat.name}</dt>
+                    <dd className="text-lg font-semibold text-gray-900">{stat.value}</dd>
+                  </dl>
+                </div>
+              </div>
+              <div className={`mt-4 h-2 ${stat.color} rounded-full`}></div>
             </div>
-            <div className="bg-white p-6 rounded-lg shadow">
-              <h3 className="text-lg font-semibold mb-2">Candidates</h3>
-              <p className="text-gray-600">Track and evaluate candidate profiles</p>
-            </div>
-            <div className="bg-white p-6 rounded-lg shadow">
-              <h3 className="text-lg font-semibold mb-2">Interviews</h3>
-              <p className="text-gray-600">Schedule and conduct AI-assisted interviews</p>
-            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Recent Activity */}
+      <div className="bg-white shadow rounded-lg">
+        <div className="px-4 py-5 sm:p-6">
+          <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
+            Recent Activity
+          </h3>
+          
+          <div className="flow-root">
+            <ul className="-mb-8">
+              {recentActivity.map((activity) => (
+                <li key={activity.id}>
+                  <div className="relative pb-8">
+                    <div className="relative flex space-x-3">
+                      <div>
+                        <span className="h-8 w-8 rounded-full bg-gray-400 flex items-center justify-center ring-8 ring-white">
+                          <span className="text-sm">{activity.icon}</span>
+                        </span>
+                      </div>
+                      <div className="min-w-0 flex-1 py-0.5">
+                        <div className="h-full bg-gray-200"></div>
+                        <div className="text-sm text-gray-500">
+                          <p className="font-medium text-gray-900">{activity.type}</p>
+                          <p className="mt-1">{activity.description}</p>
+                          <p className="mt-1 text-xs text-gray-500">{activity.time}</p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
       </div>
