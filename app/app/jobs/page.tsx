@@ -73,6 +73,8 @@ export default function JobsPage() {
 
     if (!formData.rawJD.trim()) {
       newErrors.rawJD = "Job description is required";
+    } else if (formData.rawJD.length > 10000) {
+      newErrors.rawJD = "Job description must be less than 10,000 characters";
     }
 
     setErrors(newErrors);
@@ -113,6 +115,19 @@ export default function JobsPage() {
       } else {
         const error = await response.json();
         console.error("Error creating job:", error);
+        
+        // Handle validation errors from server
+        if (error.error && response.status === 400) {
+          // Parse error message to set appropriate field errors
+          if (error.error.includes("title")) {
+            setErrors(prev => ({ ...prev, title: error.error }));
+          } else if (error.error.includes("description") || error.error.includes("characters")) {
+            setErrors(prev => ({ ...prev, rawJD: error.error }));
+          } else {
+            // Generic error
+            setErrors({ title: error.error, rawJD: "" });
+          }
+        }
       }
     } catch (error) {
       console.error("Error creating job:", error);
@@ -272,9 +287,16 @@ export default function JobsPage() {
                     }`}
                     placeholder="Paste or type the complete job description here..."
                   />
-                  {errors.rawJD && (
-                    <p className="mt-1 text-sm text-red-600">{errors.rawJD}</p>
-                  )}
+                  <div className="mt-1 flex justify-between">
+                    {errors.rawJD && (
+                      <p className="text-sm text-red-600">{errors.rawJD}</p>
+                    )}
+                    <p className={`text-sm ${
+                      formData.rawJD.length > 10000 ? "text-red-600" : "text-gray-500"
+                    }`}>
+                      {formData.rawJD.length.toLocaleString()} / 10,000 characters
+                    </p>
+                  </div>
                 </div>
 
                 <div className="flex justify-end space-x-3 pt-4">

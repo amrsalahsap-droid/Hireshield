@@ -72,9 +72,9 @@ export const POST = withOrgContext(async (request: NextRequest, orgId: string) =
       );
     }
 
-    if (rawJD && rawJD.length > 50000) {
+    if (rawJD && rawJD.length > 10000) {
       return NextResponse.json(
-        { error: "Job description must be less than 50,000 characters" },
+        { error: "Job description must be less than 10,000 characters" },
         { status: 400 }
       );
     }
