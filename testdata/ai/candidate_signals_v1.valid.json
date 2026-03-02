@@ -1,0 +1,92 @@
+{
+  "candidateSummary": "Strong technical candidate with 5 years experience in React and Node.js. Good communication skills and cultural fit. Some gaps in leadership experience but shows potential for growth.",
+  "categoryRatings": {
+    "skillMatch": 4,
+    "behavioral": 3,
+    "communication": 4,
+    "cultureFit": 3
+  },
+  "strengths": [
+    {
+      "point": "Proficient in React and TypeScript with modern best practices",
+      "evidence": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "type": "quote",
+        "content": "React, TypeScript, Node.js expert with 5 years experience",
+        "source": "cv",
+        "context": "Skills section",
+        "relevanceScore": 95
+      }
+    },
+    {
+      "point": "Clear communication during technical discussions",
+      "evidence": {
+        "id": "550e8400-e29b-41d4-a716-446655440001",
+        "type": "quote",
+        "content": "Explained complex technical concepts clearly and concisely",
+        "source": "transcript",
+        "context": "Technical interview",
+        "relevanceScore": 88
+      }
+    }
+  ],
+  "gaps": [
+    {
+      "point": "Limited leadership and mentoring experience",
+      "evidence": {
+        "id": "550e8400-e29b-41d4-a716-446655440002",
+        "type": "quote",
+        "content": "No management or leadership roles listed in work history",
+        "source": "cv",
+        "context": "Work experience section",
+        "relevanceScore": 80
+      }
+    },
+    {
+      "point": "Limited experience with cloud infrastructure at scale",
+      "evidence": {
+        "id": "550e8400-e29b-41d4-a716-446655440003",
+        "type": "quote",
+        "content": "Basic AWS knowledge but no large-scale deployment experience",
+        "source": "transcript",
+        "context": "System design interview",
+        "relevanceScore": 75
+      }
+    }
+  ],
+  "riskFlags": [
+    {
+      "flag": "Job hopping pattern",
+      "severity": "MEDIUM",
+      "whyItMatters": "May indicate lack of commitment or difficulty staying long-term at companies",
+      "evidence": {
+        "id": "550e8400-e29b-41d4-a716-446655440004",
+        "type": "quote",
+        "content": "3 jobs in 2 years with average tenure of 8 months",
+        "source": "cv",
+        "context": "Work history",
+        "relevanceScore": 90
+      }
+    }
+  ],
+  "inconsistencies": [
+    {
+      "issue": "Claims senior level but limited experience",
+      "evidence": {
+        "id": "550e8400-e29b-41d4-a716-446655440005",
+        "type": "quote",
+        "content": "Senior Developer title with only 3 years total experience",
+        "source": "cv",
+        "context": "Resume summary",
+        "relevanceScore": 85
+      }
+    }
+  ],
+  "verificationQuestions": [
+    "Can you provide examples of leading a project from start to finish?",
+    "What specific challenges have you faced with team collaboration and how did you resolve them?",
+    "How do you stay updated with new technologies and industry trends?",
+    "Describe a situation where you had to learn a new technology quickly for a project"
+  ],
+  "ignoredAttributesNotice": "This analysis ignores protected attributes including age, race, gender, religion, national origin, disability, sexual orientation, and other personal characteristics to ensure equal opportunity and prevent discrimination in hiring decisions."
+}
