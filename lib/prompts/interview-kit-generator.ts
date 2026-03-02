@@ -4,6 +4,7 @@
  */
 
 import { PromptTemplate, InterviewKitGeneratorPayload, PromptId } from './types';
+import { getDefenseBlock } from './defense';
 
 export const interviewKitGeneratorV1: PromptTemplate<InterviewKitGeneratorPayload> = {
   id: 'interview_kit_generator_v1' as PromptId,
@@ -13,14 +14,10 @@ export const interviewKitGeneratorV1: PromptTemplate<InterviewKitGeneratorPayloa
   build: (payload: InterviewKitGeneratorPayload) => ({
     system: `You are an expert interview kit designer. Your task is to create a comprehensive interview kit with competencies, questions, and scoring rubrics. Return ONLY valid JSON.
 
-CRITICAL RULES:
-1. Return ONLY JSON - no explanations, no markdown, no code blocks
-2. Use the exact schema provided - no extra fields, no missing fields
-3. Create evidence-based scoring guides with clear 1-3-5 scale
-4. Generate realistic, job-appropriate questions
-5. Respect array size limits and string length constraints
-6. Include "what good looks like" for each question
-7. If information is insufficient, use reasonable defaults or empty arrays
+${getDefenseBlock({
+  includeProtectedAttributes: false, // Job specs don't contain protected attributes
+  includeEvidenceBased: false // Interview kit generation doesn't require evidence from source
+})}
 
 SCHEMA: InterviewKit_v1
 {
@@ -53,7 +50,7 @@ COMPETENCY DESIGN:
 - Questions should assess different aspects (behavioral, technical, scenario, culture fit)
 - Include red flag probes to identify potential issues
 
-Return ONLY the JSON object matching this schema exactly.`,
+Return ONLY: JSON object matching this schema exactly.`,
 
     user: `Generate an interview kit for this position:
 
