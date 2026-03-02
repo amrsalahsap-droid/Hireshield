@@ -1,0 +1,51 @@
+{
+  "roleTitle": "Senior Software Engineer",
+  "seniorityLevel": "SENIOR",
+  "requiredSkills": ["React", "TypeScript", "Node.js", "AWS", "REST APIs"],
+  "preferredSkills": ["Docker", "Kubernetes", "GraphQL", "MongoDB"],
+  "keyResponsibilities": [
+    "Design and develop scalable web applications",
+    "Collaborate with cross-functional teams",
+    "Write clean, maintainable, and testable code",
+    "Participate in code reviews and mentor junior developers",
+    "Optimize application performance and security"
+  ],
+  "ambiguities": [
+    {
+      "issue": "Experience level unclear",
+      "suggestedClarification": "Specify years of experience required for each skill",
+      "evidence": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "type": "quote",
+        "content": "experienced developer",
+        "source": "job_description",
+        "context": "Requirements section",
+        "relevanceScore": 85
+      }
+    }
+  ],
+  "unrealisticExpectations": [
+    {
+      "issue": "10+ years experience for mid-level role",
+      "whyUnrealistic": "10+ years typically indicates senior or principal level",
+      "evidence": {
+        "id": "550e8400-e29b-41d4-a716-446655440001",
+        "type": "quote",
+        "content": "10+ years of experience required",
+        "source": "job_description",
+        "context": "Requirements section",
+        "relevanceScore": 90
+      }
+    }
+  ],
+  "missingCriteria": [
+    {
+      "missing": "Education requirements",
+      "suggestedCriteria": "Bachelor's degree in Computer Science or related field, or equivalent experience"
+    },
+    {
+      "missing": "Remote work policy",
+      "suggestedCriteria": "Specify if role is fully remote, hybrid, or on-site"
+    }
+  ]
+}

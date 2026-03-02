@@ -1,0 +1,47 @@
+{
+  "finalScore": 78,
+  "riskLevel": "YELLOW",
+  "breakdown": {
+    "skillMatch": 85,
+    "behavioral": 72,
+    "communication": 80,
+    "cultureFit": 75,
+    "riskComponent": 65
+  },
+  "topReasons": [
+    {
+      "reason": "Strong technical skills in React and TypeScript with practical experience",
+      "evidence": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "type": "quote",
+        "content": "5 years experience with React, TypeScript, and Node.js",
+        "source": "cv",
+        "context": "Skills section",
+        "relevanceScore": 95
+      }
+    },
+    {
+      "reason": "Good communication skills demonstrated in technical interviews",
+      "evidence": {
+        "id": "550e8400-e29b-41d4-a716-446655440001",
+        "type": "quote",
+        "content": "Explained complex concepts clearly and answered questions concisely",
+        "source": "transcript",
+        "context": "Technical interview",
+        "relevanceScore": 88
+      }
+    },
+    {
+      "reason": "Limited leadership experience impacts senior-level fit",
+      "evidence": {
+        "id": "550e8400-e29b-41d4-a716-446655440002",
+        "type": "quote",
+        "content": "No management or mentoring experience in work history",
+        "source": "cv",
+        "context": "Work experience",
+        "relevanceScore": 80
+      }
+    }
+  ],
+  "computedAt": "2026-03-02T01:45:00.000Z"
+}

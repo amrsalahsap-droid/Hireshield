@@ -1,0 +1,242 @@
+{
+  "info": {
+    "name": "HireShield QA API Collection",
+    "description": "CRUD operations for Jobs, Candidates, Interviews, and Evaluations with example payloads"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000"
+    },
+    {
+      "key": "orgId",
+      "value": "cmm87bloy0000v9nvvzyt6aqn"
+    },
+    {
+      "key": "jobId",
+      "value": ""
+    },
+    {
+      "key": "candidateId",
+      "value": ""
+    },
+    {
+      "key": "interviewId",
+      "value": ""
+    },
+    {
+      "key": "evaluationId",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Jobs",
+      "item": [
+        {
+          "name": "List Jobs",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-org-id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/jobs"
+          }
+        },
+        {
+          "name": "Create Job",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-org-id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"title\": \"Senior Software Engineer\", \"rawJD\": \"We are looking for a Senior Software Engineer with 5+ years experience in modern web development.\", \"status\": \"ACTIVE\"}"
+            },
+            "url": "{{baseUrl}}/api/jobs"
+          }
+        },
+        {
+          "name": "Get Job",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-org-id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/jobs/{{jobId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Candidates",
+      "item": [
+        {
+          "name": "List Candidates",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-org-id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/candidates"
+          }
+        },
+        {
+          "name": "Create Candidate",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-org-id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"fullName\": \"John Doe\", \"email\": \"john@example.com\", \"rawCVText\": \"John Doe\\n\\nSenior Software Engineer with 8 years experience.\"}"
+            },
+            "url": "{{baseUrl}}/api/candidates"
+          }
+        },
+        {
+          "name": "Get Candidate",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-org-id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/candidates/{{candidateId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Interviews",
+      "item": [
+        {
+          "name": "List Interviews",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-org-id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/interviews"
+          }
+        },
+        {
+          "name": "Create Interview",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-org-id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"jobId\": \"{{jobId}}\", \"candidateId\": \"{{candidateId}}\", \"transcriptText\": \"Interviewer: Tell me about your experience.\\n\\nCandidate: I have 5 years of experience...\"}"
+            },
+            "url": "{{baseUrl}}/api/interviews"
+          }
+        },
+        {
+          "name": "Get Interview",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-org-id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/interviews/{{interviewId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Evaluations",
+      "item": [
+        {
+          "name": "List Evaluations",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-org-id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/evaluations"
+          }
+        },
+        {
+          "name": "Create Evaluation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "x-org-id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"jobId\": \"{{jobId}}\", \"candidateId\": \"{{candidateId}}\"}"
+            },
+            "url": "{{baseUrl}}/api/evaluations"
+          }
+        },
+        {
+          "name": "Get Evaluation",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "x-org-id",
+                "value": "{{orgId}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/evaluations/{{evaluationId}}"
+          }
+        }
+      ]
+    }
+  ]
+}

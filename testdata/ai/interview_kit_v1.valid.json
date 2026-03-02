@@ -1,0 +1,84 @@
+{
+  "roleTitle": "Senior Software Engineer",
+  "competencies": [
+    {
+      "name": "Technical Problem Solving",
+      "definition": "Ability to analyze complex technical problems and develop effective solutions using systematic approaches",
+      "questions": {
+        "behavioral": [
+          {
+            "question": "Tell me about a time you solved a complex technical problem under pressure",
+            "whatGoodLooksLike": "Candidate describes structured problem-solving with clear methodology and measurable results",
+            "scoringGuide": {
+              "1": "Vague description, no clear problem or solution approach",
+              "3": "Describes problem and basic solution but lacks systematic approach",
+              "5": "Detailed problem analysis, systematic methodology, and measurable positive outcomes"
+            }
+          },
+          {
+            "question": "How do you approach debugging unfamiliar code?",
+            "whatGoodLooksLike": "Candidate demonstrates methodical debugging process and learning mindset",
+            "scoringGuide": {
+              "1": "Random trial and error approach",
+              "3": "Basic debugging steps but limited strategy",
+              "5": "Systematic approach with hypothesis testing and documentation"
+            }
+          }
+        ],
+        "technical": [
+          {
+            "question": "How would you optimize a slow database query?",
+            "whatGoodLooksLike": "Candidate demonstrates understanding of indexing, query plans, and performance tuning",
+            "scoringGuide": {
+              "1": "No understanding of database performance concepts",
+              "3": "Basic understanding but limited practical knowledge",
+              "5": "Comprehensive knowledge with specific optimization techniques and trade-offs"
+            }
+          },
+          {
+            "question": "Explain the difference between SQL and NoSQL databases",
+            "whatGoodLooksLike": "Candidate shows understanding of use cases, trade-offs, and when to use each",
+            "scoringGuide": {
+              "1": "Cannot explain fundamental differences",
+              "3": "Basic understanding but limited depth",
+              "5": "Clear understanding of ACID properties, scalability, and appropriate use cases"
+            }
+          }
+        ],
+        "scenario": [
+          {
+            "question": "Our e-commerce site is experiencing 503 errors during peak traffic. How would you troubleshoot?",
+            "whatGoodLooksLike": "Candidate demonstrates systematic incident response and prioritization skills",
+            "scoringGuide": {
+              "1": "Random troubleshooting attempts without methodology",
+              "3": "Basic troubleshooting steps but lacks comprehensive approach",
+              "5": "Comprehensive incident response with proper prioritization, communication, and prevention"
+            }
+          }
+        ],
+        "cultureFit": [
+          {
+            "question": "Describe your ideal team environment",
+            "whatGoodLooksLike": "Candidate shows self-awareness and collaborative mindset",
+            "scoringGuide": {
+              "1": "Focuses only on personal preferences",
+              "3": "Basic understanding of team dynamics",
+              "5": "Balanced view considering both personal needs and team effectiveness"
+            }
+          }
+        ],
+        "redFlagProbes": [
+          {
+            "question": "Tell me about a time you disagreed with your manager's decision",
+            "whatGoodLooksLike": "Candidate demonstrates professionalism and constructive conflict resolution",
+            "scoringGuide": {
+              "1": "Blames manager or shows defiance",
+              "3": "Basic professionalism but limited strategic thinking",
+              "5": "Constructive approach with focus on solutions and professional communication"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

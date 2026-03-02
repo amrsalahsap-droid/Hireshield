@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withOrgContext } from "@/lib/server/org-context";
 import { prisma } from "@/lib/prisma";
+import { assertMaxLen, assertNonEmpty, isGuardViolation, formatGuardError } from "@/lib/guards";
 
 // GET /api/jobs - List jobs for the organization
 export const GET = withOrgContext(async (request: NextRequest, orgId: string) => {
@@ -50,40 +51,26 @@ export const POST = withOrgContext(async (request: NextRequest, orgId: string) =
     const body = await request.json();
     const { title, rawJD, status } = body;
 
-    // Validation
-    if (!title || typeof title !== "string" || title.trim().length === 0) {
-      return NextResponse.json(
-        { error: "Title is required and must be a non-empty string" },
-        { status: 400 }
-      );
-    }
-
-    if (title.length > 200) {
-      return NextResponse.json(
-        { error: "Title must be less than 200 characters" },
-        { status: 400 }
-      );
-    }
-
-    if (rawJD && typeof rawJD !== "string") {
-      return NextResponse.json(
-        { error: "rawJD must be a string" },
-        { status: 400 }
-      );
-    }
-
-    if (rawJD && rawJD.length > 10000) {
-      return NextResponse.json(
-        { error: "Job description must be less than 10,000 characters" },
-        { status: 400 }
-      );
-    }
-
-    if (status && !["DRAFT", "ACTIVE", "ARCHIVED"].includes(status)) {
-      return NextResponse.json(
-        { error: "Status must be one of: DRAFT, ACTIVE, ARCHIVED" },
-        { status: 400 }
-      );
+    // Input validation using guards
+    try {
+      assertNonEmpty("title", title);
+      assertMaxLen("title", title, 200);
+      
+      if (rawJD) {
+        assertMaxLen("rawJD", rawJD, 10000);
+      }
+      
+      if (status && !["DRAFT", "ACTIVE", "ARCHIVED"].includes(status)) {
+        throw new Error("Status must be one of: DRAFT, ACTIVE, ARCHIVED");
+      }
+    } catch (error) {
+      if (isGuardViolation(error)) {
+        return NextResponse.json(
+          formatGuardError(error),
+          { status: error.code }
+        );
+      }
+      throw error; // Re-throw non-guard errors
     }
 
     const job = await prisma.job.create({
