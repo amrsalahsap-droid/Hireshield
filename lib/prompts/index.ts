@@ -6,13 +6,13 @@
 export * from './types';
 export * from './jd_analyzer_v1';
 export * from './interview_kit_v1';
-export * from './candidate-signals-extractor';
+export * from './candidate_signals_v1';
 export * from './defense';
 
 import { PromptRegistry, PromptId, PromptPayload, BuiltPrompt, PromptTemplate } from './types';
 import { jdAnalyzerV1 } from './jd_analyzer_v1';
 import { interviewKitGeneratorV1 } from './interview_kit_v1';
-import { candidateSignalsExtractorV1 } from './candidate-signals-extractor';
+import { candidateSignalsExtractorV1 } from './candidate_signals_v1';
 
 // Prompt registry - maps IDs to prompt templates
 export const PROMPT_REGISTRY: PromptRegistry = {
