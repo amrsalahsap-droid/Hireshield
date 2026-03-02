@@ -33,6 +33,7 @@ export interface InterviewKitGeneratorPayload extends BasePromptPayload {
   requiredSkills: string[];
   preferredSkills?: string[];
   keyResponsibilities?: string[];
+  rawJD?: string;
   competencies?: Array<{
     name: string;
     definition: string;
