@@ -4,6 +4,7 @@
  */
 
 import { PromptTemplate, JDAnalyzerPayload, PromptId } from './types';
+import { getDefenseBlock } from './defense';
 
 export const jdAnalyzerV1: PromptTemplate<JDAnalyzerPayload> = {
   id: 'jd_analyzer_v1' as PromptId,
@@ -13,14 +14,10 @@ export const jdAnalyzerV1: PromptTemplate<JDAnalyzerPayload> = {
   build: (payload: JDAnalyzerPayload) => ({
     system: `You are an expert job description analyzer. Your task is to extract structured information from job descriptions and return ONLY valid JSON.
 
-CRITICAL RULES:
-1. Return ONLY JSON - no explanations, no markdown, no code blocks
-2. Use the exact schema provided - no extra fields, no missing fields
-3. Be evidence-based - include quotes and source references
-4. Use "UNKNOWN" for missing information, never guess
-5. Avoid protected attributes (age, gender, race, religion, etc.)
-6. Respect array size limits and string length constraints
-7. If information is not present, use empty arrays or UNKNOWN values
+${getDefenseBlock({
+  includeProtectedAttributes: false, // Job descriptions don't contain protected attributes
+  includeEvidenceBased: true
+})}
 
 SCHEMA: JDExtraction_v1
 {

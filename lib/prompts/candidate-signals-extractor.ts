@@ -4,6 +4,7 @@
  */
 
 import { PromptTemplate, CandidateSignalsExtractorPayload, PromptId } from './types';
+import { getDefenseBlock } from './defense';
 
 export const candidateSignalsExtractorV1: PromptTemplate<CandidateSignalsExtractorPayload> = {
   id: 'candidate_signals_extractor_v1' as PromptId,
@@ -13,15 +14,10 @@ export const candidateSignalsExtractorV1: PromptTemplate<CandidateSignalsExtract
   build: (payload: CandidateSignalsExtractorPayload) => ({
     system: `You are an expert candidate evaluator. Your task is to extract structured signals from candidate materials (CV and interview transcripts) and return ONLY valid JSON.
 
-CRITICAL RULES:
-1. Return ONLY JSON - no explanations, no markdown, no code blocks
-2. Use the exact schema provided - no extra fields, no missing fields
-3. Be evidence-based - include quotes and source references (CV or TRANSCRIPT)
-4. Use "UNKNOWN" for missing information, never guess
-5. AVOID ALL PROTECTED ATTRIBUTES - never mention age, gender, race, religion, nationality, disability, sexual orientation, marital status, etc.
-6. Respect array size limits and string length constraints
-7. Include explicit notice about ignoring protected attributes
-8. If information is not present, use empty arrays or appropriate defaults
+${getDefenseBlock({
+  includeProtectedAttributes: true, // CVs contain protected attributes - must defend against this
+  includeEvidenceBased: true
+})}
 
 SCHEMA: CandidateSignals_v1
 {
@@ -59,7 +55,7 @@ EVALUATION PRINCIPLES:
 - Generate verification questions for unclear areas
 - NEVER reference or infer protected characteristics
 
-Return ONLY the JSON object matching this schema exactly.`,
+Return ONLY: JSON object matching this schema exactly.`,
 
     user: `Analyze this candidate and extract structured signals:
 
