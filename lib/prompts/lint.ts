@@ -68,7 +68,6 @@ export function lintAllPrompts(): {
     failed: number;
   };
 } {
-  const { buildPrompt } = require('./index');
   const results: Record<string, ReturnType<typeof lintPrompt>> = {};
   
   // Get all prompt IDs from registry
