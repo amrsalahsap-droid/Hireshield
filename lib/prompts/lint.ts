@@ -3,7 +3,7 @@
  * Lightweight validation to prevent accidental removal of critical instructions
  */
 
-import { buildPrompt } from './index';
+import { buildPrompt, PromptId } from './index';
 
 // Required tokens that must be present in all prompts
 export const REQUIRED_TOKENS = {
@@ -71,12 +71,12 @@ export function lintAllPrompts(): {
   const results: Record<string, ReturnType<typeof lintPrompt>> = {};
   
   // Get all prompt IDs from registry
-  const promptIds = ['jd_analyzer_v1', 'interview_kit_generator_v1', 'candidate_signals_extractor_v1'];
+  const promptIds: PromptId[] = ['jd_analyzer_v1', 'interview_kit_generator_v1', 'candidate_signals_extractor_v1'];
   
   let totalPassed = 0;
   
   // Test each prompt
-  promptIds.forEach(id => {
+  for (const id of promptIds) {
     try {
       const prompt = buildPrompt(id, getMinimalPayload(id));
       results[id] = lintPrompt(prompt.system);
@@ -90,7 +90,7 @@ export function lintAllPrompts(): {
         errors: [`Failed to build prompt: ${(error as Error).message}`]
       };
     }
-  });
+  }
 
   const total = promptIds.length;
   const passed = totalPassed;
