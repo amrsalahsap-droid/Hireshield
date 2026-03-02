@@ -46,7 +46,10 @@ export interface InterviewKitGeneratorPayload extends BasePromptPayload {
 export interface CandidateSignalsExtractorPayload extends BasePromptPayload {
   cvText: string;
   transcriptText?: string;
-  jobTitle?: string;
+  roleTitle?: string;
+  requiredSkills?: string[];
+  keyResponsibilities?: string[];
+  jobContext?: string;
   jobDescription?: string;
   maxStrengths?: number;
   maxGaps?: number;
