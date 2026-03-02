@@ -88,7 +88,7 @@ export function lintAllPrompts(): {
       results[id] = {
         missing: ['BUILD_ERROR'],
         passed: false,
-        errors: [`Failed to build prompt: ${error.message}`]
+        errors: [`Failed to build prompt: ${(error as Error).message}`]
       };
     }
   });
