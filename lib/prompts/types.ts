@@ -19,8 +19,8 @@ export interface BasePromptPayload {
 
 // JD Analyzer payload
 export interface JDAnalyzerPayload extends BasePromptPayload {
-  jobDescription: string;
-  title?: string;
+  jobTitle?: string;
+  rawJD: string;
   industry?: string;
   maxSkills?: number;
   maxResponsibilities?: number;

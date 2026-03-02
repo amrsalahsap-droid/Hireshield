@@ -4,13 +4,13 @@
  */
 
 export * from './types';
-export * from './jd-analyzer';
+export * from './jd_analyzer_v1';
 export * from './interview-kit-generator';
 export * from './candidate-signals-extractor';
 export * from './defense';
 
 import { PromptRegistry, PromptId, PromptPayload, BuiltPrompt, PromptTemplate } from './types';
-import { jdAnalyzerV1 } from './jd-analyzer';
+import { jdAnalyzerV1 } from './jd_analyzer_v1';
 import { interviewKitGeneratorV1 } from './interview-kit-generator';
 import { candidateSignalsExtractorV1 } from './candidate-signals-extractor';
 
