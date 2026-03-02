@@ -81,7 +81,7 @@ Return ONLY: JSON object matching InterviewKit_v1 schema exactly.`,
 
     user: `Generate an interview kit for this position:
 
-ROLE TITLE: ${payload.roleTitle}
+ROLE TITLE: ${payload.jobTitle}
 SENIORITY LEVEL: ${payload.seniorityLevel}
 
 REQUIRED SKILLS:
@@ -113,6 +113,6 @@ Generate ONLY valid JSON matching InterviewKit_v1 schema with:
   }),
 
   validatePayload: (payload: InterviewKitGeneratorPayload) => {
-    return !!(payload.roleTitle && payload.seniorityLevel && payload.requiredSkills && payload.requiredSkills.length > 0);
+    return !!(payload.jobTitle && payload.seniorityLevel && payload.requiredSkills && payload.requiredSkills.length > 0);
   }
 };
