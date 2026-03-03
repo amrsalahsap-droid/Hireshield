@@ -19,6 +19,9 @@ interface Evaluation {
     email: string | null;
   };
   signalsJson: any;
+  signalsPromptVersion: string | null;
+  signalsGeneratedAt: string | null;
+  rawModelOutputSnippet: string | null;
   finalScoreJson: any;
   createdAt: string;
   updatedAt: string;
@@ -30,6 +33,8 @@ export default function EvaluationDetailsPage() {
   const [evaluation, setEvaluation] = useState<Evaluation | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isGeneratingSignals, setIsGeneratingSignals] = useState(false);
+  const [signalsError, setSignalsError] = useState<string | null>(null);
 
   // Fetch evaluation details
   const fetchEvaluation = async () => {
@@ -61,6 +66,38 @@ export default function EvaluationDetailsPage() {
     setLoading(true);
     setError(null);
     await fetchEvaluation();
+  };
+
+  // Generate Signals function
+  const generateSignals = async () => {
+    if (!evaluation) return;
+    
+    setIsGeneratingSignals(true);
+    setSignalsError(null);
+    
+    try {
+      const response = await fetch(`/api/evaluations/${evaluation.id}/generate-signals`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-org-id': 'cmm87bloy0000v9nvvzyt6aqn'
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        // Refresh evaluation data to show the signals results
+        await fetchEvaluation();
+      } else {
+        const errorData = await response.json();
+        setSignalsError(errorData.error || 'Failed to generate candidate signals');
+      }
+    } catch (error) {
+      console.error("Error generating signals:", error);
+      setSignalsError('Network error occurred while generating candidate signals');
+    } finally {
+      setIsGeneratingSignals(false);
+    }
   };
 
   useEffect(() => {
@@ -154,31 +191,76 @@ export default function EvaluationDetailsPage() {
               ? "bg-green-50 border border-green-200" 
               : "bg-yellow-50 border border-yellow-200"
           }`}>
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                {hasAIResults ? (
-                  <div className="text-green-400 text-2xl">✅</div>
-                ) : (
-                  <div className="text-yellow-400 text-2xl">⏳</div>
-                )}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <div className="flex-shrink-0">
+                  {hasAIResults ? (
+                    <div className="text-green-400 text-2xl">✅</div>
+                  ) : (
+                    <div className="text-yellow-400 text-2xl">⏳</div>
+                  )}
+                </div>
+                <div className="ml-4">
+                  <h3 className={`text-lg font-medium ${
+                    hasAIResults ? "text-green-800" : "text-yellow-800"
+                  }`}>
+                    {hasAIResults ? "AI Analysis Complete" : "Pending AI Analysis"}
+                  </h3>
+                  <p className={`mt-1 text-sm ${
+                    hasAIResults ? "text-green-700" : "text-yellow-700"
+                  }`}>
+                    {hasAIResults 
+                      ? "AI has analyzed this candidate and provided detailed insights."
+                      : "AI analysis is currently being processed. Results will appear here once complete."
+                    }
+                  </p>
+                </div>
               </div>
-              <div className="ml-4">
-                <h3 className={`text-lg font-medium ${
-                  hasAIResults ? "text-green-800" : "text-yellow-800"
-                }`}>
-                  {hasAIResults ? "AI Analysis Complete" : "Pending AI Analysis"}
-                </h3>
-                <p className={`mt-1 text-sm ${
-                  hasAIResults ? "text-green-700" : "text-yellow-700"
-                }`}>
-                  {hasAIResults 
-                    ? "AI has analyzed this candidate and provided detailed insights."
-                    : "AI analysis is currently being processed. Results will appear here once complete."
-                  }
-                </p>
-              </div>
+              {!evaluation.signalsJson && (
+                <button
+                  onClick={generateSignals}
+                  disabled={isGeneratingSignals}
+                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isGeneratingSignals ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      🧠 Generate Signals
+                    </>
+                  )}
+                </button>
+              )}
             </div>
           </div>
+
+          {/* Signals Error Alert */}
+          {signalsError && (
+            <div className="bg-red-50 border border-red-200 rounded-md p-4">
+              <div className="flex">
+                <div className="flex-shrink-0">
+                  <div className="text-red-400 text-lg">⚠️</div>
+                </div>
+                <div className="ml-3">
+                  <h3 className="text-sm font-medium text-red-800">Signals Generation Failed</h3>
+                  <div className="mt-2 text-sm text-red-700">
+                    {signalsError}
+                  </div>
+                  <div className="mt-4">
+                    <button
+                      onClick={() => setSignalsError(null)}
+                      className="text-sm font-medium text-red-600 hover:text-red-800"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* AI Results Section */}
           {hasAIResults ? (
@@ -189,12 +271,151 @@ export default function EvaluationDetailsPage() {
               <div className="px-6 py-4 space-y-6">
                 {/* Signals Section */}
                 <div>
-                  <h3 className="text-md font-medium text-gray-900 mb-3">Evaluation Signals</h3>
-                  <div className="bg-gray-50 p-4 rounded-md">
-                    <pre className="text-sm text-gray-700 whitespace-pre-wrap">
-                      {JSON.stringify(evaluation.signalsJson, null, 2)}
-                    </pre>
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-md font-medium text-gray-900">Candidate Signals</h3>
+                    {evaluation.signalsPromptVersion && (
+                      <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                        v{evaluation.signalsPromptVersion}
+                      </span>
+                    )}
                   </div>
+                  
+                  {evaluation.signalsJson ? (
+                    <div className="space-y-4">
+                      {/* Summary */}
+                      {evaluation.signalsJson.candidateSummary && (
+                        <div className="bg-blue-50 border border-blue-200 p-4 rounded-md">
+                          <h4 className="font-medium text-blue-900 mb-2">Summary</h4>
+                          <p className="text-blue-800 text-sm">{evaluation.signalsJson.candidateSummary}</p>
+                        </div>
+                      )}
+
+                      {/* Category Ratings */}
+                      {evaluation.signalsJson.categoryRatings && (
+                        <div className="bg-gray-50 p-4 rounded-md">
+                          <h4 className="font-medium text-gray-900 mb-3">Category Ratings</h4>
+                          <div className="grid grid-cols-2 gap-3">
+                            {Object.entries(evaluation.signalsJson.categoryRatings).map(([category, rating]) => (
+                              <div key={category} className="flex justify-between items-center">
+                                <span className="text-sm text-gray-600 capitalize">
+                                  {category.replace(/([A-Z])/g, ' $1').trim()}
+                                </span>
+                                <div className="flex items-center">
+                                  <div className="w-20 bg-gray-200 rounded-full h-2 mr-2">
+                                    <div 
+                                      className="bg-indigo-600 h-2 rounded-full" 
+                                      style={{ width: `${(Number(rating) * 20)}%` }}
+                                    ></div>
+                                  </div>
+                                  <span className="text-sm font-medium text-gray-900">{Number(rating)}/5</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Strengths */}
+                      {evaluation.signalsJson.strengths && evaluation.signalsJson.strengths.length > 0 && (
+                        <div className="bg-green-50 border border-green-200 p-4 rounded-md">
+                          <h4 className="font-medium text-green-900 mb-3">Strengths ({evaluation.signalsJson.strengths.length})</h4>
+                          <ul className="space-y-3">
+                            {evaluation.signalsJson.strengths.map((strength: any, index: number) => (
+                              <li key={index} className="text-green-800">
+                                <p className="text-sm font-medium">• {strength.point}</p>
+                                {strength.evidence && (
+                                  <blockquote className="mt-1 pl-3 border-l-2 border-green-300 text-xs text-green-700 italic">
+                                    "{strength.evidence.content}"
+                                    <span className="block text-xs text-green-600 mt-1">
+                                      — {strength.evidence.source}
+                                    </span>
+                                  </blockquote>
+                                )}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {/* Gaps */}
+                      {evaluation.signalsJson.gaps && evaluation.signalsJson.gaps.length > 0 && (
+                        <div className="bg-yellow-50 border border-yellow-200 p-4 rounded-md">
+                          <h4 className="font-medium text-yellow-900 mb-3">Areas for Development ({evaluation.signalsJson.gaps.length})</h4>
+                          <ul className="space-y-3">
+                            {evaluation.signalsJson.gaps.map((gap: any, index: number) => (
+                              <li key={index} className="text-yellow-800">
+                                <p className="text-sm font-medium">• {gap.point}</p>
+                                {gap.evidence && (
+                                  <blockquote className="mt-1 pl-3 border-l-2 border-yellow-300 text-xs text-yellow-700 italic">
+                                    "{gap.evidence.content}"
+                                    <span className="block text-xs text-yellow-600 mt-1">
+                                      — {gap.evidence.source}
+                                    </span>
+                                  </blockquote>
+                                )}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {/* Risk Flags */}
+                      {evaluation.signalsJson.riskFlags && evaluation.signalsJson.riskFlags.length > 0 && (
+                        <div className="bg-red-50 border border-red-200 p-4 rounded-md">
+                          <h4 className="font-medium text-red-900 mb-3">Risk Flags ({evaluation.signalsJson.riskFlags.length})</h4>
+                          <ul className="space-y-3">
+                            {evaluation.signalsJson.riskFlags.map((risk: any, index: number) => (
+                              <li key={index} className="text-red-800">
+                                <div className="flex items-start">
+                                  <span className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded mr-2 mt-0.5">
+                                    {risk.severity}
+                                  </span>
+                                  <div>
+                                    <p className="text-sm font-medium">{risk.flag}</p>
+                                    <p className="text-xs text-red-700 mt-1">{risk.whyItMatters}</p>
+                                    {risk.evidence && (
+                                      <blockquote className="mt-1 pl-3 border-l-2 border-red-300 text-xs text-red-700 italic">
+                                        "{risk.evidence.content}"
+                                        <span className="block text-xs text-red-600 mt-1">
+                                          — {risk.evidence.source}
+                                        </span>
+                                      </blockquote>
+                                    )}
+                                  </div>
+                                </div>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {/* Verification Questions */}
+                      {evaluation.signalsJson.verificationQuestions && evaluation.signalsJson.verificationQuestions.length > 0 && (
+                        <div className="bg-purple-50 border border-purple-200 p-4 rounded-md">
+                          <h4 className="font-medium text-purple-900 mb-3">Questions for Verification ({evaluation.signalsJson.verificationQuestions.length})</h4>
+                          <ul className="space-y-2">
+                            {evaluation.signalsJson.verificationQuestions.map((question: string, index: number) => (
+                              <li key={index} className="text-purple-800 text-sm">
+                                • {question}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {/* Generation Info */}
+                      {evaluation.signalsGeneratedAt && (
+                        <div className="text-xs text-gray-500 mt-4 pt-4 border-t border-gray-200">
+                          Generated on {new Date(evaluation.signalsGeneratedAt).toLocaleString()}
+                          {evaluation.signalsPromptVersion && ` using prompt version ${evaluation.signalsPromptVersion}`}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="bg-gray-50 p-4 rounded-md text-center text-gray-500 text-sm">
+                      No signals data available
+                    </div>
+                  )}
                 </div>
 
                 {/* Final Score Section */}
@@ -321,12 +542,50 @@ export default function EvaluationDetailsPage() {
                   </span>
                 </dd>
               </div>
+              
+              {/* Signals Metadata */}
+              {evaluation.signalsGeneratedAt && (
+                <>
+                  <div>
+                    <dt className="text-sm font-medium text-gray-500">Signals Generated</dt>
+                    <dd className="mt-1 text-sm text-gray-900">
+                      {new Date(evaluation.signalsGeneratedAt).toLocaleString()}
+                    </dd>
+                  </div>
+                  {evaluation.signalsPromptVersion && (
+                    <div>
+                      <dt className="text-sm font-medium text-gray-500">Signals Prompt Version</dt>
+                      <dd className="mt-1 text-sm text-gray-900">
+                        v{evaluation.signalsPromptVersion}
+                      </dd>
+                    </div>
+                  )}
+                </>
+              )}
+              
               <div>
                 <dt className="text-sm font-medium text-gray-500">Processing Time</dt>
                 <dd className="mt-1 text-sm text-gray-900">
                   {hasAIResults ? "Completed" : "In Progress"}
                 </dd>
               </div>
+              
+              {/* Debug Info */}
+              {evaluation.rawModelOutputSnippet && (
+                <div>
+                  <dt className="text-sm font-medium text-gray-500">Debug Information</dt>
+                  <dd className="mt-1">
+                    <details className="text-sm">
+                      <summary className="cursor-pointer text-indigo-600 hover:text-indigo-800">
+                        View raw output snippet ({evaluation.rawModelOutputSnippet.length} chars)
+                      </summary>
+                      <pre className="mt-2 text-xs text-gray-600 bg-gray-50 p-2 rounded overflow-x-auto whitespace-pre-wrap">
+                        {evaluation.rawModelOutputSnippet}
+                      </pre>
+                    </details>
+                  </dd>
+                </div>
+              )}
             </div>
           </div>
         </div>

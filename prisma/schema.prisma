@@ -27,10 +27,11 @@ model User {
 }
 
 model Org {
-  id        String   @id @default(cuid())
-  name      String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id               String   @id @default(cuid())
+  name             String
+  jdAnalysisCount  Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
   
   members OrgMember[]
   jobs     Job[]
@@ -64,12 +65,21 @@ model Job {
   orgId       String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  jdExtractionJson Json?
+  jdAnalyzedAt   DateTime?
+  jdPromptVersion String?
+  jdAnalysisStatus JDAnalysisStatus @default(NOT_STARTED)
+  jdLastError     String?
+  interviewKitJson Json?
+  interviewKitGeneratedAt DateTime?
+  interviewKitPromptVersion String?
   
   org         Org          @relation(fields: [orgId], references: [id], onDelete: Cascade)
   interviews Interview[]
   evaluations Evaluation[]
   
   @@index([orgId])
+  @@index([jdAnalyzedAt])
   @@map("jobs")
 }
 
@@ -110,14 +120,17 @@ model Interview {
 }
 
 model Evaluation {
-  id             String   @id @default(cuid())
-  signalsJson    Json?
-  finalScoreJson Json?
-  orgId          String
-  jobId          String
-  candidateId    String
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id                    String   @id @default(cuid())
+  signalsJson           Json?
+  signalsPromptVersion  String?
+  signalsGeneratedAt    DateTime?
+  rawModelOutputSnippet String?  // Truncated 2-4k chars for debugging
+  finalScoreJson        Json?
+  orgId                 String
+  jobId                 String
+  candidateId           String
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
   
   org       Org        @relation(fields: [orgId], references: [id], onDelete: Cascade)
   job       Job        @relation(fields: [jobId], references: [id], onDelete: Cascade)
@@ -139,4 +152,28 @@ enum JobStatus {
   DRAFT
   ACTIVE
   ARCHIVED
+}
+
+enum JDAnalysisStatus {
+  NOT_STARTED
+  RUNNING
+  DONE
+  FAILED
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  orgId       String
+  actorUserId String
+  action      String
+  entityType  String
+  entityId    String
+  createdAt   DateTime @default(now())
+  metadataJson Json?
+  
+  @@index([orgId])
+  @@index([actorUserId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
 }
