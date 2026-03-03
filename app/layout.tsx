@@ -1,11 +1,18 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Inter, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 import { ClerkProvider } from "@clerk/nextjs";
+import { Toaster } from "sonner";
 
 const inter = Inter({
   subsets: ["latin"],
-  variable: "--font-inter",
+  variable: "--font-body",
+  display: "swap",
+});
+
+const spaceGrotesk = Space_Grotesk({
+  subsets: ["latin"],
+  variable: "--font-display",
   display: "swap",
 });
 
@@ -27,7 +34,7 @@ export default function RootLayout({
     return (
       <html lang="en">
         <body
-          className={`${inter.variable} font-sans antialiased`}
+          className={`${inter.variable} ${spaceGrotesk.variable} font-body antialiased`}
         >
           <div className="min-h-screen flex items-center justify-center bg-background">
             <div className="text-center">
@@ -49,9 +56,10 @@ export default function RootLayout({
     <ClerkProvider>
       <html lang="en">
         <body
-          className={`${inter.variable} font-sans antialiased`}
+          className={`${inter.variable} ${spaceGrotesk.variable} font-body antialiased`}
         >
           {children}
+          <Toaster richColors position="top-center" />
         </body>
       </html>
     </ClerkProvider>
