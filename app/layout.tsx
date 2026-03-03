@@ -29,13 +29,13 @@ export default function RootLayout({
         <body
           className={`${inter.variable} font-sans antialiased`}
         >
-          <div className="min-h-screen flex items-center justify-center bg-neutral-50">
+          <div className="min-h-screen flex items-center justify-center bg-background">
             <div className="text-center">
-              <h1 className="text-4xl font-bold mb-4 text-neutral-900">HireShield</h1>
-              <p className="text-lg text-neutral-600 mb-8">
+              <h1 className="text-4xl font-bold mb-4 text-foreground">HireShield</h1>
+              <p className="text-lg text-muted-foreground mb-8">
                 AI-powered hiring evaluation platform
               </p>
-              <div className="text-sm text-neutral-500">
+              <div className="text-sm text-muted-foreground">
                 Please configure Clerk environment variables to enable authentication
               </div>
             </div>

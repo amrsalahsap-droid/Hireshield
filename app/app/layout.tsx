@@ -24,9 +24,9 @@ export default async function AppLayout({
   ];
 
   return (
-    <div className="min-h-screen bg-neutral-50 flex">
+    <div className="min-h-screen bg-background flex">
       {/* Sidebar */}
-      <div className="w-64 bg-white shadow-subtle border-r border-neutral-200">
+      <div className="w-64 bg-card border-r border-border">
         {/* Logo Header */}
         <div className="p-6 border-b border-border">
           <div className="flex items-center space-x-3">
