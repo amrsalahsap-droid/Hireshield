@@ -1,12 +1,65 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { SignIn, SignUp } from '@clerk/nextjs';
 import { Logo } from '@/components/ui/logo';
 import { Button } from '@/components/ui/button';
 
+export const dynamic = 'force-dynamic';
+
 export default function AuthPage() {
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
+  const [clerkAvailable, setClerkAvailable] = useState(false);
+
+  useEffect(() => {
+    // Check if Clerk is properly configured
+    const clerkKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+    setClerkAvailable(!!clerkKey && !clerkKey.includes('...'));
+  }, []);
+
+  if (!clerkAvailable) {
+    return (
+      <main className="min-h-screen w-full bg-background flex items-center justify-center p-6">
+        <div className="max-w-md w-full rounded-xl border border-border bg-card shadow-sm p-8">
+          <div className="text-center">
+            <Logo 
+              src="/hireshield-logo.png" 
+              alt="HireShield Logo" 
+              className="h-8 w-auto mx-auto mb-4"
+              fallback={
+                <div className="flex items-center justify-center space-x-2">
+                  <div className="w-8 h-8 bg-gradient-to-br from-primary to-primary/90 rounded-lg flex items-center justify-center">
+                    <svg className="w-5 h-5 text-primary-foreground" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/>
+                      <path fill="currentColor" d="M10 17l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9z"/>
+                    </svg>
+                  </div>
+                  <span className="text-xl font-semibold text-foreground">HireShield</span>
+                </div>
+              }
+            />
+            <h1 className="text-2xl font-semibold text-foreground mb-4">
+              Authentication Setup Required
+            </h1>
+            <p className="text-muted-foreground mb-6">
+              Please configure Clerk environment variables to enable authentication.
+            </p>
+            <div className="text-sm text-muted-foreground">
+              <p className="mb-2">Get your keys at:</p>
+              <a 
+                href="https://dashboard.clerk.com/last-active?path=api-keys" 
+                className="text-primary hover:text-primary/90 underline"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Clerk Dashboard → API Keys
+              </a>
+            </div>
+          </div>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen w-full bg-background flex items-center justify-center p-6">
