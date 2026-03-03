@@ -1,6 +1,33 @@
 import { SignIn } from "@clerk/nextjs";
+import { Suspense } from "react";
 
 export const dynamic = 'force-dynamic';
+
+function SignInComponent() {
+  try {
+    return (
+      <SignIn 
+        redirectUrl="/app"
+        appearance={{
+          elements: {
+            rootBox: "mx-auto",
+            card: "shadow-none border-0 p-0",
+            headerTitle: "hidden",
+            headerSubtitle: "hidden",
+          }
+        }}
+      />
+    );
+  } catch (error) {
+    console.error("SignIn component error:", error);
+    return (
+      <div className="text-center py-8">
+        <p className="text-red-600 mb-4">Authentication service unavailable</p>
+        <p className="text-sm text-gray-600">Please try again later or contact support</p>
+      </div>
+    );
+  }
+}
 
 export default function LoginPage() {
   return (
@@ -104,22 +131,13 @@ export default function LoginPage() {
 
             {/* Clerk SignIn Component */}
             <div className="mb-6">
-              <SignIn 
-                redirectUrl="/app"
-                appearance={{
-                  elements: {
-                    rootBox: "mx-auto",
-                    card: "shadow-none border-0 p-0",
-                    headerTitle: "hidden",
-                    headerSubtitle: "hidden",
-                    socialButtonsBlockButton: "w-full flex justify-center items-center py-3 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500",
-                    formButtonPrimary: "w-full flex justify-center py-3 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500",
-                    formFieldInput: "appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm",
-                    dividerText: "text-gray-500 text-sm",
-                    footerActionLink: "text-blue-600 hover:text-blue-500 text-sm font-medium"
-                  }
-                }}
-              />
+              <Suspense fallback={
+                <div className="flex justify-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                </div>
+              }>
+                <SignInComponent />
+              </Suspense>
             </div>
 
             {/* Footer */}
