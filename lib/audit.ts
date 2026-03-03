@@ -38,7 +38,7 @@ export async function createAuditLog({
         action,
         entityType,
         entityId,
-        metadataJson: Object.keys(filteredMetadata).length > 0 ? filteredMetadata : null,
+        metadataJson: Object.keys(filteredMetadata).length > 0 ? filteredMetadata as any : undefined,
       },
     });
   } catch (error) {
