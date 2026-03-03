@@ -1,0 +1,12 @@
+{
+  "css.validate": false,
+  "tailwindCSS.includeLanguages": {
+    "css": "css"
+  },
+  "tailwindCSS.experimental.classRegex": [
+    ["@apply\\s+([^;]+);", "$1"]
+  ],
+  "files.associations": {
+    "*.css": "tailwindcss"
+  }
+}
