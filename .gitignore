@@ -16,6 +16,9 @@
 # production
 /build
 
+# temporary Lovable clone (integration reference)
+_hire-smart-ai
+
 # misc
 .DS_Store
 *.pem
