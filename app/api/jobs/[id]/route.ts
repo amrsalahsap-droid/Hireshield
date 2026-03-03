@@ -455,6 +455,8 @@ export const POST = withOrgContext(async (request: NextRequest, orgId: string, {
 export const PUT = withOrgContext(async (request: NextRequest, orgId: string, { params }: { params: { id: string } }) => {
   try {
     const { id } = params;
+    const { searchParams } = new URL(request.url);
+    const force = searchParams.get('force') === '1';
 
     if (!id) {
       return NextResponse.json(
@@ -475,7 +477,7 @@ export const PUT = withOrgContext(async (request: NextRequest, orgId: string, { 
       );
     }
 
-    // 409 if JD not analyzed - requires explicit dependency
+    // Validate precondition: jdExtractionJson exists
     if (!job.jdExtractionJson) {
       return NextResponse.json(
         { error: "Analyze JD first", message: "Job description must be analyzed before generating interview kit" },
@@ -483,71 +485,171 @@ export const PUT = withOrgContext(async (request: NextRequest, orgId: string, { 
       );
     }
 
+    // Check for cached results (unless force flag is set)
+    if (!force && job.interviewKitJson && job.interviewKitGeneratedAt) {
+      return NextResponse.json({
+        interviewKit: job.interviewKitJson,
+        requestId: null,
+        cached: true,
+        job: {
+          id: job.id,
+          title: job.title,
+          interviewKitGeneratedAt: job.interviewKitGeneratedAt,
+          interviewKitPromptVersion: job.interviewKitPromptVersion,
+        },
+      });
+    }
+
     // Generate request ID for tracking
     const requestId = randomUUID();
 
-    // Extract data from JD analysis
-    const jdExtraction = job.jdExtractionJson as any;
+    // Get current user for audit logging
+    let actorUserId: string | null = null;
+    try {
+      const currentUser = await getCurrentUserOrThrow();
+      // Get the database user ID from clerk user ID
+      const dbUser = await prisma.user.findUnique({
+        where: { clerkUserId: currentUser.clerkUserId },
+        select: { id: true }
+      });
+      actorUserId = dbUser?.id || null;
+    } catch (error) {
+      // Continue without audit logging if auth fails
+      console.warn("Failed to get current user for audit logging:", error);
+    }
 
-    // Build prompt from JD extraction
-    const prompt = interviewKitGeneratorV1.build({
-      jobTitle: jdExtraction.roleTitle || job.title,
-      seniorityLevel: jdExtraction.seniorityLevel || 'UNKNOWN',
-      requiredSkills: jdExtraction.requiredSkills || [],
-      preferredSkills: jdExtraction.preferredSkills || [],
-      keyResponsibilities: jdExtraction.keyResponsibilities || [],
-      rawJD: job.rawJD,
-    });
-
-    // Call LLM with InterviewKit_v1 schema parsing
-    const result = await callLLMAndParseJSON({
-      promptId: interviewKitGeneratorV1.id,
-      system: prompt.system,
-      user: prompt.user,
-      schema: InterviewKit_v1,
-      requestId,
-      orgId,
-    });
-
-    // Save interview kit to database
-    const updatedJob = await prisma.job.update({
+    // Update status to RUNNING
+    await prisma.job.update({
       where: { id },
       data: {
-        interviewKitJson: result.value,
-        interviewKitGeneratedAt: new Date(),
-        interviewKitPromptVersion: interviewKitGeneratorV1.version,
+        interviewKitStatus: 'RUNNING',
+        interviewKitLastError: null,
       },
     });
 
-    return NextResponse.json({
-      interviewKit: result.value,
-      requestId,
-      job: {
-        id: updatedJob.id,
-        title: updatedJob.title,
-        interviewKitGeneratedAt: updatedJob.interviewKitGeneratedAt,
-        interviewKitPromptVersion: updatedJob.interviewKitPromptVersion,
-      },
-      meta: result.meta,
-    });
+    try {
+      // Extract data from JD analysis
+      const jdExtraction = job.jdExtractionJson as any;
 
-  } catch (error) {
-    console.error("Error generating interview kit:", error);
-    
-    // Handle LLM-specific errors
-    if (error && typeof error === 'object' && 'code' in error) {
-      const llmError = error as any;
+      // Build prompt from JD extraction
+      const prompt = interviewKitGeneratorV1.build({
+        jobTitle: jdExtraction.roleTitle || job.title,
+        seniorityLevel: jdExtraction.seniorityLevel || 'UNKNOWN',
+        requiredSkills: jdExtraction.requiredSkills || [],
+        preferredSkills: jdExtraction.preferredSkills || [],
+        keyResponsibilities: jdExtraction.keyResponsibilities || [],
+        rawJD: job.rawJD,
+      });
+
+      // Call LLM with InterviewKit_v1 schema parsing
+      const result = await callLLMAndParseJSON({
+        promptId: interviewKitGeneratorV1.id,
+        system: prompt.system,
+        user: prompt.user,
+        schema: InterviewKit_v1,
+        requestId,
+        orgId,
+      });
+
+      // Save interview kit to database
+      const updatedJob = await prisma.job.update({
+        where: { id },
+        data: {
+          interviewKitJson: result.value,
+          interviewKitGeneratedAt: new Date(),
+          interviewKitPromptVersion: interviewKitGeneratorV1.version,
+          interviewKitStatus: 'DONE',
+          interviewKitLastError: null,
+        },
+      });
+
+      // Log successful generation
+      if (actorUserId) {
+        await createAuditLog({
+          orgId,
+          actorUserId,
+          action: AUDIT_ACTIONS.JOB_INTERVIEW_KIT_GENERATED,
+          entityType: 'JOB',
+          entityId: id,
+          metadata: { 
+            requestId,
+            force,
+          },
+        });
+      }
+
+      return NextResponse.json({
+        interviewKit: result.value,
+        requestId,
+        cached: false,
+        job: {
+          id: updatedJob.id,
+          title: updatedJob.title,
+          interviewKitGeneratedAt: updatedJob.interviewKitGeneratedAt,
+          interviewKitPromptVersion: updatedJob.interviewKitPromptVersion,
+        },
+        meta: result.meta,
+      });
+
+    } catch (error) {
+      console.error("Error generating interview kit:", error);
+      
+      // Update job status to FAILED with error details
+      try {
+        await prisma.job.update({
+          where: { id },
+          data: {
+            interviewKitStatus: 'FAILED',
+            interviewKitLastError: error instanceof Error ? error.message : 'Unknown error',
+          },
+        });
+      } catch (updateError) {
+        console.error("Failed to update job error status:", updateError);
+      }
+
+      // Log generation failure
+      if (actorUserId) {
+        await createAuditLog({
+          orgId,
+          actorUserId,
+          action: AUDIT_ACTIONS.JOB_INTERVIEW_KIT_GENERATE_FAILED,
+          entityType: 'JOB',
+          entityId: id,
+          metadata: { 
+            requestId,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          },
+        });
+      }
+      
+      // Handle LLM-specific errors
+      if (error && typeof error === 'object' && 'code' in error) {
+        const llmError = error as any;
+        const statusCode = llmError.code === 'RATE_LIMIT' ? 429 : 
+                          llmError.code === 'TIMEOUT' ? 502 : 500;
+        
+        return NextResponse.json(
+          { 
+            error: "Interview kit generation failed",
+            details: llmError.message,
+            code: llmError.code,
+            requestId,
+          },
+          { status: statusCode }
+        );
+      }
+
       return NextResponse.json(
         { 
-          error: "Interview kit generation failed",
-          details: llmError.message,
-          code: llmError.code,
-          requestId: llmError.requestId,
+          error: "Failed to generate interview kit",
+          requestId,
+          details: error instanceof Error ? error.message : 'Unknown error',
         },
         { status: 500 }
       );
     }
-
+  } catch (error) {
+    console.error("Error in PUT /api/jobs/[id]/generate-interview-kit:", error);
     return NextResponse.json(
       { error: "Failed to generate interview kit" },
       { status: 500 }
