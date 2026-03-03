@@ -1,5 +1,6 @@
 import { SignIn } from "@clerk/nextjs";
 import { Suspense } from "react";
+import { Logo } from "@/components/ui/logo";
 
 export const dynamic = 'force-dynamic';
 
@@ -38,30 +39,26 @@ export default function LoginPage() {
         <div>
           {/* Logo Section */}
           <div className="mb-8 flex items-center space-x-3">
-            {/* HireShield Logo - Replace with your actual logo file */}
-            <img 
+            {/* HireShield Logo */}
+            <Logo 
               src="/hireshield-logo.png" 
               alt="HireShield Logo" 
               className="h-12 w-auto"
-              onError={(e) => {
-                // Fallback to SVG if image fails to load
-                e.currentTarget.style.display = 'none';
-                e.currentTarget.nextElementSibling?.classList.remove('hidden');
-              }}
+              fallback={
+                <div className="flex items-center space-x-3">
+                  <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center shadow-lg">
+                    <svg className="w-7 h-7 text-white" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/>
+                      <path fill="white" d="M10 17l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9z"/>
+                    </svg>
+                  </div>
+                  <div>
+                    <h1 className="text-3xl font-bold text-white mb-1">HireShield</h1>
+                    <p className="text-slate-300 text-sm uppercase tracking-wide">STRUCTURED HIRING. REDUCED RISK.</p>
+                  </div>
+                </div>
+              }
             />
-            {/* Fallback SVG logo */}
-            <div className="hidden items-center space-x-3">
-              <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center shadow-lg">
-                <svg className="w-7 h-7 text-white" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4z"/>
-                  <path fill="white" d="M10 17l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9z"/>
-                </svg>
-              </div>
-              <div>
-                <h1 className="text-3xl font-bold text-white mb-1">HireShield</h1>
-                <p className="text-slate-300 text-sm uppercase tracking-wide">STRUCTURED HIRING. REDUCED RISK.</p>
-              </div>
-            </div>
           </div>
 
           {/* Subtle blue glowing line under tagline */}

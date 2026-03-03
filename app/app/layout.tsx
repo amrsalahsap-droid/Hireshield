@@ -1,6 +1,7 @@
 import { UserButton } from "@clerk/nextjs";
 import Link from "next/link";
-import { auth, currentUser } from "@clerk/nextjs/server";
+import { currentUser } from "@clerk/nextjs/server";
+import { Logo } from "@/components/ui/logo";
 
 export default async function AppLayout({
   children,
@@ -30,22 +31,16 @@ export default async function AppLayout({
         <div className="p-6 border-b border-neutral-200">
           <div className="flex items-center space-x-3">
             {/* HireShield Logo */}
-            <img 
+            <Logo 
               src="/hireshield-logo.png" 
               alt="HireShield Logo" 
               className="h-8 w-auto"
-              onError={(e) => {
-                // Fallback to text if image fails to load
-                e.currentTarget.style.display = 'none';
-                e.currentTarget.nextElementSibling?.classList.remove('hidden');
-              }}
+              fallback={
+                <h1 className="text-xl font-semibold text-neutral-900">
+                  HireShield
+                </h1>
+              }
             />
-            {/* Fallback text logo */}
-            <div className="hidden">
-              <h1 className="text-xl font-semibold text-neutral-900">
-                HireShield
-              </h1>
-            </div>
           </div>
         </div>
         
