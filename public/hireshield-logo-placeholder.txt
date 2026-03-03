@@ -1,0 +1,4 @@
+<!-- Add your HireShield logo here -->
+<!-- Replace this placeholder with your actual logo file -->
+<!-- Recommended size: 200x60px, transparent background -->
+<!-- File should be placed in: public/hireshield-logo.png or public/hireshield-logo.svg -->

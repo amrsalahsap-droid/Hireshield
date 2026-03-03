@@ -1,17 +1,12 @@
 import type { Metadata } from "next";
-import localFont from "next/font/local";
+import { Inter } from "next/font/google";
 import "./globals.css";
 import { ClerkProvider } from "@clerk/nextjs";
 
-const geistSans = localFont({
-  src: "./fonts/GeistVF.woff",
-  variable: "--font-geist-sans",
-  weight: "100 900",
-});
-const geistMono = localFont({
-  src: "./fonts/GeistMonoVF.woff",
-  variable: "--font-geist-mono",
-  weight: "100 900",
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
 });
 
 export const metadata: Metadata = {
@@ -32,15 +27,15 @@ export default function RootLayout({
     return (
       <html lang="en">
         <body
-          className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+          className={`${inter.variable} font-sans antialiased`}
         >
-          <div className="min-h-screen flex items-center justify-center bg-gray-50">
+          <div className="min-h-screen flex items-center justify-center bg-neutral-50">
             <div className="text-center">
-              <h1 className="text-4xl font-bold mb-4 text-gray-900">HireShield</h1>
-              <p className="text-lg text-gray-600 mb-8">
+              <h1 className="text-4xl font-bold mb-4 text-neutral-900">HireShield</h1>
+              <p className="text-lg text-neutral-600 mb-8">
                 AI-powered hiring evaluation platform
               </p>
-              <div className="text-sm text-gray-500">
+              <div className="text-sm text-neutral-500">
                 Please configure Clerk environment variables to enable authentication
               </div>
             </div>
@@ -54,7 +49,7 @@ export default function RootLayout({
     <ClerkProvider>
       <html lang="en">
         <body
-          className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+          className={`${inter.variable} font-sans antialiased`}
         >
           {children}
         </body>

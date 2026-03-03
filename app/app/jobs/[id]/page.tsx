@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { ErrorState, LoadingState } from "@/components/ui/ErrorState";
 import { JDExtractionViewer } from "@/components/jobs/jd-extraction-viewer";
+import { InterviewKitViewer } from "@/components/jobs/interview-kit-viewer";
 
 interface Job {
   id: string;
@@ -68,6 +69,7 @@ export default function JobDetailsPage() {
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [analysisRequestId, setAnalysisRequestId] = useState<string | null>(null);
   const [kitError, setKitError] = useState<string | null>(null);
+  const [kitRequestId, setKitRequestId] = useState<string | null>(null);
   const [formErrors, setFormErrors] = useState({
     candidate: "",
     transcript: "",
@@ -228,14 +230,19 @@ export default function JobDetailsPage() {
   };
 
   // Generate Interview Kit function
-  const generateInterviewKit = async () => {
+  const generateInterviewKit = async (force = false) => {
     if (!job) return;
     
     setIsGeneratingKit(true);
     setKitError(null);
+    setKitRequestId(null);
     
     try {
-      const response = await fetch(`/api/jobs/${job.id}/generate-interview-kit`, {
+      const url = force 
+        ? `/api/jobs/${job.id}/generate-interview-kit?force=1`
+        : `/api/jobs/${job.id}/generate-interview-kit`;
+      
+      const response = await fetch(url, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -250,10 +257,12 @@ export default function JobDetailsPage() {
       } else {
         const errorData = await response.json();
         setKitError(errorData.error || 'Failed to generate interview kit');
+        setKitRequestId(errorData.requestId || null);
       }
     } catch (error) {
       console.error("Error generating interview kit:", error);
       setKitError('Network error occurred while generating interview kit');
+      setKitRequestId(null);
     } finally {
       setIsGeneratingKit(false);
     }
@@ -505,7 +514,7 @@ export default function JobDetailsPage() {
           )}
         </button>
         <button
-          onClick={generateInterviewKit}
+          onClick={() => generateInterviewKit(!!job?.interviewKitJson)}
           disabled={isGeneratingKit || !job?.jdExtractionJson}
           title={!job?.jdExtractionJson ? "Analyze JD first" : ""}
           className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-teal-600 hover:bg-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -513,11 +522,11 @@ export default function JobDetailsPage() {
           {isGeneratingKit ? (
             <>
               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-              Generating...
+              {job?.interviewKitJson ? 'Regenerating...' : 'Generating...'}
             </>
           ) : (
             <>
-              📋 Generate Interview Kit
+              📋 {job?.interviewKitJson ? 'Regenerate Interview Kit' : 'Generate Interview Kit'}
             </>
           )}
         </button>
@@ -568,9 +577,17 @@ export default function JobDetailsPage() {
               <div className="mt-2 text-sm text-red-700">
                 {kitError}
               </div>
+              {kitRequestId && (
+                <div className="mt-2 text-xs text-red-600">
+                  Request ID: {kitRequestId}
+                </div>
+              )}
               <div className="mt-4">
                 <button
-                  onClick={() => setKitError(null)}
+                  onClick={() => {
+                    setKitError(null);
+                    setKitRequestId(null);
+                  }}
                   className="text-sm font-medium text-red-600 hover:text-red-800"
                 >
                   Dismiss
@@ -636,135 +653,11 @@ export default function JobDetailsPage() {
 
           {/* Interview Kit Results */}
           {job.interviewKitJson && (
-            <div className="bg-white shadow rounded-lg">
-              <div className="px-6 py-4 border-b border-gray-200">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-lg font-medium text-gray-900">Interview Kit</h2>
-                  <div className="flex items-center space-x-2">
-                    {job.interviewKitPromptVersion && (
-                      <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
-                        v{job.interviewKitPromptVersion}
-                      </span>
-                    )}
-                    {job.interviewKitGeneratedAt && (
-                      <span className="text-xs text-gray-500">
-                        Generated {new Date(job.interviewKitGeneratedAt).toLocaleDateString()}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-              <div className="px-6 py-4 space-y-6">
-                {/* Role Information */}
-                <div>
-                  <h3 className="text-sm font-medium text-gray-900 mb-2">Role Title</h3>
-                  <p className="text-sm text-gray-700">{job.interviewKitJson.roleTitle || 'Not specified'}</p>
-                </div>
-
-                {/* Competencies */}
-                {job.interviewKitJson.competencies && job.interviewKitJson.competencies.length > 0 && (
-                  <div>
-                    <h3 className="text-sm font-medium text-gray-900 mb-4">Core Competencies ({job.interviewKitJson.competencies.length})</h3>
-                    <div className="space-y-4">
-                      {job.interviewKitJson.competencies.map((competency: any, index: number) => (
-                        <div key={index} className="border border-gray-200 rounded-lg p-4">
-                          <h4 className="text-sm font-medium text-gray-900 mb-2">{competency.name}</h4>
-                          <p className="text-sm text-gray-600 mb-3">{competency.definition}</p>
-                          
-                          {/* Questions by Type */}
-                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {/* Behavioral Questions */}
-                            {competency.questions?.behavioral && competency.questions.behavioral.length > 0 && (
-                              <div>
-                                <h5 className="text-xs font-medium text-gray-700 mb-2">Behavioral ({competency.questions.behavioral.length})</h5>
-                                <div className="space-y-2">
-                                  {competency.questions.behavioral.map((question: any, qIndex: number) => (
-                                    <div key={qIndex} className="bg-blue-50 p-2 rounded text-xs">
-                                      <p className="font-medium text-blue-800">{question.question}</p>
-                                      <p className="text-blue-600 mt-1">Good: {question.whatGoodLooksLike}</p>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                            
-                            {/* Technical Questions */}
-                            {competency.questions?.technical && competency.questions.technical.length > 0 && (
-                              <div>
-                                <h5 className="text-xs font-medium text-gray-700 mb-2">Technical ({competency.questions.technical.length})</h5>
-                                <div className="space-y-2">
-                                  {competency.questions.technical.map((question: any, qIndex: number) => (
-                                    <div key={qIndex} className="bg-green-50 p-2 rounded text-xs">
-                                      <p className="font-medium text-green-800">{question.question}</p>
-                                      <p className="text-green-600 mt-1">Good: {question.whatGoodLooksLike}</p>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                            
-                            {/* Scenario Questions */}
-                            {competency.questions?.scenario && competency.questions.scenario.length > 0 && (
-                              <div>
-                                <h5 className="text-xs font-medium text-gray-700 mb-2">Scenario ({competency.questions.scenario.length})</h5>
-                                <div className="space-y-2">
-                                  {competency.questions.scenario.map((question: any, qIndex: number) => (
-                                    <div key={qIndex} className="bg-purple-50 p-2 rounded text-xs">
-                                      <p className="font-medium text-purple-800">{question.question}</p>
-                                      <p className="text-purple-600 mt-1">Good: {question.whatGoodLooksLike}</p>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                            
-                            {/* Culture Fit Questions */}
-                            {competency.questions?.cultureFit && competency.questions.cultureFit.length > 0 && (
-                              <div>
-                                <h5 className="text-xs font-medium text-gray-700 mb-2">Culture Fit ({competency.questions.cultureFit.length})</h5>
-                                <div className="space-y-2">
-                                  {competency.questions.cultureFit.map((question: any, qIndex: number) => (
-                                    <div key={qIndex} className="bg-yellow-50 p-2 rounded text-xs">
-                                      <p className="font-medium text-yellow-800">{question.question}</p>
-                                      <p className="text-yellow-600 mt-1">Good: {question.whatGoodLooksLike}</p>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                            
-                            {/* Red Flag Probes */}
-                            {competency.questions?.redFlagProbes && competency.questions.redFlagProbes.length > 0 && (
-                              <div>
-                                <h5 className="text-xs font-medium text-gray-700 mb-2">Red Flag Probes ({competency.questions.redFlagProbes.length})</h5>
-                                <div className="space-y-2">
-                                  {competency.questions.redFlagProbes.map((question: any, qIndex: number) => (
-                                    <div key={qIndex} className="bg-red-50 p-2 rounded text-xs">
-                                      <p className="font-medium text-red-800">{question.question}</p>
-                                      <p className="text-red-600 mt-1">Good: {question.whatGoodLooksLike}</p>
-                                    </div>
-                                  ))}
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Scoring Guide Reference */}
-                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                  <h3 className="text-sm font-medium text-gray-900 mb-2">Scoring Guide Reference</h3>
-                  <div className="text-xs text-gray-600 space-y-1">
-                    <p><span className="font-medium">1 - Poor:</span> Response does not meet expectations</p>
-                    <p><span className="font-medium">3 - Average:</span> Response meets basic expectations</p>
-                    <p><span className="font-medium">5 - Excellent:</span> Response exceeds expectations</p>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <InterviewKitViewer
+              kit={job.interviewKitJson}
+              generatedAt={job.interviewKitGeneratedAt}
+              promptVersion={job.interviewKitPromptVersion}
+            />
           )}
 
           {/* Linked Interviews & Evaluations */}
