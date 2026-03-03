@@ -162,7 +162,7 @@ export const POST = withOrgContext(async (request: NextRequest, orgId: string, {
       );
     }
 
-    // Load evaluation with Job + Candidate + latest Interview transcript
+    // Load evaluation with Job + Candidate
     const evaluation = await prisma.evaluation.findFirst({
       where: { id, orgId },
       include: {
@@ -181,15 +181,6 @@ export const POST = withOrgContext(async (request: NextRequest, orgId: string, {
             rawCVText: true,
           },
         },
-        interviews: {
-          orderBy: { createdAt: 'desc' },
-          take: 1, // Get latest interview
-          select: {
-            id: true,
-            transcriptText: true,
-            createdAt: true,
-          },
-        },
       },
     });
 
@@ -199,6 +190,21 @@ export const POST = withOrgContext(async (request: NextRequest, orgId: string, {
         { status: 404 }
       );
     }
+
+    // Get latest interview for this candidate and job
+    const latestInterview = await prisma.interview.findFirst({
+      where: {
+        jobId: evaluation.jobId,
+        candidateId: evaluation.candidateId,
+        orgId,
+      },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        transcriptText: true,
+        createdAt: true,
+      },
+    });
 
     // Input validation - check CV and transcript lengths
     if (!evaluation.candidate.rawCVText || evaluation.candidate.rawCVText.trim().length === 0) {
@@ -215,7 +221,7 @@ export const POST = withOrgContext(async (request: NextRequest, orgId: string, {
       );
     }
 
-    const transcriptText = evaluation.interviews[0]?.transcriptText || '';
+    const transcriptText = latestInterview?.transcriptText || '';
     if (transcriptText.length > 200000) {
       return NextResponse.json(
         { error: "Interview transcript is too large (max 200,000 characters)" },
