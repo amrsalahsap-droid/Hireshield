@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { SignIn, SignUp } from '@clerk/nextjs';
 import { Logo } from '@/components/ui/logo';
-import { Button } from '@/components/ui/shadcn-button';
+import { Button } from '@/components/ui/button';
 
 export default function AuthPage() {
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
