@@ -3,6 +3,283 @@
 ## Overview
 This test plan verifies that the JD Analyzer system is resistant to prompt injection attacks while maintaining functionality for legitimate job descriptions.
 
+---
+
+# Manual QA Checklist: Interview Kit Usability
+
+## Overview
+This checklist validates that generated interview kits are practical, fair, and usable for real interviews across different job roles.
+
+## Test Roles
+Generate and validate interview kits for these roles:
+- **Software Engineer** (Technical role)
+- **Sales Representative** (Business/Client-facing role)  
+- **Customer Support Specialist** (Service role)
+- **QA Engineer** (Quality/Process role)
+
+## Pre-Test Setup
+- [ ] Create test job descriptions for each role
+- [ ] Generate interview kits for all test roles
+- [ ] Prepare interview simulation scenarios
+- [ ] Set up documentation template for findings
+
+## Role-Based Testing
+
+### Software Engineer Kit Validation
+**Job Description**: Senior Software Engineer with React, Node.js, cloud experience
+
+#### Technical Questions
+- [ ] Questions assess actual technical skills (React hooks, API design, databases)
+- [ ] Difficulty appropriate for senior level (not junior basics, not architect-level)
+- [ ] Questions allow candidates to demonstrate problem-solving approach
+- [ ] No trick questions or unrealistic time constraints
+
+#### Behavioral Questions  
+- [ ] Questions probe collaboration, code review, learning ability
+- [ ] Scenarios relevant to software development (tight deadlines, tech debt)
+- [ ] Questions avoid personal circumstances or lifestyle assumptions
+
+#### Rubric Validation
+- [ ] Score 5: "Shows systematic debugging with hypothesis testing and documentation"
+- [ ] Score 3: "Basic debugging steps but limited strategy"  
+- [ ] Score 1: "Random trial and error approach"
+- [ ] Rubrics focus on observable behaviors, not personality traits
+
+**Findings Template**:
+```
+✅ Questions relevant to daily work
+❌ Question about "favorite programming language" too subjective
+⚠️  Some rubrics use "good candidate" language
+```
+
+### Sales Representative Kit Validation
+**Job Description**: B2B Sales Representative with SaaS experience
+
+#### Behavioral Questions
+- [ ] Questions assess prospecting, objection handling, closing techniques
+- [ ] Scenarios reflect real sales situations (cold outreach, enterprise deals)
+- [ ] Questions avoid assumptions about gender, age, or background
+
+#### Culture Fit Questions
+- [ ] Focus on teamwork, resilience, customer empathy
+- [ ] No questions about family status, social activities, or personal life
+- [ ] Scenarios test inclusive selling practices
+
+#### Rubric Validation
+- [ ] Score 5: "Demonstrates consultative selling with value-based proposals"
+- [ ] Score 3: "Basic sales pitch but limited needs assessment"
+- [ ] Score 1: "Focuses only on product features, not customer needs"
+- [ ] Rubrics measure specific sales behaviors, not "charisma" or "aggressiveness"
+
+**Findings Template**:
+```
+✅ Scenarios realistic for SaaS sales
+❌ Question about "handling rejection" too vague
+⚠️  Some rubrics reference "natural sales ability"
+```
+
+### Customer Support Specialist Kit Validation
+**Job Description**: Technical Customer Support with B2B software experience
+
+#### Scenario Questions
+- [ ] Scenarios test de-escalation, technical troubleshooting, customer empathy
+- [ ] Questions assess prioritization and communication under pressure
+- [ ] No assumptions about technical background or previous experience
+
+#### Red Flag Probes
+- [ ] Questions identify poor customer service patterns
+- [ ] Focus on accountability and problem ownership
+- [ ] Avoid stereotypes about "difficult customers"
+
+#### Rubric Validation
+- [ ] Score 5: "Systematic issue resolution with clear communication and follow-up"
+- [ ] Score 3: "Basic troubleshooting but lacks customer empathy"
+- [ ] Score 1: "Blames customer or shows frustration"
+- [ ] Rubrics measure specific support behaviors
+
+**Findings Template**:
+```
+✅ Good mix of technical and soft skills
+❌ Some questions too company-specific
+⚠️  Rubrics need more concrete examples
+```
+
+### QA Engineer Kit Validation
+**Job Description**: QA Engineer with automation and API testing experience
+
+#### Technical Questions
+- [ ] Questions cover test strategy, automation frameworks, API testing
+- [ ] Assess understanding of quality metrics and risk assessment
+- [ ] Questions allow demonstration of analytical thinking
+
+#### Behavioral Questions
+- [ ] Focus on collaboration with developers, attention to detail
+- [ ] Scenarios about handling pressure and tight deadlines
+- [ ] No assumptions about formal education or certification
+
+#### Rubric Validation
+- [ ] Score 5: "Comprehensive test strategy with risk-based prioritization and automation"
+- [ ] Score 3: "Basic testing knowledge but limited strategic thinking"
+- [ ] Score 1: "Focuses only on manual testing without quality principles"
+- [ ] Rubrics avoid "detail-oriented" as primary criterion
+
+**Findings Template**:
+```
+✅ Questions relevant to modern QA practices
+❌ Some questions too focused on specific tools
+⚠️  Need more behavioral scenarios
+```
+
+## Quality Assurance Checks
+
+### Discrimination Prevention
+**Review all questions for**:
+- [ ] Age-related assumptions ("recent graduate", "experienced professional")
+- [ ] Gender-coded language ("aggressive", "nurturing", "assertive")
+- [ ] Cultural assumptions ("team player" implying social preferences)
+- [ ] Disability-related requirements ("stand for long periods", "lift heavy objects")
+- [ ] Socioeconomic indicators ("private school", "extracurricular activities")
+- [ ] Family status assumptions ("willing to travel", "flexible hours")
+
+**Red Flag Examples to Remove**:
+- "How would you handle working with older/younger team members?"
+- "Are you comfortable with our fast-paced, young startup culture?"
+- "Do you have reliable transportation for overtime?"
+
+**Acceptable Alternatives**:
+- "How do you adapt your communication style for different team members?"
+- "Describe your experience with project timelines and deliverable expectations"
+- "What's your availability for collaborative work and meetings?"
+
+### Rubric Concreteness Validation
+**Check all rubrics for**:
+- [ ] Specific, observable behaviors (not "good attitude")
+- [ ] Clear examples of what each score level looks like
+- [ ] Focus on actions and outcomes, not personality traits
+- [ ] Avoid subjective terms like "natural ability", "potential"
+
+**Poor Rubric Examples**:
+```
+Score 5: "Natural leader with good communication skills"
+Score 3: "Average candidate who tries hard"  
+Score 1: "Poor fit for the role"
+```
+
+**Good Rubric Examples**:
+```
+Score 5: "Facilitates team discussions, ensures all voices heard, documents decisions"
+Score 3: "Participates in discussions but doesn't actively facilitate or document"
+Score 1: "Dominates conversations or doesn't engage in team collaboration"
+```
+
+### Duplication Check Across Categories
+**Review for question overlap**:
+- [ ] Behavioral vs Technical: Same concept asked differently?
+- [ ] Scenario vs Culture Fit: Redundant situations?
+- [ ] Red Flag Probes: Duplicating behavioral questions?
+
+**Examples of Duplication to Fix**:
+```
+Behavioral: "Tell me about a time you handled a difficult team situation"
+Scenario: "Your team disagrees on a technical approach. What do you do?"
+→ Merge or differentiate clearly
+
+Technical: "How do you handle code reviews?"
+Culture Fit: "How do you give feedback to colleagues?"  
+→ Focus on different aspects (technical vs interpersonal)
+```
+
+## Usability Testing
+
+### Interview Simulation
+**For each role**:
+- [ ] Conduct mock interview using generated questions
+- [ ] Time responses (aim for 2-5 minutes per question)
+- [ ] Apply rubrics consistently
+- [ ] Note any questions that are unclear or too broad
+
+**Interviewer Feedback**:
+```
+✅ Questions flow naturally in conversation
+❌ Some questions too complex for verbal response
+⚠️  Need clearer transition between question types
+```
+
+### Candidate Experience Validation
+**Review from candidate perspective**:
+- [ ] Questions are clear and understandable
+- [ ] Scenarios are realistic and relevant
+- [ ] No questions feel invasive or inappropriate
+- [ ] Assessment criteria feel fair and transparent
+
+**Candidate Feedback Template**:
+```
+✅ Questions allowed me to showcase my skills
+❌ Some scenarios were too company-specific
+⚠️  Would like more context for technical questions
+```
+
+## Documentation and Reporting
+
+### Test Results Summary
+**For each role tested**:
+- **Questions Generated**: [count] Behavioral, [count] Technical, [count] Scenario, [count] Culture Fit, [count] Red Flag
+- **Quality Issues Found**: [count] Discriminatory language, [count] Vague rubrics, [count] Duplicate questions
+- **Usability Score**: [1-5] based on interview simulation
+- **Recommendations**: [specific improvements needed]
+
+### Action Items
+**Immediate Fixes Required**:
+- [ ] Remove/replace discriminatory questions
+- [ ] Rewrite vague rubrics with concrete examples
+- [ ] Consolidate duplicate questions
+- [ ] Add missing scenario types
+
+**Improvement Opportunities**:
+- [ ] Add role-specific scenarios
+- [ ] Enhance rubric detail level
+- [ ] Balance question difficulty
+- [ ] Improve question flow and sequencing
+
+## Acceptance Criteria
+
+### Checklist Completion
+- [ ] All 4 test roles have been evaluated
+- [ ] Discrimination check completed for all questions
+- [ ] Rubric concreteness validated across all categories
+- [ ] Duplication analysis completed
+- [ ] Interview simulation conducted for each role
+- [ ] Findings documented with specific examples
+
+### Quality Gates
+- [ ] Zero discriminatory questions remain
+- [ ] All rubrics use concrete, observable behaviors
+- [ ] No significant question overlap between categories
+- [ ] Interview simulation scores ≥ 3/5 for all roles
+- [ ] Candidate experience feedback positive
+
+### Documentation Requirements
+- [ ] Test findings recorded with specific examples
+- [ ] Before/after examples for question improvements
+- [ ] Action items prioritized and assigned
+- [ ] Success metrics defined for future validation
+
+## Ongoing Monitoring
+
+### Regular Reviews
+- **Monthly**: Spot-check new interview kits for quality issues
+- **Quarterly**: Full usability review with new role testing
+- **After Updates**: Re-validate when generation logic changes
+
+### Quality Metrics
+- Question discrimination rate: Target 0%
+- Rubric concreteness score: Target 100%
+- Question duplication rate: Target <5%
+- Interview simulation satisfaction: Target ≥4/5
+- Candidate experience feedback: Target ≥4/5
+
+---
+
 ## Test Data
 - **testdata/jd/injection_attempt_1.txt**: JSON output override attempt
 - **testdata/jd/injection_attempt_2.txt**: YAML format override attempt  

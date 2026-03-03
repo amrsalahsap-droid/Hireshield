@@ -9,6 +9,7 @@ import { InterviewKit_v1 } from "@/lib/schemas/interview-kit";
 import { randomUUID } from "crypto";
 import { createAuditLog, AUDIT_ACTIONS } from "@/lib/audit";
 import { getCurrentUserOrThrow } from "@/lib/server/auth";
+import { incrementInterviewKitUsage, getUsageSnapshot } from "@/lib/usage";
 
 // GET /api/jobs/[id] - Get job details or JD analysis status
 export const GET = withOrgContext(async (request: NextRequest, orgId: string, { params }: { params: { id: string } }) => {
@@ -487,6 +488,40 @@ export const PUT = withOrgContext(async (request: NextRequest, orgId: string, { 
 
     // Check for cached results (unless force flag is set)
     if (!force && job.interviewKitJson && job.interviewKitGeneratedAt) {
+      // Get current user for audit logging
+      let actorUserId: string | null = null;
+      try {
+        const currentUser = await getCurrentUserOrThrow();
+        // Get the database user ID from clerk user ID
+        const dbUser = await prisma.user.findUnique({
+          where: { clerkUserId: currentUser.clerkUserId },
+          select: { id: true }
+        });
+        actorUserId = dbUser?.id || null;
+      } catch (error) {
+        // Continue without audit logging if auth fails
+        console.warn("Failed to get current user for audit logging:", error);
+      }
+
+      // Log cached interview kit access
+      if (actorUserId) {
+        await createAuditLog({
+          orgId,
+          actorUserId,
+          action: AUDIT_ACTIONS.JOB_INTERVIEW_KIT_COMPLETED,
+          entityType: 'JOB',
+          entityId: id,
+          metadata: { 
+            requestId: undefined,
+            promptVersion: job.interviewKitPromptVersion,
+            cached: true,
+          },
+        });
+      }
+
+      // Get usage snapshot for cached response
+      const usageSnapshot = await getUsageSnapshot(orgId);
+
       return NextResponse.json({
         interviewKit: job.interviewKitJson,
         requestId: null,
@@ -497,6 +532,7 @@ export const PUT = withOrgContext(async (request: NextRequest, orgId: string, { 
           interviewKitGeneratedAt: job.interviewKitGeneratedAt,
           interviewKitPromptVersion: job.interviewKitPromptVersion,
         },
+        usage: usageSnapshot,
       });
     }
 
@@ -527,17 +563,117 @@ export const PUT = withOrgContext(async (request: NextRequest, orgId: string, { 
       },
     });
 
-    try {
-      // Extract data from JD analysis
-      const jdExtraction = job.jdExtractionJson as any;
+    // Log interview kit generation request
+    if (actorUserId) {
+      await createAuditLog({
+        orgId,
+        actorUserId,
+        action: AUDIT_ACTIONS.JOB_INTERVIEW_KIT_REQUESTED,
+        entityType: 'JOB',
+        entityId: id,
+        metadata: { 
+          requestId,
+          force,
+        },
+      });
+    }
 
-      // Build prompt from JD extraction
+    try {
+      // Extract and validate JD analysis data (defensive programming)
+      const jdExtraction = job.jdExtractionJson as any;
+      
+      // Validate JD extraction against schema before using it
+      const validationResult = JDExtraction_v1.safeParse(jdExtraction);
+      
+      if (!validationResult.success) {
+        console.error("JD extraction validation failed for job", id, {
+          error: validationResult.error,
+          jobId: id,
+          orgId,
+        });
+        
+        // Update job status to FAILED with corruption error
+        await prisma.job.update({
+          where: { id },
+          data: {
+            interviewKitStatus: 'FAILED',
+            interviewKitLastError: 'JD analysis is invalid; re-analyze JD.',
+          },
+        });
+
+        // Log interview kit generation failure
+        if (actorUserId) {
+          await createAuditLog({
+            orgId,
+            actorUserId,
+            action: AUDIT_ACTIONS.JOB_INTERVIEW_KIT_FAILED,
+            entityType: 'JOB',
+            entityId: id,
+            metadata: { 
+              requestId,
+              error: 'JD analysis is invalid; re-analyze JD.',
+              errorCode: 'DATA_CORRUPTION',
+            },
+          });
+        }
+        
+        return NextResponse.json(
+          { 
+            error: "JD analysis is invalid; re-analyze JD.",
+            code: 'DATA_CORRUPTION',
+            details: 'The stored job description analysis is corrupted or invalid. Please re-analyze the job description.',
+            requestId,
+          },
+          { status: 409 }
+        );
+      }
+      
+      // Enforce additional limits (defensive checks beyond schema)
+      const validatedData = validationResult.data;
+      
+      if (validatedData.requiredSkills.length > 20) {
+        console.error("Required skills exceeds limit", {
+          count: validatedData.requiredSkills.length,
+          jobId: id,
+          orgId,
+        });
+        
+        return NextResponse.json(
+          { 
+            error: "JD analysis is invalid; re-analyze JD.",
+            code: 'DATA_CORRUPTION',
+            details: 'Required skills count exceeds allowed limit.',
+            requestId,
+          },
+          { status: 409 }
+        );
+      }
+      
+      if (validatedData.keyResponsibilities.length > 15) {
+        console.error("Key responsibilities exceeds limit", {
+          count: validatedData.keyResponsibilities.length,
+          jobId: id,
+          orgId,
+        });
+        
+        return NextResponse.json(
+          { 
+            error: "JD analysis is invalid; re-analyze JD.",
+            code: 'DATA_CORRUPTION',
+            details: 'Key responsibilities count exceeds allowed limit.',
+            requestId,
+          },
+          { status: 409 }
+        );
+      }
+
+      // Build prompt from validated JD extraction
       const prompt = interviewKitGeneratorV1.build({
-        jobTitle: jdExtraction.roleTitle || job.title,
-        seniorityLevel: jdExtraction.seniorityLevel || 'UNKNOWN',
-        requiredSkills: jdExtraction.requiredSkills || [],
-        preferredSkills: jdExtraction.preferredSkills || [],
-        keyResponsibilities: jdExtraction.keyResponsibilities || [],
+        jobTitle: validatedData.roleTitle || job.title,
+        seniorityLevel: validatedData.seniorityLevel || 'UNKNOWN',
+        requiredSkills: validatedData.requiredSkills || [],
+        preferredSkills: validatedData.preferredSkills || [],
+        keyResponsibilities: validatedData.keyResponsibilities || [],
         rawJD: job.rawJD,
       });
 
@@ -568,14 +704,22 @@ export const PUT = withOrgContext(async (request: NextRequest, orgId: string, { 
         await createAuditLog({
           orgId,
           actorUserId,
-          action: AUDIT_ACTIONS.JOB_INTERVIEW_KIT_GENERATED,
+          action: AUDIT_ACTIONS.JOB_INTERVIEW_KIT_COMPLETED,
           entityType: 'JOB',
           entityId: id,
           metadata: { 
             requestId,
+            promptVersion: interviewKitGeneratorV1.version,
             force,
           },
         });
+      }
+
+      // Increment usage count for non-cached generation
+      const usageResult = await incrementInterviewKitUsage(orgId);
+      if (!usageResult.success) {
+        console.error('Failed to increment usage:', usageResult.error);
+        // Don't fail the request, but log the error
       }
 
       return NextResponse.json({
@@ -588,6 +732,7 @@ export const PUT = withOrgContext(async (request: NextRequest, orgId: string, { 
           interviewKitGeneratedAt: updatedJob.interviewKitGeneratedAt,
           interviewKitPromptVersion: updatedJob.interviewKitPromptVersion,
         },
+        usage: usageResult.success ? usageResult.usage : undefined,
         meta: result.meta,
       });
 
@@ -612,11 +757,12 @@ export const PUT = withOrgContext(async (request: NextRequest, orgId: string, { 
         await createAuditLog({
           orgId,
           actorUserId,
-          action: AUDIT_ACTIONS.JOB_INTERVIEW_KIT_GENERATE_FAILED,
+          action: AUDIT_ACTIONS.JOB_INTERVIEW_KIT_FAILED,
           entityType: 'JOB',
           entityId: id,
           metadata: { 
             requestId,
+            promptVersion: interviewKitGeneratorV1.version,
             error: error instanceof Error ? error.message : 'Unknown error',
           },
         });
