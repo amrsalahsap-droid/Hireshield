@@ -28,7 +28,7 @@ export default async function AppLayout({
       {/* Sidebar */}
       <div className="w-64 bg-white shadow-subtle border-r border-neutral-200">
         {/* Logo Header */}
-        <div className="p-6 border-b border-neutral-200">
+        <div className="p-6 border-b border-border">
           <div className="flex items-center space-x-3">
             {/* HireShield Logo */}
             <Logo 
@@ -36,7 +36,7 @@ export default async function AppLayout({
               alt="HireShield Logo" 
               className="h-8 w-auto"
               fallback={
-                <h1 className="text-xl font-semibold text-neutral-900">
+                <h1 className="text-xl font-semibold text-foreground">
                   HireShield
                 </h1>
               }
@@ -50,7 +50,7 @@ export default async function AppLayout({
             <Link
               key={item.name}
               href={item.href}
-              className="flex items-center px-3 py-2 text-body font-medium rounded-button text-neutral-600 hover:text-neutral-900 hover:bg-neutral-50 transition-colors"
+              className="flex items-center px-3 py-2 text-sm font-medium rounded-button text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
             >
               <span className="mr-3 text-lg">{item.icon}</span>
               {item.name}
@@ -59,9 +59,9 @@ export default async function AppLayout({
         </nav>
         
         {/* User info */}
-        <div className="absolute bottom-0 w-64 p-6 border-t border-neutral-200">
+        <div className="absolute bottom-0 w-64 p-6 border-t border-border">
           <div className="flex flex-col space-y-3">
-            <div className="text-secondary text-neutral-500">
+            <div className="text-secondary text-muted-foreground">
               {user?.id ? `User: ${user.id.slice(0, 8)}...` : "Not authenticated"}
             </div>
             <UserButton 
@@ -78,9 +78,9 @@ export default async function AppLayout({
 
       {/* Main content */}
       <div className="flex-1 flex flex-col">
-        <header className="bg-white shadow-subtle border-b border-neutral-200">
+        <header className="bg-card shadow-subtle border-b border-border">
           <div className="px-6 py-4">
-            <div className="text-secondary text-neutral-500">
+            <div className="text-secondary text-muted-foreground">
               HireShield - Decision Intelligence Platform
             </div>
           </div>

@@ -1,28 +1,30 @@
 import Link from "next/link";
+import { Button } from "@/components/ui/shadcn-button";
 
 export default function Home() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50">
+    <div className="flex min-h-screen items-center justify-center bg-background">
       <div className="text-center max-w-md mx-auto p-8">
-        <h1 className="text-4xl font-bold mb-4 text-neutral-900">HireShield</h1>
-        <p className="text-lg text-slate-600 mb-8">
+        <h1 className="text-4xl font-bold mb-4 text-foreground">HireShield</h1>
+        <p className="text-lg text-muted-foreground mb-8">
           AI-powered hiring evaluation platform
         </p>
         
         <div className="space-y-4">
           <Link
             href="/auth"
-            className="block w-full bg-primary-500 text-white px-6 py-3 rounded-button hover:bg-primary-600 transition-colors font-medium"
           >
-            Get Started
+            <Button size="lg" className="w-full">
+              Get Started
+            </Button>
           </Link>
         </div>
         
-        <p className="text-sm text-slate-500 mt-8">
+        <p className="text-sm text-muted-foreground mt-8">
           Join thousands of companies using AI to streamline their hiring process
         </p>
         
-        <div className="mt-4 text-xs text-slate-400">
+        <div className="mt-4 text-xs text-muted-foreground">
           v2.0
         </div>
       </div>
