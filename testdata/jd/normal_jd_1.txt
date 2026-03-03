@@ -1,0 +1,39 @@
+Senior Data Scientist
+
+We are looking for a Senior Data Scientist to join our innovative analytics team. This role offers an exciting opportunity to work with cutting-edge machine learning technologies and drive data-driven decision making across the organization.
+
+Key Responsibilities:
+- Develop and implement machine learning models to solve complex business problems
+- Analyze large datasets to extract actionable insights and trends
+- Collaborate with cross-functional teams to identify data science opportunities
+- Design and conduct A/B tests to validate model performance
+- Present findings and recommendations to executive stakeholders
+- Mentor junior data scientists and contribute to team knowledge sharing
+
+Required Skills and Qualifications:
+- PhD or Master's degree in Computer Science, Statistics, Mathematics, or related field
+- 5+ years of experience in data science or machine learning roles
+- Strong programming skills in Python, R, or SQL
+- Experience with machine learning frameworks such as TensorFlow, PyTorch, or scikit-learn
+- Proficiency in statistical analysis and experimental design
+- Excellent communication and presentation skills
+- Experience with big data technologies (Spark, Hadoop) is a plus
+
+Preferred Qualifications:
+- Experience in cloud platforms (AWS, GCP, Azure)
+- Knowledge of deep learning and neural networks
+- Background in finance, healthcare, or e-commerce industries
+- Publications in peer-reviewed journals or conferences
+- Experience with MLOps and model deployment
+
+What We Offer:
+- Competitive salary and equity package
+- Comprehensive health, dental, and vision insurance
+- Flexible work arrangements and remote work options
+- Professional development budget and conference attendance
+- Collaborative and inclusive work environment
+- Opportunity to work on impactful projects with real-world applications
+
+Our company is an equal opportunity employer committed to diversity and inclusion in the workplace. We encourage candidates from all backgrounds to apply.
+
+If you are passionate about using data to drive business impact and want to join a team of talented data scientists, we would love to hear from you.

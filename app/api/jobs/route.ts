@@ -57,6 +57,7 @@ export const POST = withOrgContext(async (request: NextRequest, orgId: string) =
       assertMaxLen("title", title, 200);
       
       if (rawJD) {
+        assertNonEmpty("rawJD", rawJD);
         assertMaxLen("rawJD", rawJD, 10000);
       }
       

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { ErrorState, LoadingState } from "@/components/ui/ErrorState";
+import { JDExtractionViewer } from "@/components/jobs/jd-extraction-viewer";
 
 interface Job {
   id: string;
@@ -12,6 +13,14 @@ interface Job {
   createdAt: string;
   updatedAt: string;
   rawJD: string;
+  jdExtractionJson: any;
+  jdAnalyzedAt: string | null;
+  jdPromptVersion: string | null;
+  jdAnalysisStatus: 'NOT_STARTED' | 'RUNNING' | 'DONE' | 'FAILED';
+  jdLastError: string | null;
+  interviewKitJson: any;
+  interviewKitGeneratedAt: string | null;
+  interviewKitPromptVersion: string | null;
 }
 
 interface Interview {
@@ -54,6 +63,11 @@ export default function JobDetailsPage() {
   const [transcript, setTranscript] = useState("");
   const [isCreatingInterview, setIsCreatingInterview] = useState(false);
   const [isCreatingEvaluation, setIsCreatingEvaluation] = useState(false);
+  const [isAnalyzingJD, setIsAnalyzingJD] = useState(false);
+  const [isGeneratingKit, setIsGeneratingKit] = useState(false);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [analysisRequestId, setAnalysisRequestId] = useState<string | null>(null);
+  const [kitError, setKitError] = useState<string | null>(null);
   const [formErrors, setFormErrors] = useState({
     candidate: "",
     transcript: "",
@@ -140,6 +154,108 @@ export default function JobDetailsPage() {
       }
     } catch (error) {
       console.error("Error fetching candidates:", error);
+    }
+  };
+
+  // Analyze JD function
+  const analyzeJD = async () => {
+    if (!job) return;
+    
+    setIsAnalyzingJD(true);
+    setAnalysisError(null);
+    setAnalysisRequestId(null);
+    
+    try {
+      const response = await fetch(`/api/jobs/${job.id}/analyze-jd`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-org-id': 'cmm87bloy0000v9nvvzyt6aqn'
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        // Refresh job data to show the analysis results
+        await fetchJob();
+      } else {
+        const errorData = await response.json();
+        setAnalysisError(errorData.error || 'Failed to analyze job description');
+        setAnalysisRequestId(errorData.requestId || null);
+      }
+    } catch (error) {
+      console.error("Error analyzing JD:", error);
+      setAnalysisError('Network error occurred while analyzing job description');
+      setAnalysisRequestId(null);
+    } finally {
+      setIsAnalyzingJD(false);
+    }
+  };
+
+  // Re-analyze JD function (uses force=1)
+  const reanalyzeJD = async () => {
+    if (!job) return;
+    
+    setIsAnalyzingJD(true);
+    setAnalysisError(null);
+    setAnalysisRequestId(null);
+    
+    try {
+      const response = await fetch(`/api/jobs/${job.id}/analyze-jd?force=1`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-org-id': 'cmm87bloy0000v9nvvzyt6aqn'
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        // Refresh job data to show the new analysis results
+        await fetchJob();
+      } else {
+        const errorData = await response.json();
+        setAnalysisError(errorData.error || 'Failed to re-analyze job description');
+        setAnalysisRequestId(errorData.requestId || null);
+      }
+    } catch (error) {
+      console.error("Error re-analyzing JD:", error);
+      setAnalysisError('Network error occurred while re-analyzing job description');
+      setAnalysisRequestId(null);
+    } finally {
+      setIsAnalyzingJD(false);
+    }
+  };
+
+  // Generate Interview Kit function
+  const generateInterviewKit = async () => {
+    if (!job) return;
+    
+    setIsGeneratingKit(true);
+    setKitError(null);
+    
+    try {
+      const response = await fetch(`/api/jobs/${job.id}/generate-interview-kit`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-org-id': 'cmm87bloy0000v9nvvzyt6aqn'
+        }
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        // Refresh job data to show the interview kit results
+        await fetchJob();
+      } else {
+        const errorData = await response.json();
+        setKitError(errorData.error || 'Failed to generate interview kit');
+      }
+    } catch (error) {
+      console.error("Error generating interview kit:", error);
+      setKitError('Network error occurred while generating interview kit');
+    } finally {
+      setIsGeneratingKit(false);
     }
   };
 
@@ -372,7 +488,124 @@ export default function JobDetailsPage() {
         >
           📊 Create Evaluation
         </button>
+        <button
+          onClick={job?.jdExtractionJson ? reanalyzeJD : analyzeJD}
+          disabled={isAnalyzingJD || !job?.rawJD}
+          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {isAnalyzingJD ? (
+            <>
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+              {job?.jdExtractionJson ? 'Re-analyzing...' : 'Analyzing...'}
+            </>
+          ) : (
+            <>
+              🔍 {job?.jdExtractionJson ? 'Re-analyze JD' : 'Analyze JD'}
+            </>
+          )}
+        </button>
+        <button
+          onClick={generateInterviewKit}
+          disabled={isGeneratingKit || !job?.jdExtractionJson}
+          title={!job?.jdExtractionJson ? "Analyze JD first" : ""}
+          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-teal-600 hover:bg-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {isGeneratingKit ? (
+            <>
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+              Generating...
+            </>
+          ) : (
+            <>
+              📋 Generate Interview Kit
+            </>
+          )}
+        </button>
       </div>
+
+      {/* Analysis Error Alert */}
+      {analysisError && (
+        <div className="mb-6 bg-red-50 border border-red-200 rounded-md p-4">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <div className="text-red-400 text-lg">⚠️</div>
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-red-800">Analysis Failed</h3>
+              <div className="mt-2 text-sm text-red-700">
+                {analysisError}
+              </div>
+              {analysisRequestId && (
+                <div className="mt-2 text-xs text-red-600">
+                  Request ID: {analysisRequestId}
+                </div>
+              )}
+              <div className="mt-4">
+                <button
+                  onClick={() => {
+                    setAnalysisError(null);
+                    setAnalysisRequestId(null);
+                  }}
+                  className="text-sm font-medium text-red-600 hover:text-red-800"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Kit Generation Error Alert */}
+      {kitError && (
+        <div className="mb-6 bg-red-50 border border-red-200 rounded-md p-4">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <div className="text-red-400 text-lg">⚠️</div>
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-red-800">Kit Generation Failed</h3>
+              <div className="mt-2 text-sm text-red-700">
+                {kitError}
+              </div>
+              <div className="mt-4">
+                <button
+                  onClick={() => setKitError(null)}
+                  className="text-sm font-medium text-red-600 hover:text-red-800"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* JD Analysis Required Warning */}
+      {!job?.jdExtractionJson && job?.rawJD && (
+        <div className="mb-6 bg-yellow-50 border border-yellow-200 rounded-md p-4">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <div className="text-yellow-400 text-lg">💡</div>
+            </div>
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-yellow-800">Interview Kit Generation</h3>
+              <div className="mt-2 text-sm text-yellow-700">
+                Analyze the job description first to generate a comprehensive interview kit tailored to the role requirements.
+              </div>
+              <div className="mt-4">
+                <button
+                  onClick={analyzeJD}
+                  disabled={isAnalyzingJD}
+                  className="text-sm font-medium text-yellow-600 hover:text-yellow-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isAnalyzingJD ? 'Analyzing...' : 'Analyze JD First'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Job Details */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -391,6 +624,148 @@ export default function JobDetailsPage() {
               </div>
             </div>
           </div>
+
+          {/* JD Analysis Results */}
+          {job.jdExtractionJson && (
+            <JDExtractionViewer
+              extraction={job.jdExtractionJson}
+              analyzedAt={job.jdAnalyzedAt}
+              promptVersion={job.jdPromptVersion}
+            />
+          )}
+
+          {/* Interview Kit Results */}
+          {job.interviewKitJson && (
+            <div className="bg-white shadow rounded-lg">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-medium text-gray-900">Interview Kit</h2>
+                  <div className="flex items-center space-x-2">
+                    {job.interviewKitPromptVersion && (
+                      <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                        v{job.interviewKitPromptVersion}
+                      </span>
+                    )}
+                    {job.interviewKitGeneratedAt && (
+                      <span className="text-xs text-gray-500">
+                        Generated {new Date(job.interviewKitGeneratedAt).toLocaleDateString()}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <div className="px-6 py-4 space-y-6">
+                {/* Role Information */}
+                <div>
+                  <h3 className="text-sm font-medium text-gray-900 mb-2">Role Title</h3>
+                  <p className="text-sm text-gray-700">{job.interviewKitJson.roleTitle || 'Not specified'}</p>
+                </div>
+
+                {/* Competencies */}
+                {job.interviewKitJson.competencies && job.interviewKitJson.competencies.length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-900 mb-4">Core Competencies ({job.interviewKitJson.competencies.length})</h3>
+                    <div className="space-y-4">
+                      {job.interviewKitJson.competencies.map((competency: any, index: number) => (
+                        <div key={index} className="border border-gray-200 rounded-lg p-4">
+                          <h4 className="text-sm font-medium text-gray-900 mb-2">{competency.name}</h4>
+                          <p className="text-sm text-gray-600 mb-3">{competency.definition}</p>
+                          
+                          {/* Questions by Type */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {/* Behavioral Questions */}
+                            {competency.questions?.behavioral && competency.questions.behavioral.length > 0 && (
+                              <div>
+                                <h5 className="text-xs font-medium text-gray-700 mb-2">Behavioral ({competency.questions.behavioral.length})</h5>
+                                <div className="space-y-2">
+                                  {competency.questions.behavioral.map((question: any, qIndex: number) => (
+                                    <div key={qIndex} className="bg-blue-50 p-2 rounded text-xs">
+                                      <p className="font-medium text-blue-800">{question.question}</p>
+                                      <p className="text-blue-600 mt-1">Good: {question.whatGoodLooksLike}</p>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            
+                            {/* Technical Questions */}
+                            {competency.questions?.technical && competency.questions.technical.length > 0 && (
+                              <div>
+                                <h5 className="text-xs font-medium text-gray-700 mb-2">Technical ({competency.questions.technical.length})</h5>
+                                <div className="space-y-2">
+                                  {competency.questions.technical.map((question: any, qIndex: number) => (
+                                    <div key={qIndex} className="bg-green-50 p-2 rounded text-xs">
+                                      <p className="font-medium text-green-800">{question.question}</p>
+                                      <p className="text-green-600 mt-1">Good: {question.whatGoodLooksLike}</p>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            
+                            {/* Scenario Questions */}
+                            {competency.questions?.scenario && competency.questions.scenario.length > 0 && (
+                              <div>
+                                <h5 className="text-xs font-medium text-gray-700 mb-2">Scenario ({competency.questions.scenario.length})</h5>
+                                <div className="space-y-2">
+                                  {competency.questions.scenario.map((question: any, qIndex: number) => (
+                                    <div key={qIndex} className="bg-purple-50 p-2 rounded text-xs">
+                                      <p className="font-medium text-purple-800">{question.question}</p>
+                                      <p className="text-purple-600 mt-1">Good: {question.whatGoodLooksLike}</p>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            
+                            {/* Culture Fit Questions */}
+                            {competency.questions?.cultureFit && competency.questions.cultureFit.length > 0 && (
+                              <div>
+                                <h5 className="text-xs font-medium text-gray-700 mb-2">Culture Fit ({competency.questions.cultureFit.length})</h5>
+                                <div className="space-y-2">
+                                  {competency.questions.cultureFit.map((question: any, qIndex: number) => (
+                                    <div key={qIndex} className="bg-yellow-50 p-2 rounded text-xs">
+                                      <p className="font-medium text-yellow-800">{question.question}</p>
+                                      <p className="text-yellow-600 mt-1">Good: {question.whatGoodLooksLike}</p>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            
+                            {/* Red Flag Probes */}
+                            {competency.questions?.redFlagProbes && competency.questions.redFlagProbes.length > 0 && (
+                              <div>
+                                <h5 className="text-xs font-medium text-gray-700 mb-2">Red Flag Probes ({competency.questions.redFlagProbes.length})</h5>
+                                <div className="space-y-2">
+                                  {competency.questions.redFlagProbes.map((question: any, qIndex: number) => (
+                                    <div key={qIndex} className="bg-red-50 p-2 rounded text-xs">
+                                      <p className="font-medium text-red-800">{question.question}</p>
+                                      <p className="text-red-600 mt-1">Good: {question.whatGoodLooksLike}</p>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Scoring Guide Reference */}
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                  <h3 className="text-sm font-medium text-gray-900 mb-2">Scoring Guide Reference</h3>
+                  <div className="text-xs text-gray-600 space-y-1">
+                    <p><span className="font-medium">1 - Poor:</span> Response does not meet expectations</p>
+                    <p><span className="font-medium">3 - Average:</span> Response meets basic expectations</p>
+                    <p><span className="font-medium">5 - Excellent:</span> Response exceeds expectations</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Linked Interviews & Evaluations */}
           <div className="bg-white shadow rounded-lg">
@@ -514,6 +889,120 @@ export default function JobDetailsPage() {
                   {job.id}
                 </dd>
               </div>
+            </div>
+          </div>
+
+          {/* JD Analysis */}
+          <div className="bg-white shadow rounded-lg">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h2 className="text-lg font-medium text-gray-900">JD Analysis</h2>
+            </div>
+            <div className="px-6 py-4 space-y-4">
+              {job.jdExtractionJson ? (
+                <>
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <dt className="text-sm font-medium text-gray-500">Analysis Status</dt>
+                      <dd className="mt-1">
+                        <div className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
+                          ✓ Analyzed
+                        </div>
+                      </dd>
+                    </div>
+                    {job.jdPromptVersion && (
+                      <div className="text-right">
+                        <dt className="text-sm font-medium text-gray-500">Prompt Version</dt>
+                        <dd className="mt-1">
+                          <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded">
+                            v{job.jdPromptVersion}
+                          </span>
+                        </dd>
+                      </div>
+                    )}
+                  </div>
+                  {job.jdAnalyzedAt && (
+                    <div>
+                      <dt className="text-sm font-medium text-gray-500">Analyzed At</dt>
+                      <dd className="mt-1 text-sm text-gray-900">
+                        {new Date(job.jdAnalyzedAt).toLocaleString()}
+                      </dd>
+                    </div>
+                  )}
+                  <div>
+                    <dt className="text-sm font-medium text-gray-500">Analysis Data</dt>
+                    <dd className="mt-1">
+                      <pre className="text-xs text-gray-700 bg-gray-50 p-3 rounded-md overflow-x-auto">
+                        {JSON.stringify(job.jdExtractionJson, null, 2)}
+                      </pre>
+                    </dd>
+                  </div>
+                </>
+              ) : (
+                <div className="text-center py-8">
+                  <div className="text-gray-400 text-4xl mb-3">📋</div>
+                  <p className="text-gray-500 mb-4">No JD analysis available</p>
+                  <p className="text-sm text-gray-400">
+                    Job description analysis will be performed when needed.
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Interview Kit */}
+          <div className="bg-white shadow rounded-lg">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h2 className="text-lg font-medium text-gray-900">Interview Kit</h2>
+            </div>
+            <div className="px-6 py-4 space-y-4">
+              {job.interviewKitJson ? (
+                <>
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <dt className="text-sm font-medium text-gray-500">Kit Status</dt>
+                      <dd className="mt-1">
+                        <div className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                          ✓ Generated
+                        </div>
+                      </dd>
+                    </div>
+                    {job.interviewKitPromptVersion && (
+                      <div className="text-right">
+                        <dt className="text-sm font-medium text-gray-500">Prompt Version</dt>
+                        <dd className="mt-1">
+                          <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded">
+                            v{job.interviewKitPromptVersion}
+                          </span>
+                        </dd>
+                      </div>
+                    )}
+                  </div>
+                  {job.interviewKitGeneratedAt && (
+                    <div>
+                      <dt className="text-sm font-medium text-gray-500">Generated At</dt>
+                      <dd className="mt-1 text-sm text-gray-900">
+                        {new Date(job.interviewKitGeneratedAt).toLocaleString()}
+                      </dd>
+                    </div>
+                  )}
+                  <div>
+                    <dt className="text-sm font-medium text-gray-500">Kit Data</dt>
+                    <dd className="mt-1">
+                      <pre className="text-xs text-gray-700 bg-gray-50 p-3 rounded-md overflow-x-auto">
+                        {JSON.stringify(job.interviewKitJson, null, 2)}
+                      </pre>
+                    </dd>
+                  </div>
+                </>
+              ) : (
+                <div className="text-center py-8">
+                  <div className="text-gray-400 text-4xl mb-3">📝</div>
+                  <p className="text-gray-500 mb-4">No interview kit available</p>
+                  <p className="text-sm text-gray-400">
+                    Interview kit will be generated when needed for this job.
+                  </p>
+                </div>
+              )}
             </div>
           </div>
 
