@@ -73,6 +73,8 @@ model Job {
   interviewKitJson Json?
   interviewKitGeneratedAt DateTime?
   interviewKitPromptVersion String?
+  interviewKitStatus InterviewKitStatus @default(NOT_STARTED)
+  interviewKitLastError String?
   
   org         Org          @relation(fields: [orgId], references: [id], onDelete: Cascade)
   interviews Interview[]
@@ -155,6 +157,13 @@ enum JobStatus {
 }
 
 enum JDAnalysisStatus {
+  NOT_STARTED
+  RUNNING
+  DONE
+  FAILED
+}
+
+enum InterviewKitStatus {
   NOT_STARTED
   RUNNING
   DONE
