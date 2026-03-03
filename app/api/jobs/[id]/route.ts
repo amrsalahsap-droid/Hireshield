@@ -437,7 +437,7 @@ export const POST = withOrgContext(async (request: NextRequest, orgId: string, {
         { 
           error: "Failed to analyze job description",
           requestId,
-          details: error.message,
+          details: error instanceof Error ? error.message : 'Unknown error',
         },
         { status: 500 }
       );
