@@ -14,19 +14,37 @@ function statusBadge(status: string) {
 }
 
 export default function AppPage() {
-  const { getToken } = useAuth();
+  const { isLoaded, isSignedIn, getToken } = useAuth();
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [unauthorized, setUnauthorized] = useState(false);
 
   useEffect(() => {
+    // Wait for Clerk to finish loading before doing anything.
+    if (!isLoaded) return;
+
+    // If not signed in, show the sign-in prompt immediately.
+    if (!isSignedIn) {
+      setUnauthorized(true);
+      setLoading(false);
+      return;
+    }
+
     let cancelled = false;
     (async () => {
       try {
         const token = await getToken();
-        const headers: Record<string, string> = {};
-        if (token) headers["Authorization"] = `Bearer ${token}`;
-        const res = await fetch("/api/dashboard", { credentials: "include", headers });
+        if (!token) {
+          if (!cancelled) {
+            setUnauthorized(true);
+            setLoading(false);
+          }
+          return;
+        }
+        const res = await fetch("/api/dashboard", {
+          credentials: "include",
+          headers: { Authorization: `Bearer ${token}` },
+        });
         if (cancelled) return;
         if (res.status === 401) {
           setUnauthorized(true);
@@ -45,7 +63,7 @@ export default function AppPage() {
     return () => {
       cancelled = true;
     };
-  }, [getToken]);
+  }, [isLoaded, isSignedIn, getToken]);
 
   if (loading) {
     return (
