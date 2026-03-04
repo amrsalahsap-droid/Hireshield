@@ -102,10 +102,6 @@ export default async function AppPage() {
     if (error instanceof NoSessionError) {
       redirect("/auth");
     }
-    const message = error instanceof Error ? error.message : String(error);
-    if (message.includes("clerkMiddleware") || message.includes("Clerk")) {
-      redirect("/auth");
-    }
     console.error("Failed to provision user:", error);
     return (
       <div className="px-4 py-6 sm:px-0">
