@@ -1,5 +1,7 @@
 import Link from "next/link";
-import { ensureProvisioned } from "@/lib/server/auth";
+import { redirect } from "next/navigation";
+import { auth } from "@clerk/nextjs/server";
+import { ensureProvisioned, NoSessionError } from "@/lib/server/auth";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -89,10 +91,18 @@ function statusBadge(status: string) {
 }
 
 export default async function AppPage() {
+  const { userId } = await auth();
+  if (!userId) {
+    redirect("/auth");
+  }
+
   let user;
   try {
     user = await ensureProvisioned();
   } catch (error) {
+    if (error instanceof NoSessionError) {
+      redirect("/auth");
+    }
     console.error("Failed to provision user:", error);
     return (
       <div className="px-4 py-6 sm:px-0">
