@@ -1,12 +1,15 @@
-import { createClerkClient, verifyToken } from "@clerk/backend";
+import { createClerkClient } from "@clerk/backend";
 import type { NextRequest } from "next/server";
 import type { AuthUser } from "./auth";
 import { ensureProvisionedFromClerkData } from "./auth";
 
 /**
  * Authenticate from request using Clerk Backend SDK (no Next.js middleware required).
- * Prefers Bearer token from the Authorization header (no handshake/cookies needed).
- * Falls back to cookie-based authenticateRequest (works locally with middleware).
+ *
+ * When the client sends "Authorization: Bearer <token>", Clerk's authenticateRequest
+ * uses that header directly — no cookie handshake, no azp check needed.
+ * When no Bearer header is present (e.g. local dev with cookies), we fall back to the
+ * cookie path with authorizedParties to handle the azp claim.
  */
 export async function getAuthUserFromRequest(request: NextRequest): Promise<AuthUser | null> {
   const secretKey = process.env.CLERK_SECRET_KEY;
@@ -16,25 +19,23 @@ export async function getAuthUserFromRequest(request: NextRequest): Promise<Auth
     return null;
   }
 
-  // Fast path: Bearer token — no handshake, no cookies, no middleware required.
-  const authHeader = request.headers.get("authorization");
-  const bearer = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
-  if (bearer) {
-    return getAuthUserFromBearerToken(bearer, secretKey, publishableKey);
-  }
-
-  // Fallback: cookie-based (works locally when clerkMiddleware is active).
   const clerkClient = createClerkClient({ secretKey, publishableKey });
-  const allowedOrigins = getAllowedOrigins(request);
   const jwtKey = process.env.CLERK_JWT_KEY;
+
+  // When a Bearer token is present, skip the azp/authorizedParties check entirely —
+  // the token's signature is sufficient proof of identity and the handshake is never
+  // triggered for Authorization-header requests.
+  const hasBearerToken = request.headers.get("authorization")?.startsWith("Bearer ") ?? false;
+  const allowedOrigins = hasBearerToken ? [] : getAllowedOrigins(request);
+
   const state = await clerkClient.authenticateRequest(request, {
-    authorizedParties: allowedOrigins.length > 0 ? allowedOrigins : undefined,
+    ...(allowedOrigins.length > 0 ? { authorizedParties: allowedOrigins } : {}),
     ...(jwtKey ? { jwtKey } : {}),
   });
 
   if (!state.isAuthenticated || !state.toAuth) {
     if ("reason" in state && "message" in state) {
-      console.warn("Clerk auth failed:", state.reason, state.message);
+      console.warn("Clerk auth failed:", (state as { reason?: string; message?: string }).reason, (state as { reason?: string; message?: string }).message);
     }
     return null;
   }
@@ -44,24 +45,6 @@ export async function getAuthUserFromRequest(request: NextRequest): Promise<Auth
   if (!userId) return null;
 
   return fetchAndProvisionClerkUser(userId, clerkClient);
-}
-
-async function getAuthUserFromBearerToken(
-  token: string,
-  secretKey: string,
-  publishableKey: string
-): Promise<AuthUser | null> {
-  try {
-    const payload = await verifyToken(token, { secretKey });
-    const userId = payload.sub;
-    if (!userId) return null;
-
-    const clerkClient = createClerkClient({ secretKey, publishableKey });
-    return fetchAndProvisionClerkUser(userId, clerkClient);
-  } catch (err) {
-    console.warn("Bearer token verification failed:", err);
-    return null;
-  }
 }
 
 async function fetchAndProvisionClerkUser(
