@@ -6,45 +6,72 @@ import { ensureProvisionedFromClerkData } from "./auth";
 /**
  * Authenticate from request using Clerk Backend SDK (no Next.js middleware required).
  *
- * When the client sends "Authorization: Bearer <token>", Clerk's authenticateRequest
- * uses that header directly — no cookie handshake, no azp check needed.
- * When no Bearer header is present (e.g. local dev with cookies), we fall back to the
- * cookie path with authorizedParties to handle the azp claim.
+ * When the client sends "Authorization: Bearer <token>", we strip cookies from the
+ * request before passing to authenticateRequest so Clerk is forced onto the Bearer
+ * path (preventing the cookie handshake from overriding it).
+ * When no Bearer header is present (local dev with middleware), we use cookies +
+ * authorizedParties.
+ *
+ * Returns the AuthUser on success, or null with a reason string on failure.
  */
-export async function getAuthUserFromRequest(request: NextRequest): Promise<AuthUser | null> {
+export async function getAuthUserFromRequest(
+  request: NextRequest
+): Promise<AuthUser | null> {
+  const result = await getAuthUserFromRequestWithReason(request);
+  return result.user;
+}
+
+export async function getAuthUserFromRequestWithReason(
+  request: NextRequest
+): Promise<{ user: AuthUser | null; reason?: string }> {
   const secretKey = process.env.CLERK_SECRET_KEY;
   const publishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
   if (!secretKey || !publishableKey) {
     console.error("Missing CLERK_SECRET_KEY or NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY");
-    return null;
+    return { user: null, reason: "missing-env" };
   }
 
   const clerkClient = createClerkClient({ secretKey, publishableKey });
   const jwtKey = process.env.CLERK_JWT_KEY;
+  const authHeader = request.headers.get("authorization");
+  const hasBearerToken = authHeader?.startsWith("Bearer ") ?? false;
 
-  // When a Bearer token is present, skip the azp/authorizedParties check entirely —
-  // the token's signature is sufficient proof of identity and the handshake is never
-  // triggered for Authorization-header requests.
-  const hasBearerToken = request.headers.get("authorization")?.startsWith("Bearer ") ?? false;
-  const allowedOrigins = hasBearerToken ? [] : getAllowedOrigins(request);
+  let requestForAuth: Request;
+  if (hasBearerToken) {
+    // Strip cookies so Clerk is forced onto the Bearer-only path.
+    // Without this, Clerk may process the session cookie first and return
+    // HandshakeState, ignoring the valid Bearer token.
+    const strippedHeaders = new Headers();
+    strippedHeaders.set("Authorization", authHeader!);
+    requestForAuth = new Request(request.url, { headers: strippedHeaders });
+  } else {
+    requestForAuth = request;
+  }
 
-  const state = await clerkClient.authenticateRequest(request, {
-    ...(allowedOrigins.length > 0 ? { authorizedParties: allowedOrigins } : {}),
+  const allowedOrigins = hasBearerToken ? undefined : getAllowedOrigins(request);
+  const state = await clerkClient.authenticateRequest(requestForAuth, {
+    ...(allowedOrigins && allowedOrigins.length > 0 ? { authorizedParties: allowedOrigins } : {}),
     ...(jwtKey ? { jwtKey } : {}),
   });
 
   if (!state.isAuthenticated || !state.toAuth) {
-    if ("reason" in state && "message" in state) {
-      console.warn("Clerk auth failed:", (state as { reason?: string; message?: string }).reason, (state as { reason?: string; message?: string }).message);
-    }
-    return null;
+    const s = state as { reason?: string; message?: string };
+    const reason = s.reason ?? "unknown";
+    console.warn("Clerk auth failed — reason:", reason, "message:", s.message ?? "(none)");
+    return { user: null, reason };
   }
 
   const auth = state.toAuth();
   const userId = auth.userId;
-  if (!userId) return null;
+  if (!userId) return { user: null, reason: "no-user-id" };
 
-  return fetchAndProvisionClerkUser(userId, clerkClient);
+  try {
+    const user = await fetchAndProvisionClerkUser(userId, clerkClient);
+    return { user };
+  } catch (err) {
+    console.error("Failed to provision user:", err);
+    return { user: null, reason: "provision-failed" };
+  }
 }
 
 async function fetchAndProvisionClerkUser(
