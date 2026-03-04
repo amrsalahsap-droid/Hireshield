@@ -20,12 +20,17 @@ export async function getAuthUserFromRequest(request: NextRequest): Promise<Auth
     publishableKey,
   });
 
-  const origin = getRequestOrigin(request);
+  const allowedOrigins = getAllowedOrigins(request);
+  const jwtKey = process.env.CLERK_JWT_KEY;
   const state = await clerkClient.authenticateRequest(request, {
-    authorizedParties: origin ? [origin] : undefined,
+    authorizedParties: allowedOrigins.length > 0 ? allowedOrigins : undefined,
+    ...(jwtKey ? { jwtKey } : {}),
   });
 
   if (!state.isAuthenticated || !state.toAuth) {
+    if ("reason" in state && "message" in state) {
+      console.warn("Clerk auth failed:", state.reason, state.message);
+    }
     return null;
   }
 
@@ -51,6 +56,35 @@ export async function getAuthUserFromRequest(request: NextRequest): Promise<Auth
       : null;
 
   return ensureProvisionedFromClerkData(userId, email, name);
+}
+
+/** Build normalized allowed origins for Clerk azp check (request origin + Vercel/env URLs). */
+function getAllowedOrigins(request: NextRequest): string[] {
+  const seen = new Set<string>();
+  const add = (origin: string | null | undefined) => {
+    if (!origin || typeof origin !== "string") return;
+    const normalized = normalizeOrigin(origin);
+    if (normalized) seen.add(normalized);
+  };
+  const requestOrigin = getRequestOrigin(request);
+  add(requestOrigin);
+  const vercelUrl = process.env.VERCEL_URL;
+  if (vercelUrl) add(`https://${vercelUrl}`);
+  const branchUrl = process.env.VERCEL_BRANCH_URL;
+  if (branchUrl) add(`https://${branchUrl}`);
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
+  if (appUrl) add(appUrl);
+  return Array.from(seen);
+}
+
+function normalizeOrigin(origin: string): string | null {
+  try {
+    const u = new URL(origin);
+    if (!u.origin || u.origin === "null") return null;
+    return u.origin.replace(/\/$/, "");
+  } catch {
+    return null;
+  }
 }
 
 function getRequestOrigin(request: NextRequest): string | null {
