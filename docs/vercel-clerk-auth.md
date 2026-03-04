@@ -3,16 +3,44 @@
 ## What’s going on
 
 - **With Clerk middleware enabled** (`clerkMiddleware()` in `middleware.ts`): Vercel returns **500 INTERNAL_SERVER_ERROR** with `Code: MIDDLEWARE_INVOCATION_FAILED`. That usually means something in Clerk’s middleware (or its dependencies) is not compatible with Vercel’s Edge runtime.
-- **With Clerk middleware disabled**: The app no longer 500s, but `auth()` in Server Components throws because Clerk expects its middleware to run. So after sign-in, the dashboard shows a friendly “We couldn’t verify your session” message instead of the real dashboard.
+- **With Clerk middleware disabled**: The app no longer 500s, but `auth()` in Server Components throws because Clerk expects its middleware to run.
 
-So you’re in a loop: enable middleware → 500; disable middleware → no server-side auth on Vercel.
+So: enable middleware → 500; disable middleware → we use **request-based auth** instead (see below).
 
-## Current setup (to stop the 500 loop)
+## Request-based auth (no middleware)
+
+The dashboard and `/api/me` do **not** use Clerk’s Next.js middleware. They use **request-based auth** via the Clerk Backend SDK:
+
+- **`GET /api/dashboard`** and **`GET /api/me`** call `getAuthUserFromRequest(request)` in [lib/server/auth-request.ts](lib/server/auth-request.ts).
+- That uses Clerk’s `authenticateRequest(request)` to read the session from cookies and verify the JWT. No `clerkMiddleware()` is required, so the app works on Vercel without the Edge 500.
+
+### Env vars that affect request-based auth
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `CLERK_SECRET_KEY` | Yes | Clerk secret key from Dashboard → API Keys. |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Yes | Clerk publishable key. |
+| `VERCEL_URL` | No (auto) | Set by Vercel; used to build allowed origins for JWT `azp` check. |
+| `NEXT_PUBLIC_APP_URL` | No | Your app’s canonical URL (e.g. `https://hireshield-xi.vercel.app`). If set, added to allowed origins. |
+| `CLERK_JWT_KEY` | No | PEM public key from Clerk Dashboard → API Keys → “JWT public key”. Enables networkless verification; recommended for reliability. |
+
+### Troubleshooting “We couldn’t verify your session”
+
+If the dashboard still shows “We couldn’t verify your session” after sign-in:
+
+1. **Check Vercel function logs**  
+   When auth fails, the API logs `Clerk auth failed: <reason> <message>`. Look for that line to see whether the failure is e.g. `session-token-missing`, an authorized-party mismatch, or something else.
+
+2. **Allowed origins**  
+   Ensure your app’s URL is allowed by Clerk. The code allows: request origin, `https://${VERCEL_URL}`, `https://${VERCEL_BRANCH_URL}`, and `NEXT_PUBLIC_APP_URL`. If you use a custom domain, set `NEXT_PUBLIC_APP_URL` to that URL (e.g. `https://app.example.com`).
+
+3. **Clerk Dashboard**  
+   In Clerk Dashboard, confirm your production (and preview) domains are in the allowed redirect/origin settings for the application.
+
+## Current setup (middleware disabled)
 
 - **Middleware**: Clerk is **disabled** in `middleware.ts`. The file just does `NextResponse.next()` so the app never hits the failing Clerk middleware on Vercel.
-- **Dashboard**: When the server can’t verify the session (e.g. on Vercel), it shows an explanation and a “Sign in again” link instead of crashing.
-
-So: **deployments on Vercel no longer 500**, but the dashboard there won’t show your data until auth works (see below).
+- **Dashboard**: Loads data via `GET /api/dashboard`, which uses request-based auth. If the session cookie is valid and allowed origins match, the dashboard shows data; otherwise it shows “Sign in again”.
 
 ## How to get out of the loop
 
@@ -59,9 +87,9 @@ If you need the dashboard in production and can’t fix Edge yet, run the app on
 
 ## Summary
 
-| Goal                         | Action |
-|-----------------------------|--------|
-| Stop 500s and get out of the loop | Middleware stays **disabled** (current state). Deploy; no more MIDDLEWARE_INVOCATION_FAILED. |
-| Use dashboard “for real”     | Use **local** `npm run dev`, or fix Clerk on Vercel and re-enable `clerkMiddleware()`. |
-
-Once Clerk middleware runs successfully on Vercel, re-enable it in `middleware.ts` and the dashboard will work there too.
+| Goal | Action |
+|------|--------|
+| Stop 500s | Middleware stays **disabled**. Deploy; no more MIDDLEWARE_INVOCATION_FAILED. |
+| Use dashboard on Vercel | Request-based auth is used: `/api/dashboard` and `/api/me` verify the session via `authenticateRequest(request)`. Set env vars above; ensure allowed origins match where users sign in. |
+| Use dashboard locally | Run `npm run dev`; same request-based auth applies. |
+| Re-enable middleware later | If you get Clerk middleware working on Vercel Edge, switch `middleware.ts` back to `clerkMiddleware()` and the dashboard will continue to work (server components could use `auth()` again if desired). |
