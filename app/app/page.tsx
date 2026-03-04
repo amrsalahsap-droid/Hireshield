@@ -13,7 +13,7 @@ function statusBadge(status: string) {
   return "text-muted-foreground";
 }
 
-type DiagStep = "clerk-not-loaded" | "not-signed-in" | "no-token" | "api-401" | "api-error";
+type DiagStep = string;
 
 export default function AppPage() {
   const { isLoaded, isSignedIn, getToken } = useAuth();
@@ -42,12 +42,13 @@ export default function AppPage() {
           return;
         }
         const res = await fetch("/api/dashboard", {
-          credentials: "include",
+          credentials: "omit",
           headers: { Authorization: `Bearer ${token}` },
         });
         if (cancelled) return;
         if (res.status === 401) {
-          setDiagStep("api-401");
+          const body = await res.json().catch(() => ({}));
+          setDiagStep(`api-401:${body?.reason ?? "unknown"}` as DiagStep);
           setSummary(null);
           return;
         }
@@ -77,13 +78,16 @@ export default function AppPage() {
   }
 
   if (diagStep || !summary) {
-    const diagMessages: Record<DiagStep, string> = {
+    const diagMessages: Record<string, string> = {
       "not-signed-in": "Clerk loaded but you are not signed in.",
       "no-token": "You are signed in but Clerk returned no session token.",
-      "api-401": "Token sent to /api/dashboard but server returned 401 (token rejected).",
       "api-error": "Server returned an unexpected error.",
       "clerk-not-loaded": "Clerk has not loaded.",
     };
+    const diagMessage =
+      diagStep && diagStep.startsWith("api-401:")
+        ? `Token rejected by server. Clerk reason: ${diagStep.slice(8)}`
+        : (diagMessages[diagStep ?? ""] ?? diagStep);
     return (
       <div className="px-4 py-6 sm:px-0">
         <div className="text-center max-w-md mx-auto space-y-4">
@@ -94,7 +98,7 @@ export default function AppPage() {
             <p className="font-mono text-xs bg-muted border border-border rounded px-3 py-2 text-left text-foreground">
               Step: <span className="font-bold">{diagStep}</span>
               <br />
-              {diagMessages[diagStep]}
+              {diagMessage}
             </p>
           )}
           <Link
