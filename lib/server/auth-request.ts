@@ -1,11 +1,12 @@
-import { createClerkClient } from "@clerk/backend";
+import { createClerkClient, verifyToken } from "@clerk/backend";
 import type { NextRequest } from "next/server";
 import type { AuthUser } from "./auth";
 import { ensureProvisionedFromClerkData } from "./auth";
 
 /**
  * Authenticate from request using Clerk Backend SDK (no Next.js middleware required).
- * Use this in Route Handlers when clerkMiddleware is disabled (e.g. to avoid Vercel Edge 500).
+ * Prefers Bearer token from the Authorization header (no handshake/cookies needed).
+ * Falls back to cookie-based authenticateRequest (works locally with middleware).
  */
 export async function getAuthUserFromRequest(request: NextRequest): Promise<AuthUser | null> {
   const secretKey = process.env.CLERK_SECRET_KEY;
@@ -15,11 +16,15 @@ export async function getAuthUserFromRequest(request: NextRequest): Promise<Auth
     return null;
   }
 
-  const clerkClient = createClerkClient({
-    secretKey,
-    publishableKey,
-  });
+  // Fast path: Bearer token — no handshake, no cookies, no middleware required.
+  const authHeader = request.headers.get("authorization");
+  const bearer = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  if (bearer) {
+    return getAuthUserFromBearerToken(bearer, secretKey, publishableKey);
+  }
 
+  // Fallback: cookie-based (works locally when clerkMiddleware is active).
+  const clerkClient = createClerkClient({ secretKey, publishableKey });
   const allowedOrigins = getAllowedOrigins(request);
   const jwtKey = process.env.CLERK_JWT_KEY;
   const state = await clerkClient.authenticateRequest(request, {
@@ -38,6 +43,32 @@ export async function getAuthUserFromRequest(request: NextRequest): Promise<Auth
   const userId = auth.userId;
   if (!userId) return null;
 
+  return fetchAndProvisionClerkUser(userId, clerkClient);
+}
+
+async function getAuthUserFromBearerToken(
+  token: string,
+  secretKey: string,
+  publishableKey: string
+): Promise<AuthUser | null> {
+  try {
+    const payload = await verifyToken(token, { secretKey });
+    const userId = payload.sub;
+    if (!userId) return null;
+
+    const clerkClient = createClerkClient({ secretKey, publishableKey });
+    return fetchAndProvisionClerkUser(userId, clerkClient);
+  } catch (err) {
+    console.warn("Bearer token verification failed:", err);
+    return null;
+  }
+}
+
+async function fetchAndProvisionClerkUser(
+  userId: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  clerkClient: any
+): Promise<AuthUser | null> {
   const user = await clerkClient.users.getUser(userId);
   const primaryEmail = user.emailAddresses?.find(
     (e: { id: string }) => e.id === user.primaryEmailAddressId
