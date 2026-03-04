@@ -2,6 +2,13 @@ import { auth } from "@clerk/nextjs/server";
 import { Role } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
+export class NoSessionError extends Error {
+  constructor() {
+    super("No session");
+    this.name = "NoSessionError";
+  }
+}
+
 export interface AuthUser {
   userId: string;
   clerkUserId: string;
@@ -12,9 +19,9 @@ export interface AuthUser {
 
 export async function getCurrentUserOrThrow() {
   const { userId } = await auth();
-  
+
   if (!userId) {
-    throw new Error("Unauthorized: No user found");
+    throw new NoSessionError();
   }
 
   const clerkUser = await (await import("@clerk/nextjs/server")).currentUser();
