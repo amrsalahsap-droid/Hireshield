@@ -105,8 +105,19 @@ export default async function AppPage() {
     console.error("Failed to provision user:", error);
     return (
       <div className="px-4 py-6 sm:px-0">
-        <div className="text-center text-destructive">
-          <p className="font-body">Authentication error. Please try logging in again.</p>
+        <div className="text-center max-w-md mx-auto space-y-4">
+          <p className="font-body text-foreground">
+            We couldn&apos;t verify your session. This can happen when the app is deployed without Clerk middleware (e.g. on Vercel).
+          </p>
+          <p className="font-body text-muted-foreground text-sm">
+            Try signing out (using your profile in the sidebar) and then sign in again. If you run the app locally with <code className="bg-muted px-1 rounded text-xs">npm run dev</code>, the dashboard may work there.
+          </p>
+          <Link
+            href="/auth"
+            className="inline-flex items-center justify-center rounded-button bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 font-body"
+          >
+            Sign in again
+          </Link>
         </div>
       </div>
     );
