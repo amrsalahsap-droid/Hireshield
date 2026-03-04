@@ -415,10 +415,10 @@ export default function JobDetailsPage() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "ACTIVE": return "bg-green-100 text-green-800";
-      case "DRAFT": return "bg-yellow-100 text-yellow-800";
-      case "ARCHIVED": return "bg-gray-100 text-gray-800";
-      default: return "bg-gray-100 text-gray-800";
+      case "ACTIVE": return "bg-safe/10 text-safe";
+      case "DRAFT": return "bg-investigate/10 text-investigate";
+      case "ARCHIVED": return "bg-muted text-muted-foreground";
+      default: return "bg-muted text-muted-foreground";
     }
   };
 
@@ -461,18 +461,18 @@ export default function JobDetailsPage() {
           <div className="flex items-center space-x-4">
             <Link
               href="/app/jobs"
-              className="text-gray-500 hover:text-gray-700"
+              className="text-muted-foreground hover:text-foreground"
             >
               ← Jobs
             </Link>
-            <div className="h-4 w-px bg-gray-300"></div>
-            <h1 className="text-2xl font-bold text-gray-900">{job.title}</h1>
+            <div className="h-4 w-px bg-border"></div>
+            <h1 className="text-2xl font-bold text-foreground font-display">{job.title}</h1>
           </div>
           <span className={`inline-flex px-3 py-1 text-sm font-semibold rounded-full ${getStatusColor(job.status)}`}>
             {job.status}
           </span>
         </div>
-        <p className="text-gray-600">
+        <p className="text-muted-foreground font-body">
           Manage job details and track candidate applications.
         </p>
       </div>
@@ -630,12 +630,12 @@ export default function JobDetailsPage() {
         <div className="lg:col-span-2 space-y-6">
           {/* Job Description */}
           <div className="bg-white shadow rounded-lg">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h2 className="text-lg font-medium text-gray-900">Job Description</h2>
+            <div className="px-6 py-4 border-b border-border">
+              <h2 className="text-lg font-medium text-foreground font-display">Job Description</h2>
             </div>
             <div className="px-6 py-4">
               <div className="prose max-w-none">
-                <pre className="whitespace-pre-wrap text-sm text-gray-700 font-mono bg-gray-50 p-4 rounded-md">
+                <pre className="whitespace-pre-wrap text-sm text-foreground font-mono bg-muted p-4 rounded-md">
                   {job.rawJD}
                 </pre>
               </div>
@@ -662,14 +662,14 @@ export default function JobDetailsPage() {
 
           {/* Linked Interviews & Evaluations */}
           <div className="bg-white shadow rounded-lg">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h2 className="text-lg font-medium text-gray-900">Linked Interviews & Evaluations</h2>
+            <div className="px-6 py-4 border-b border-border">
+              <h2 className="text-lg font-medium text-foreground font-display">Linked Interviews & Evaluations</h2>
             </div>
             <div className="px-6 py-4">
               {interviews.length === 0 && evaluations.length === 0 ? (
                 <div className="text-center py-8">
-                  <div className="text-gray-400 text-4xl mb-3">📋</div>
-                  <p className="text-gray-500 mb-4">No interviews or evaluations yet</p>
+                  <div className="text-muted-foreground text-4xl mb-3">📋</div>
+                  <p className="text-muted-foreground mb-4">No interviews or evaluations yet</p>
                   <div className="space-x-3">
                     <Link
                       href="/app/candidates"
@@ -696,13 +696,13 @@ export default function JobDetailsPage() {
                   {/* Interviews */}
                   {interviews.length > 0 && (
                     <div>
-                      <h3 className="text-sm font-medium text-gray-900 mb-2">Interviews ({interviews.length})</h3>
+                      <h3 className="text-sm font-medium text-foreground mb-2">Interviews ({interviews.length})</h3>
                       <div className="space-y-2">
                         {interviews.map((interview) => (
-                          <div key={interview.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
+                          <div key={interview.id} className="flex items-center justify-between p-3 bg-muted rounded-md">
                             <div>
-                              <div className="font-medium text-gray-900">{interview.candidate.fullName}</div>
-                              <div className="text-sm text-gray-500">
+                              <div className="font-medium text-foreground">{interview.candidate.fullName}</div>
+                              <div className="text-sm text-muted-foreground">
                                 {new Date(interview.createdAt).toLocaleDateString()}
                               </div>
                             </div>
@@ -721,13 +721,13 @@ export default function JobDetailsPage() {
                   {/* Evaluations */}
                   {evaluations.length > 0 && (
                     <div>
-                      <h3 className="text-sm font-medium text-gray-900 mb-2">Evaluations ({evaluations.length})</h3>
+                      <h3 className="text-sm font-medium text-foreground mb-2">Evaluations ({evaluations.length})</h3>
                       <div className="space-y-2">
                         {evaluations.map((evaluation) => (
-                          <div key={evaluation.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
+                          <div key={evaluation.id} className="flex items-center justify-between p-3 bg-muted rounded-md">
                             <div>
-                              <div className="font-medium text-gray-900">{evaluation.candidate.fullName}</div>
-                              <div className="text-sm text-gray-500">
+                              <div className="font-medium text-foreground">{evaluation.candidate.fullName}</div>
+                              <div className="text-sm text-muted-foreground">
                                 {new Date(evaluation.createdAt).toLocaleDateString()}
                               </div>
                             </div>
@@ -752,12 +752,12 @@ export default function JobDetailsPage() {
         <div className="space-y-6">
           {/* Job Information */}
           <div className="bg-white shadow rounded-lg">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h2 className="text-lg font-medium text-gray-900">Job Information</h2>
+            <div className="px-6 py-4 border-b border-border">
+              <h2 className="text-lg font-medium text-foreground font-display">Job Information</h2>
             </div>
             <div className="px-6 py-4 space-y-4">
               <div>
-                <dt className="text-sm font-medium text-gray-500">Status</dt>
+                <dt className="text-sm font-medium text-muted-foreground">Status</dt>
                 <dd className="mt-1">
                   <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(job.status)}`}>
                     {job.status}
@@ -765,20 +765,20 @@ export default function JobDetailsPage() {
                 </dd>
               </div>
               <div>
-                <dt className="text-sm font-medium text-gray-500">Created</dt>
-                <dd className="mt-1 text-sm text-gray-900">
+                <dt className="text-sm font-medium text-muted-foreground">Created</dt>
+                <dd className="mt-1 text-sm text-foreground">
                   {new Date(job.createdAt).toLocaleDateString()}
                 </dd>
               </div>
               <div>
-                <dt className="text-sm font-medium text-gray-500">Last Updated</dt>
-                <dd className="mt-1 text-sm text-gray-900">
+                <dt className="text-sm font-medium text-muted-foreground">Last Updated</dt>
+                <dd className="mt-1 text-sm text-foreground">
                   {new Date(job.updatedAt).toLocaleDateString()}
                 </dd>
               </div>
               <div>
-                <dt className="text-sm font-medium text-gray-500">Job ID</dt>
-                <dd className="mt-1 text-sm text-gray-900 font-mono">
+                <dt className="text-sm font-medium text-muted-foreground">Job ID</dt>
+                <dd className="mt-1 text-sm text-foreground font-mono">
                   {job.id}
                 </dd>
               </div>
@@ -787,15 +787,15 @@ export default function JobDetailsPage() {
 
           {/* JD Analysis */}
           <div className="bg-white shadow rounded-lg">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h2 className="text-lg font-medium text-gray-900">JD Analysis</h2>
+            <div className="px-6 py-4 border-b border-border">
+              <h2 className="text-lg font-medium text-foreground font-display">JD Analysis</h2>
             </div>
             <div className="px-6 py-4 space-y-4">
               {job.jdExtractionJson ? (
                 <>
                   <div className="flex justify-between items-center">
                     <div>
-                      <dt className="text-sm font-medium text-gray-500">Analysis Status</dt>
+                      <dt className="text-sm font-medium text-muted-foreground">Analysis Status</dt>
                       <dd className="mt-1">
                         <div className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
                           ✓ Analyzed
@@ -804,9 +804,9 @@ export default function JobDetailsPage() {
                     </div>
                     {job.jdPromptVersion && (
                       <div className="text-right">
-                        <dt className="text-sm font-medium text-gray-500">Prompt Version</dt>
+                        <dt className="text-sm font-medium text-muted-foreground">Prompt Version</dt>
                         <dd className="mt-1">
-                          <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded">
+                          <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
                             v{job.jdPromptVersion}
                           </span>
                         </dd>
@@ -815,16 +815,16 @@ export default function JobDetailsPage() {
                   </div>
                   {job.jdAnalyzedAt && (
                     <div>
-                      <dt className="text-sm font-medium text-gray-500">Analyzed At</dt>
-                      <dd className="mt-1 text-sm text-gray-900">
+                      <dt className="text-sm font-medium text-muted-foreground">Analyzed At</dt>
+                      <dd className="mt-1 text-sm text-foreground">
                         {new Date(job.jdAnalyzedAt).toLocaleString()}
                       </dd>
                     </div>
                   )}
                   <div>
-                    <dt className="text-sm font-medium text-gray-500">Analysis Data</dt>
+                    <dt className="text-sm font-medium text-muted-foreground">Analysis Data</dt>
                     <dd className="mt-1">
-                      <pre className="text-xs text-gray-700 bg-gray-50 p-3 rounded-md overflow-x-auto">
+                      <pre className="text-xs text-foreground bg-muted p-3 rounded-md overflow-x-auto">
                         {JSON.stringify(job.jdExtractionJson, null, 2)}
                       </pre>
                     </dd>
@@ -832,9 +832,9 @@ export default function JobDetailsPage() {
                 </>
               ) : (
                 <div className="text-center py-8">
-                  <div className="text-gray-400 text-4xl mb-3">📋</div>
-                  <p className="text-gray-500 mb-4">No JD analysis available</p>
-                  <p className="text-sm text-gray-400">
+                  <div className="text-muted-foreground text-4xl mb-3">📋</div>
+                  <p className="text-muted-foreground mb-4">No JD analysis available</p>
+                  <p className="text-sm text-muted-foreground">
                     Job description analysis will be performed when needed.
                   </p>
                 </div>
@@ -844,15 +844,15 @@ export default function JobDetailsPage() {
 
           {/* Interview Kit */}
           <div className="bg-white shadow rounded-lg">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h2 className="text-lg font-medium text-gray-900">Interview Kit</h2>
+            <div className="px-6 py-4 border-b border-border">
+              <h2 className="text-lg font-medium text-foreground font-display">Interview Kit</h2>
             </div>
             <div className="px-6 py-4 space-y-4">
               {job.interviewKitJson ? (
                 <>
                   <div className="flex justify-between items-center">
                     <div>
-                      <dt className="text-sm font-medium text-gray-500">Kit Status</dt>
+                      <dt className="text-sm font-medium text-muted-foreground">Kit Status</dt>
                       <dd className="mt-1">
                         <div className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
                           ✓ Generated
@@ -861,9 +861,9 @@ export default function JobDetailsPage() {
                     </div>
                     {job.interviewKitPromptVersion && (
                       <div className="text-right">
-                        <dt className="text-sm font-medium text-gray-500">Prompt Version</dt>
+                        <dt className="text-sm font-medium text-muted-foreground">Prompt Version</dt>
                         <dd className="mt-1">
-                          <span className="text-xs text-gray-400 bg-gray-100 px-2 py-1 rounded">
+                          <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
                             v{job.interviewKitPromptVersion}
                           </span>
                         </dd>
@@ -872,16 +872,16 @@ export default function JobDetailsPage() {
                   </div>
                   {job.interviewKitGeneratedAt && (
                     <div>
-                      <dt className="text-sm font-medium text-gray-500">Generated At</dt>
-                      <dd className="mt-1 text-sm text-gray-900">
+                      <dt className="text-sm font-medium text-muted-foreground">Generated At</dt>
+                      <dd className="mt-1 text-sm text-foreground">
                         {new Date(job.interviewKitGeneratedAt).toLocaleString()}
                       </dd>
                     </div>
                   )}
                   <div>
-                    <dt className="text-sm font-medium text-gray-500">Kit Data</dt>
+                    <dt className="text-sm font-medium text-muted-foreground">Kit Data</dt>
                     <dd className="mt-1">
-                      <pre className="text-xs text-gray-700 bg-gray-50 p-3 rounded-md overflow-x-auto">
+                      <pre className="text-xs text-foreground bg-muted p-3 rounded-md overflow-x-auto">
                         {JSON.stringify(job.interviewKitJson, null, 2)}
                       </pre>
                     </dd>
@@ -889,9 +889,9 @@ export default function JobDetailsPage() {
                 </>
               ) : (
                 <div className="text-center py-8">
-                  <div className="text-gray-400 text-4xl mb-3">📝</div>
-                  <p className="text-gray-500 mb-4">No interview kit available</p>
-                  <p className="text-sm text-gray-400">
+                  <div className="text-muted-foreground text-4xl mb-3">📝</div>
+                  <p className="text-muted-foreground mb-4">No interview kit available</p>
+                  <p className="text-sm text-muted-foreground">
                     Interview kit will be generated when needed for this job.
                   </p>
                 </div>
@@ -901,21 +901,21 @@ export default function JobDetailsPage() {
 
           {/* Quick Stats */}
           <div className="bg-white shadow rounded-lg">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h2 className="text-lg font-medium text-gray-900">Quick Stats</h2>
+            <div className="px-6 py-4 border-b border-border">
+              <h2 className="text-lg font-medium text-foreground font-display">Quick Stats</h2>
             </div>
             <div className="px-6 py-4 space-y-4">
               <div className="flex justify-between">
-                <span className="text-sm text-gray-500">Total Interviews</span>
-                <span className="text-sm font-medium text-gray-900">{interviews.length}</span>
+                <span className="text-sm text-muted-foreground">Total Interviews</span>
+                <span className="text-sm font-medium text-foreground">{interviews.length}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-sm text-gray-500">Evaluations</span>
-                <span className="text-sm font-medium text-gray-900">{evaluations.length}</span>
+                <span className="text-sm text-muted-foreground">Evaluations</span>
+                <span className="text-sm font-medium text-foreground">{evaluations.length}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-sm text-gray-500">Candidates</span>
-                <span className="text-sm font-medium text-gray-900">
+                <span className="text-sm text-muted-foreground">Candidates</span>
+                <span className="text-sm font-medium text-foreground">
                   {new Set([...interviews.map(i => i.candidateId), ...evaluations.map(e => e.candidateId)]).size}
                 </span>
               </div>
@@ -926,16 +926,16 @@ export default function JobDetailsPage() {
 
       {/* Create Interview Modal */}
       {showInterviewModal && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+        <div className="fixed inset-0 bg-foreground/50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-xl bg-card border border-border shadow-card">
             <div className="mt-3">
-              <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
+              <h3 className="text-lg leading-6 font-medium text-foreground font-display mb-4">
                 Create Interview
               </h3>
               
               <form onSubmit={handleCreateInterview} className="space-y-4">
                 <div>
-                  <label htmlFor="candidate" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="candidate" className="block text-sm font-medium text-foreground mb-1">
                     Select Candidate *
                   </label>
                   <select
@@ -948,7 +948,7 @@ export default function JobDetailsPage() {
                       }
                     }}
                     className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                      formErrors.candidate ? "border-red-500" : "border-gray-300"
+                      formErrors.candidate ? "border-red-500" : "border-input"
                     }`}
                     required
                   >
@@ -965,7 +965,7 @@ export default function JobDetailsPage() {
                 </div>
 
                 <div>
-                  <label htmlFor="transcript" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="transcript" className="block text-sm font-medium text-foreground mb-1">
                     Interview Transcript *
                   </label>
                   <textarea
@@ -979,7 +979,7 @@ export default function JobDetailsPage() {
                     }}
                     rows={6}
                     className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                      formErrors.transcript ? "border-red-500" : "border-gray-300"
+                      formErrors.transcript ? "border-red-500" : "border-input"
                     }`}
                     placeholder="Paste or type the interview transcript here..."
                     required
@@ -989,7 +989,7 @@ export default function JobDetailsPage() {
                       <p className="text-sm text-red-600">{formErrors.transcript}</p>
                     )}
                     <p className={`text-sm ${
-                      transcript.length > 50000 ? "text-red-600" : "text-gray-500"
+                      transcript.length > 50000 ? "text-red-600" : "text-muted-foreground"
                     }`}>
                       {transcript.length.toLocaleString()} / 50,000 characters
                     </p>
@@ -1005,7 +1005,7 @@ export default function JobDetailsPage() {
                       setTranscript("");
                       setFormErrors({ candidate: "", transcript: "", evaluationCandidate: "" });
                     }}
-                    className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                    className="px-4 py-2 border border-input rounded-md text-sm font-medium text-foreground hover:bg-muted transition-colors"
                   >
                     Cancel
                   </button>
@@ -1025,16 +1025,16 @@ export default function JobDetailsPage() {
 
       {/* Create Evaluation Modal */}
       {showEvaluationModal && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+        <div className="fixed inset-0 bg-foreground/50 overflow-y-auto h-full w-full z-50">
+          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-xl bg-card border border-border shadow-card">
             <div className="mt-3">
-              <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
+              <h3 className="text-lg leading-6 font-medium text-foreground font-display mb-4">
                 Create Evaluation
               </h3>
               
               <form onSubmit={handleCreateEvaluation} className="space-y-4">
                 <div>
-                  <label htmlFor="evaluationCandidate" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="evaluationCandidate" className="block text-sm font-medium text-foreground mb-1">
                     Select Candidate *
                   </label>
                   <select
@@ -1047,7 +1047,7 @@ export default function JobDetailsPage() {
                       }
                     }}
                     className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                      formErrors.evaluationCandidate ? "border-red-500" : "border-gray-300"
+                      formErrors.evaluationCandidate ? "border-red-500" : "border-input"
                     }`}
                     required
                   >
@@ -1063,8 +1063,8 @@ export default function JobDetailsPage() {
                   )}
                 </div>
 
-                <div className="bg-gray-50 p-4 rounded-md">
-                  <p className="text-sm text-gray-600">
+                <div className="bg-muted p-4 rounded-md">
+                  <p className="text-sm text-muted-foreground font-body">
                     <strong>Note:</strong> This will create an evaluation placeholder. 
                     AI analysis will be processed later and the results will appear here.
                   </p>
@@ -1078,7 +1078,7 @@ export default function JobDetailsPage() {
                       setSelectedCandidate("");
                       setFormErrors({ candidate: "", transcript: "", evaluationCandidate: "" });
                     }}
-                    className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                    className="px-4 py-2 border border-input rounded-md text-sm font-medium text-foreground hover:bg-muted transition-colors"
                   >
                     Cancel
                   </button>

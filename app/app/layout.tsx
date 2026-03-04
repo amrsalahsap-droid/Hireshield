@@ -36,7 +36,7 @@ export default async function AppLayout({
               alt="HireShield Logo" 
               className="h-8 w-auto"
               fallback={
-                <h1 className="text-xl font-semibold text-foreground">
+                <h1 className="text-xl font-semibold text-foreground font-display">
                   HireShield
                 </h1>
               }
@@ -50,7 +50,7 @@ export default async function AppLayout({
             <Link
               key={item.name}
               href={item.href}
-              className="flex items-center px-3 py-2 text-sm font-medium rounded-button text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+              className="flex items-center px-3 py-2 text-sm font-medium font-body rounded-button text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
             >
               <span className="mr-3 text-lg">{item.icon}</span>
               {item.name}
@@ -61,7 +61,7 @@ export default async function AppLayout({
         {/* User info */}
         <div className="absolute bottom-0 w-64 p-6 border-t border-border">
           <div className="flex flex-col space-y-3">
-            <div className="text-secondary text-muted-foreground">
+            <div className="text-muted-foreground font-body text-sm">
               {user?.id ? `User: ${user.id.slice(0, 8)}...` : "Not authenticated"}
             </div>
             <UserButton 
@@ -80,7 +80,7 @@ export default async function AppLayout({
       <div className="flex-1 flex flex-col">
         <header className="bg-card shadow-subtle border-b border-border">
           <div className="px-6 py-4">
-            <div className="text-secondary text-muted-foreground">
+            <div className="text-muted-foreground font-body">
               HireShield - Decision Intelligence Platform
             </div>
           </div>
