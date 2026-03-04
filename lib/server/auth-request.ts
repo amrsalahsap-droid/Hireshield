@@ -58,7 +58,7 @@ export async function getAuthUserFromRequest(request: NextRequest): Promise<Auth
   return ensureProvisionedFromClerkData(userId, email, name);
 }
 
-/** Build normalized allowed origins for Clerk azp check (request origin + Vercel/env URLs). */
+/** Build normalized allowed origins for Clerk azp check (request origin, Origin header, Vercel/env URLs). */
 function getAllowedOrigins(request: NextRequest): string[] {
   const seen = new Set<string>();
   const add = (origin: string | null | undefined) => {
@@ -68,6 +68,8 @@ function getAllowedOrigins(request: NextRequest): string[] {
   };
   const requestOrigin = getRequestOrigin(request);
   add(requestOrigin);
+  const originHeader = request.headers.get("origin");
+  add(originHeader);
   const vercelUrl = process.env.VERCEL_URL;
   if (vercelUrl) add(`https://${vercelUrl}`);
   const branchUrl = process.env.VERCEL_BRANCH_URL;

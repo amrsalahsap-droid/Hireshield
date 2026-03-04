@@ -32,7 +32,7 @@ If the dashboard still shows “We couldn’t verify your session” after sign-
    When auth fails, the API logs `Clerk auth failed: <reason> <message>`. Look for that line to see whether the failure is e.g. `session-token-missing`, an authorized-party mismatch, or something else.
 
 2. **Allowed origins**  
-   Ensure your app’s URL is allowed by Clerk. The code allows: request origin, `https://${VERCEL_URL}`, `https://${VERCEL_BRANCH_URL}`, and `NEXT_PUBLIC_APP_URL`. If you use a custom domain, set `NEXT_PUBLIC_APP_URL` to that URL (e.g. `https://app.example.com`).
+   Ensure your app’s URL is allowed by Clerk. The code allows: request origin, the request `Origin` header (when present, so the dashboard origin is accepted even if env/request URL differ), `https://${VERCEL_URL}`, `https://${VERCEL_BRANCH_URL}`, and `NEXT_PUBLIC_APP_URL`. If you use a custom domain, set `NEXT_PUBLIC_APP_URL` to that URL (e.g. `https://app.example.com`).
 
 3. **Clerk Dashboard**  
    In Clerk Dashboard, confirm your production (and preview) domains are in the allowed redirect/origin settings for the application.
