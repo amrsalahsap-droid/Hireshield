@@ -1,13 +1,13 @@
-// Minimal Clerk middleware so auth() works in Server Components.
-// If you see MIDDLEWARE_INVOCATION_FAILED on Vercel, ensure CLERK_SECRET_KEY and
-// NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY are set in Vercel project environment.
-import { clerkMiddleware } from "@clerk/nextjs/server";
+// Clerk middleware is OFF: clerkMiddleware() causes MIDDLEWARE_INVOCATION_FAILED
+// on Vercel Edge. See docs/vercel-clerk-auth.md for details and workarounds.
+// With middleware disabled: auth() in Server Components throws, so the dashboard
+// shows a friendly message and "Sign in again" when deployed on Vercel.
+import { NextResponse } from "next/server";
 
-export default clerkMiddleware();
+export function middleware() {
+  return NextResponse.next();
+}
 
 export const config = {
-  matcher: [
-    "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
-    "/(api|trpc)(.*)",
-  ],
+  matcher: ["/((?!.*\\..*|_next).*)", "/", "/(api|trpc)(.*)"],
 };
