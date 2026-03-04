@@ -26,14 +26,15 @@ export async function getCurrentUserOrThrow() {
   const primaryEmail = clerkUser.emailAddresses.find(
     (email: { id: string; emailAddress: string }) => email.id === clerkUser.primaryEmailAddressId
   );
+  const emailAddress = primaryEmail?.emailAddress ?? clerkUser.emailAddresses[0]?.emailAddress;
 
-  if (!primaryEmail) {
+  if (!emailAddress) {
     throw new Error("Unauthorized: No email found");
   }
 
   return {
     clerkUserId: userId,
-    email: primaryEmail.emailAddress,
+    email: emailAddress as string,
     name: clerkUser.firstName 
       ? `${clerkUser.firstName} ${clerkUser.lastName || ""}`.trim()
       : null,
@@ -89,7 +90,33 @@ export async function ensureProvisioned(): Promise<AuthUser> {
     console.log(`Provisioned new user: ${dbUser?.id}, org: ${result.org.id}`);
   }
 
-  if (!dbUser || !dbUser.orgMemberships[0]) {
+  if (dbUser && (!dbUser.orgMemberships || dbUser.orgMemberships.length === 0)) {
+    const result = await prisma.$transaction(async (tx) => {
+      const orgName = dbUser!.name ? `${dbUser.name.split(' ')[0]} Workspace` : "My Workspace";
+      const newOrg = await tx.org.create({
+        data: { name: orgName },
+      });
+
+      await tx.orgMember.create({
+        data: {
+          orgId: newOrg.id,
+          userId: dbUser!.id,
+          role: Role.OWNER,
+        },
+      });
+
+      return { org: newOrg };
+    });
+
+    dbUser = await prisma.user.findUnique({
+      where: { clerkUserId },
+      include: { orgMemberships: { include: { org: true } } },
+    });
+
+    console.log(`Provisioned org for existing user: ${dbUser?.id}, org: ${result.org.id}`);
+  }
+
+  if (!dbUser || !dbUser.orgMemberships?.[0]) {
     throw new Error("Failed to provision user organization");
   }
 

@@ -1,9 +1,10 @@
-// Middleware temporarily disabled to prevent 500 errors
-// TODO: Implement authentication at component level instead
+import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 
-export default function middleware(req: Request) {
-  // No middleware logic for now
-}
+const isAppRoute = createRouteMatcher(["/app(.*)"]);
+
+export default clerkMiddleware(async (auth, req) => {
+  if (isAppRoute(req)) await auth.protect();
+});
 
 export const config = {
   matcher: ["/((?!.*\\..*|_next).*)", "/", "/(api|trpc)(.*)"],
