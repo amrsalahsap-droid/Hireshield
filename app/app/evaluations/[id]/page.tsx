@@ -147,33 +147,33 @@ export default function EvaluationDetailsPage() {
           <div className="flex items-center space-x-4">
             <Link
               href="/app/jobs"
-              className="text-gray-500 hover:text-gray-700"
+              className="text-muted-foreground hover:text-foreground"
             >
               ← Jobs
             </Link>
-            <div className="h-4 w-px bg-gray-300"></div>
+            <div className="h-4 w-px bg-border"></div>
             <Link
               href={`/app/jobs/${evaluation.jobId}`}
-              className="text-gray-500 hover:text-gray-700"
+              className="text-muted-foreground hover:text-foreground"
             >
               {evaluation.job.title}
             </Link>
-            <div className="h-4 w-px bg-gray-300"></div>
-            <h1 className="text-2xl font-bold text-gray-900">
+            <div className="h-4 w-px bg-border"></div>
+            <h1 className="text-2xl font-bold text-foreground font-display">
               {evaluation.candidate.fullName} - Evaluation
             </h1>
           </div>
           <div className="flex items-center space-x-3">
             <span className={`inline-flex px-3 py-1 text-sm font-semibold rounded-full ${
-              hasAIResults 
-                ? "bg-green-100 text-green-800" 
-                : "bg-yellow-100 text-yellow-800"
+              hasAIResults
+                ? "bg-safe/10 text-safe"
+                : "bg-investigate/10 text-investigate"
             }`}>
               {hasAIResults ? "Completed" : "Pending AI Analysis"}
             </span>
           </div>
         </div>
-        <p className="text-gray-600">
+        <p className="text-muted-foreground">
           {hasAIResults 
             ? "View AI-powered evaluation results and insights."
             : "Evaluation created successfully. AI analysis is in progress."
@@ -264,17 +264,17 @@ export default function EvaluationDetailsPage() {
 
           {/* AI Results Section */}
           {hasAIResults ? (
-            <div className="bg-white shadow rounded-lg">
-              <div className="px-6 py-4 border-b border-gray-200">
-                <h2 className="text-lg font-medium text-gray-900">AI Analysis Results</h2>
+            <div className="bg-card shadow-card rounded-xl border border-border">
+              <div className="px-6 py-4 border-b border-border">
+                <h2 className="text-lg font-medium text-foreground font-display">AI Analysis Results</h2>
               </div>
               <div className="px-6 py-4 space-y-6">
                 {/* Signals Section */}
                 <div>
                   <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-md font-medium text-gray-900">Candidate Signals</h3>
+                    <h3 className="text-md font-medium text-foreground font-display">Candidate Signals</h3>
                     {evaluation.signalsPromptVersion && (
-                      <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                      <span className="text-xs text-muted-foreground bg-gray-100 px-2 py-1 rounded">
                         v{evaluation.signalsPromptVersion}
                       </span>
                     )}
@@ -292,22 +292,22 @@ export default function EvaluationDetailsPage() {
 
                       {/* Category Ratings */}
                       {evaluation.signalsJson.categoryRatings && (
-                        <div className="bg-gray-50 p-4 rounded-md">
-                          <h4 className="font-medium text-gray-900 mb-3">Category Ratings</h4>
+                        <div className="bg-muted p-4 rounded-md">
+                          <h4 className="font-medium text-foreground mb-3">Category Ratings</h4>
                           <div className="grid grid-cols-2 gap-3">
                             {Object.entries(evaluation.signalsJson.categoryRatings).map(([category, rating]) => (
                               <div key={category} className="flex justify-between items-center">
-                                <span className="text-sm text-gray-600 capitalize">
+                                <span className="text-sm text-muted-foreground capitalize">
                                   {category.replace(/([A-Z])/g, ' $1').trim()}
                                 </span>
                                 <div className="flex items-center">
-                                  <div className="w-20 bg-gray-200 rounded-full h-2 mr-2">
+                                  <div className="w-20 bg-muted rounded-full h-2 mr-2">
                                     <div 
                                       className="bg-indigo-600 h-2 rounded-full" 
                                       style={{ width: `${(Number(rating) * 20)}%` }}
                                     ></div>
                                   </div>
-                                  <span className="text-sm font-medium text-gray-900">{Number(rating)}/5</span>
+                                  <span className="text-sm font-medium text-foreground">{Number(rating)}/5</span>
                                 </div>
                               </div>
                             ))}
@@ -405,14 +405,14 @@ export default function EvaluationDetailsPage() {
 
                       {/* Generation Info */}
                       {evaluation.signalsGeneratedAt && (
-                        <div className="text-xs text-gray-500 mt-4 pt-4 border-t border-gray-200">
+                        <div className="text-xs text-muted-foreground mt-4 pt-4 border-t border-gray-200">
                           Generated on {new Date(evaluation.signalsGeneratedAt).toLocaleString()}
                           {evaluation.signalsPromptVersion && ` using prompt version ${evaluation.signalsPromptVersion}`}
                         </div>
                       )}
                     </div>
                   ) : (
-                    <div className="bg-gray-50 p-4 rounded-md text-center text-gray-500 text-sm">
+                    <div className="bg-muted p-4 rounded-md text-center text-muted-foreground text-sm">
                       No signals data available
                     </div>
                   )}
@@ -420,9 +420,9 @@ export default function EvaluationDetailsPage() {
 
                 {/* Final Score Section */}
                 <div>
-                  <h3 className="text-md font-medium text-gray-900 mb-3">Final Score</h3>
-                  <div className="bg-gray-50 p-4 rounded-md">
-                    <pre className="text-sm text-gray-700 whitespace-pre-wrap">
+                  <h3 className="text-md font-medium text-foreground font-display mb-3">Final Score</h3>
+                  <div className="bg-muted p-4 rounded-md">
+                    <pre className="text-sm text-foreground whitespace-pre-wrap">
                       {JSON.stringify(evaluation.finalScoreJson, null, 2)}
                     </pre>
                   </div>
@@ -430,20 +430,20 @@ export default function EvaluationDetailsPage() {
               </div>
             </div>
           ) : (
-            <div className="bg-white shadow rounded-lg">
-              <div className="px-6 py-4 border-b border-gray-200">
-                <h2 className="text-lg font-medium text-gray-900">AI Analysis Results</h2>
+            <div className="bg-card shadow-card rounded-xl border border-border">
+              <div className="px-6 py-4 border-b border-border">
+                <h2 className="text-lg font-medium text-foreground font-display">AI Analysis Results</h2>
               </div>
               <div className="px-6 py-4">
                 <div className="text-center py-12">
-                  <div className="text-gray-400 text-5xl mb-4">🤖</div>
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">AI Analysis In Progress</h3>
-                  <p className="text-gray-500 mb-6">
+                  <div className="text-muted-foreground text-5xl mb-4">🤖</div>
+                  <h3 className="text-lg font-medium text-foreground font-display mb-2">AI Analysis In Progress</h3>
+                  <p className="text-muted-foreground mb-6">
                     Our AI is currently analyzing this candidate's profile and interview data. 
                     Results will appear here automatically once processing is complete.
                   </p>
-                  <div className="bg-gray-50 p-4 rounded-md">
-                    <div className="text-sm text-gray-600">
+                  <div className="bg-muted p-4 rounded-md">
+                    <div className="text-sm text-muted-foreground">
                       <p className="font-medium mb-2">What to expect:</p>
                       <ul className="text-left space-y-1">
                         <li>• Detailed evaluation signals</li>
@@ -459,29 +459,29 @@ export default function EvaluationDetailsPage() {
           )}
 
           {/* Evaluation Information */}
-          <div className="bg-white shadow rounded-lg">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h2 className="text-lg font-medium text-gray-900">Evaluation Information</h2>
+          <div className="bg-card shadow-card rounded-xl border border-border">
+            <div className="px-6 py-4 border-b border-border">
+              <h2 className="text-lg font-medium text-foreground font-display">Evaluation Information</h2>
             </div>
             <div className="px-6 py-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <dt className="text-sm font-medium text-gray-500">Candidate</dt>
-                  <dd className="mt-1 text-sm text-gray-900">{evaluation.candidate.fullName}</dd>
+                  <dt className="text-sm font-medium text-muted-foreground">Candidate</dt>
+                  <dd className="mt-1 text-sm text-foreground">{evaluation.candidate.fullName}</dd>
                 </div>
                 <div>
-                  <dt className="text-sm font-medium text-gray-500">Job</dt>
-                  <dd className="mt-1 text-sm text-gray-900">{evaluation.job.title}</dd>
+                  <dt className="text-sm font-medium text-muted-foreground">Job</dt>
+                  <dd className="mt-1 text-sm text-foreground">{evaluation.job.title}</dd>
                 </div>
                 <div>
-                  <dt className="text-sm font-medium text-gray-500">Created</dt>
-                  <dd className="mt-1 text-sm text-gray-900">
+                  <dt className="text-sm font-medium text-muted-foreground">Created</dt>
+                  <dd className="mt-1 text-sm text-foreground">
                     {new Date(evaluation.createdAt).toLocaleDateString()}
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-sm font-medium text-gray-500">Last Updated</dt>
-                  <dd className="mt-1 text-sm text-gray-900">
+                  <dt className="text-sm font-medium text-muted-foreground">Last Updated</dt>
+                  <dd className="mt-1 text-sm text-foreground">
                     {new Date(evaluation.updatedAt).toLocaleDateString()}
                   </dd>
                 </div>
@@ -493,9 +493,9 @@ export default function EvaluationDetailsPage() {
         {/* Sidebar */}
         <div className="space-y-6">
           {/* Quick Actions */}
-          <div className="bg-white shadow rounded-lg">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h2 className="text-lg font-medium text-gray-900">Quick Actions</h2>
+          <div className="bg-card shadow-card rounded-xl border border-border">
+            <div className="px-6 py-4 border-b border-border">
+              <h2 className="text-lg font-medium text-foreground font-display">Quick Actions</h2>
             </div>
             <div className="px-6 py-4 space-y-3">
               <Link
@@ -506,12 +506,12 @@ export default function EvaluationDetailsPage() {
               </Link>
               <Link
                 href={`/app/jobs/${evaluation.jobId}`}
-                className="block w-full text-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 transition-colors"
+                className="block w-full text-center px-4 py-2 border border-input text-sm font-medium rounded-md text-foreground bg-white hover:bg-muted transition-colors"
               >
                 View Job Details
               </Link>
               {!hasAIResults && (
-                <button className="block w-full px-4 py-2 border border-purple-300 text-sm font-medium rounded-md text-purple-700 bg-white hover:bg-purple-50 transition-colors">
+                <button className="block w-full px-4 py-2 border border-primary text-sm font-medium rounded-md text-primary bg-white hover:bg-primary/10 transition-colors">
                   Request AI Analysis
                 </button>
               )}
@@ -519,19 +519,19 @@ export default function EvaluationDetailsPage() {
           </div>
 
           {/* Evaluation Metadata */}
-          <div className="bg-white shadow rounded-lg">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h2 className="text-lg font-medium text-gray-900">Evaluation Metadata</h2>
+          <div className="bg-card shadow-card rounded-xl border border-border">
+            <div className="px-6 py-4 border-b border-border">
+              <h2 className="text-lg font-medium text-foreground font-display">Evaluation Metadata</h2>
             </div>
             <div className="px-6 py-4 space-y-4">
               <div>
-                <dt className="text-sm font-medium text-gray-500">Evaluation ID</dt>
-                <dd className="mt-1 text-sm text-gray-900 font-mono">
+                <dt className="text-sm font-medium text-muted-foreground">Evaluation ID</dt>
+                <dd className="mt-1 text-sm text-foreground font-mono">
                   {evaluation.id}
                 </dd>
               </div>
               <div>
-                <dt className="text-sm font-medium text-gray-500">Status</dt>
+                <dt className="text-sm font-medium text-muted-foreground">Status</dt>
                 <dd className="mt-1">
                   <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                     hasAIResults 
@@ -547,15 +547,15 @@ export default function EvaluationDetailsPage() {
               {evaluation.signalsGeneratedAt && (
                 <>
                   <div>
-                    <dt className="text-sm font-medium text-gray-500">Signals Generated</dt>
-                    <dd className="mt-1 text-sm text-gray-900">
+                    <dt className="text-sm font-medium text-muted-foreground">Signals Generated</dt>
+                    <dd className="mt-1 text-sm text-foreground">
                       {new Date(evaluation.signalsGeneratedAt).toLocaleString()}
                     </dd>
                   </div>
                   {evaluation.signalsPromptVersion && (
                     <div>
-                      <dt className="text-sm font-medium text-gray-500">Signals Prompt Version</dt>
-                      <dd className="mt-1 text-sm text-gray-900">
+                      <dt className="text-sm font-medium text-muted-foreground">Signals Prompt Version</dt>
+                      <dd className="mt-1 text-sm text-foreground">
                         v{evaluation.signalsPromptVersion}
                       </dd>
                     </div>
@@ -564,8 +564,8 @@ export default function EvaluationDetailsPage() {
               )}
               
               <div>
-                <dt className="text-sm font-medium text-gray-500">Processing Time</dt>
-                <dd className="mt-1 text-sm text-gray-900">
+                <dt className="text-sm font-medium text-muted-foreground">Processing Time</dt>
+                <dd className="mt-1 text-sm text-foreground">
                   {hasAIResults ? "Completed" : "In Progress"}
                 </dd>
               </div>
@@ -573,13 +573,13 @@ export default function EvaluationDetailsPage() {
               {/* Debug Info */}
               {evaluation.rawModelOutputSnippet && (
                 <div>
-                  <dt className="text-sm font-medium text-gray-500">Debug Information</dt>
+                  <dt className="text-sm font-medium text-muted-foreground">Debug Information</dt>
                   <dd className="mt-1">
                     <details className="text-sm">
                       <summary className="cursor-pointer text-indigo-600 hover:text-indigo-800">
                         View raw output snippet ({evaluation.rawModelOutputSnippet.length} chars)
                       </summary>
-                      <pre className="mt-2 text-xs text-gray-600 bg-gray-50 p-2 rounded overflow-x-auto whitespace-pre-wrap">
+                      <pre className="mt-2 text-xs text-muted-foreground bg-muted p-2 rounded overflow-x-auto whitespace-pre-wrap">
                         {evaluation.rawModelOutputSnippet}
                       </pre>
                     </details>

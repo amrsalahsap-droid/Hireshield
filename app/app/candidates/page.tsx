@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { ErrorState, EmptyState, LoadingState } from "@/components/ui/ErrorState";
+import { Button } from "@/components/ui/button";
 
 interface Candidate {
   id: string;
@@ -152,10 +153,10 @@ export default function CandidatesPage() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "Active": return "bg-green-100 text-green-800";
-      case "Screening": return "bg-blue-100 text-blue-800";
-      case "New": return "bg-gray-100 text-gray-800";
-      default: return "bg-gray-100 text-gray-800";
+      case "Active": return "bg-safe/10 text-safe";
+      case "Screening": return "bg-primary/10 text-primary";
+      case "New": return "bg-muted text-muted-foreground";
+      default: return "bg-muted text-muted-foreground";
     }
   };
 
@@ -181,15 +182,12 @@ export default function CandidatesPage() {
     <div>
       <div className="mb-8">
         <div className="flex justify-between items-center">
-          <h1 className="text-2xl font-bold text-gray-900">Candidates</h1>
-          <button 
-            onClick={() => setShowCreateModal(true)}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
-          >
+          <h1 className="text-2xl font-bold text-foreground font-display">Candidates</h1>
+          <Button onClick={() => setShowCreateModal(true)}>
             Add Candidate
-          </button>
+          </Button>
         </div>
-        <p className="text-gray-600">
+        <p className="text-muted-foreground font-body">
           Track and manage your candidate pipeline.
         </p>
       </div>
@@ -209,59 +207,59 @@ export default function CandidatesPage() {
 
       {/* Candidates Grid */}
       {candidates.length > 0 && (
-        <div className="bg-white shadow overflow-hidden rounded-md">
+        <div className="bg-card shadow-card border border-border rounded-xl overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+            <table className="min-w-full divide-y divide-border">
+              <thead className="bg-muted">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider font-body">
                     Candidate
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider font-body">
                     Status
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider font-body">
                     Added
                   </th>
-                  <th className="relative px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="relative px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider font-body">
                     <span className="sr-only">Actions</span>
                   </th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+              <tbody className="bg-card divide-y divide-border">
                 {candidates.map((candidate) => (
-                  <tr key={candidate.id} className="hover:bg-gray-50">
+                  <tr key={candidate.id} className="hover:bg-muted/50">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center">
                         <div className="flex-shrink-0 h-10 w-10">
-                          <div className="h-10 w-10 rounded-full bg-gray-300 flex items-center justify-center">
-                            <span className="text-lg font-medium text-gray-600">
+                          <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center border border-border">
+                            <span className="text-lg font-medium text-foreground font-body">
                               {candidate.fullName.charAt(0).toUpperCase()}
                             </span>
                           </div>
                         </div>
                         <div className="ml-4">
-                          <div className="text-sm font-medium text-gray-900">
+                          <div className="text-sm font-medium text-foreground font-body">
                             {candidate.fullName}
                           </div>
-                          <div className="text-sm text-gray-500">
+                          <div className="text-sm text-muted-foreground font-body">
                             {candidate.email || "No email"}
                           </div>
                         </div>
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor("New")}`}>
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full font-body ${getStatusColor("New")}`}>
                         New
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground font-body">
                       {new Date(candidate.createdAt).toLocaleDateString()}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <Link
                         href={`/app/candidates/${candidate.id}`}
-                        className="text-indigo-600 hover:text-indigo-900 mr-3"
+                        className="text-primary hover:text-primary/90 mr-3 font-body"
                       >
                         View Details
                       </Link>
@@ -276,101 +274,95 @@ export default function CandidatesPage() {
 
       {/* Create Candidate Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-10 mx-auto p-5 border w-full max-w-2xl shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-              <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
-                Add New Candidate
-              </h3>
-              
-              <form onSubmit={handleCreateCandidate} className="space-y-4">
-                <div>
-                  <label htmlFor="fullName" className="block text-sm font-medium text-gray-700 mb-1">
-                    Full Name *
-                  </label>
-                  <input
-                    type="text"
-                    id="fullName"
-                    name="fullName"
-                    value={formData.fullName}
-                    onChange={handleInputChange}
-                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
-                      errors.fullName ? "border-red-500" : "border-gray-300"
-                    }`}
-                    placeholder="e.g. John Doe"
-                  />
-                  {errors.fullName && (
-                    <p className="mt-1 text-sm text-red-600">{errors.fullName}</p>
+        <div className="fixed inset-0 bg-foreground/50 overflow-y-auto h-full w-full z-50 flex items-start justify-center pt-10 pb-8">
+          <div className="relative p-6 w-full max-w-2xl shadow-card rounded-xl border border-border bg-card">
+            <h3 className="text-lg font-medium text-foreground font-display mb-4">
+              Add New Candidate
+            </h3>
+
+            <form onSubmit={handleCreateCandidate} className="space-y-4">
+              <div>
+                <label htmlFor="fullName" className="block text-sm font-medium text-foreground font-body mb-1">
+                  Full Name *
+                </label>
+                <input
+                  type="text"
+                  id="fullName"
+                  name="fullName"
+                  value={formData.fullName}
+                  onChange={handleInputChange}
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-ring bg-background text-foreground font-body ${
+                    errors.fullName ? "border-destructive" : "border-input"
+                  }`}
+                  placeholder="e.g. John Doe"
+                />
+                {errors.fullName && (
+                  <p className="mt-1 text-sm text-destructive">{errors.fullName}</p>
+                )}
+              </div>
+
+              <div>
+                <label htmlFor="email" className="block text-sm font-medium text-foreground font-body mb-1">
+                  Email (optional)
+                </label>
+                <input
+                  type="email"
+                  id="email"
+                  name="email"
+                  value={formData.email}
+                  onChange={handleInputChange}
+                  className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring bg-background text-foreground font-body"
+                  placeholder="e.g. john.doe@example.com"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="rawCVText" className="block text-sm font-medium text-foreground font-body mb-1">
+                  CV Text *
+                </label>
+                <textarea
+                  id="rawCVText"
+                  name="rawCVText"
+                  value={formData.rawCVText}
+                  onChange={handleInputChange}
+                  rows={12}
+                  className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-ring bg-background text-foreground font-mono text-sm ${
+                    errors.rawCVText ? "border-destructive" : "border-input"
+                  }`}
+                  placeholder="Paste the complete CV text here. Supports large content and preserves formatting..."
+                />
+                <div className="mt-1 flex justify-between flex-wrap gap-1">
+                  {errors.rawCVText && (
+                    <p className="text-sm text-destructive">{errors.rawCVText}</p>
                   )}
-                </div>
-
-                <div>
-                  <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                    Email (optional)
-                  </label>
-                  <input
-                    type="email"
-                    id="email"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    placeholder="e.g. john.doe@example.com"
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="rawCVText" className="block text-sm font-medium text-gray-700 mb-1">
-                    CV Text *
-                  </label>
-                  <textarea
-                    id="rawCVText"
-                    name="rawCVText"
-                    value={formData.rawCVText}
-                    onChange={handleInputChange}
-                    rows={12}
-                    className={`w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 font-mono text-sm ${
-                      errors.rawCVText ? "border-red-500" : "border-gray-300"
-                    }`}
-                    placeholder="Paste the complete CV text here. Supports large content and preserves formatting..."
-                  />
-                  <div className="mt-1 flex justify-between">
-                    {errors.rawCVText && (
-                      <p className="text-sm text-red-600">{errors.rawCVText}</p>
-                    )}
-                    <p className={`text-sm ${
-                      formData.rawCVText.length > 20000 ? "text-red-600" : "text-gray-500"
-                    }`}>
-                      {formData.rawCVText.length.toLocaleString()} / 20,000 characters
-                    </p>
-                  </div>
-                  <p className="mt-1 text-xs text-gray-500">
-                    Supports large text content. Paste the complete CV including all sections, experience, education, etc.
+                  <p className={`text-sm font-body ${
+                    formData.rawCVText.length > 20000 ? "text-destructive" : "text-muted-foreground"
+                  }`}>
+                    {formData.rawCVText.length.toLocaleString()} / 20,000 characters
                   </p>
                 </div>
+                <p className="mt-1 text-xs text-muted-foreground font-body">
+                  Supports large text content. Paste the complete CV including all sections, experience, education, etc.
+                </p>
+              </div>
 
-                <div className="flex justify-end space-x-3 pt-4">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowCreateModal(false);
-                      setFormData({ fullName: "", email: "", rawCVText: "" });
-                      setErrors({ fullName: "", rawCVText: "" });
-                    }}
-                    className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isCreating}
-                    className="px-4 py-2 bg-indigo-600 border border-transparent rounded-md text-sm font-medium text-white hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isCreating ? "Adding..." : "Add Candidate"}
-                  </button>
-                </div>
-              </form>
-            </div>
+              <div className="flex justify-end space-x-3 pt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setShowCreateModal(false);
+                    setFormData({ fullName: "", email: "", rawCVText: "" });
+                    setErrors({ fullName: "", rawCVText: "" });
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={isCreating}>
+                  {isCreating ? "Adding..." : "Add Candidate"}
+                </Button>
+              </div>
+            </form>
           </div>
         </div>
       )}

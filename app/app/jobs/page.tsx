@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { ErrorState, EmptyState, LoadingState } from "@/components/ui/ErrorState";
+import { Button } from "@/components/ui/button";
 
 interface Job {
   id: string;
@@ -182,15 +183,12 @@ export default function JobsPage() {
     <div>
       <div className="mb-8">
         <div className="flex justify-between items-center">
-          <h1 className="text-2xl font-bold text-gray-900">Jobs</h1>
-          <button 
-            onClick={() => setShowCreateModal(true)}
-            className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
-          >
+          <h1 className="text-2xl font-bold text-foreground font-display">Jobs</h1>
+          <Button onClick={() => setShowCreateModal(true)}>
             Create New Job
-          </button>
+          </Button>
         </div>
-        <p className="text-gray-600">
+        <p className="text-muted-foreground font-body">
           Manage your job postings and track applicant progress.
         </p>
       </div>
@@ -210,57 +208,59 @@ export default function JobsPage() {
 
       {/* Jobs Table */}
       {jobs.length > 0 && (
-        <div className="bg-white shadow overflow-hidden rounded-md">
+        <div className="bg-card shadow-card border border-border rounded-xl overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
+            <table className="min-w-full divide-y divide-border">
+              <thead className="bg-muted">
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider font-body">
                     Job Title
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider font-body">
                     Status
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider font-body">
                     JD Analysis
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider font-body">
                     Interview Kit
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider font-body">
                     Created
                   </th>
-                  <th className="relative px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="relative px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider font-body">
                     <span className="sr-only">Actions</span>
                   </th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
+              <tbody className="bg-card divide-y divide-border">
                 {jobs.map((job) => (
-                  <tr key={job.id}>
+                  <tr key={job.id} className="hover:bg-muted/50">
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">{job.title}</div>
+                      <div className="text-sm font-medium text-foreground font-body">{job.title}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                        job.status === 'active' 
-                          ? 'bg-green-100 text-green-800' 
-                          : 'bg-gray-100 text-gray-800'
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full font-body ${
+                        job.status === "ACTIVE"
+                          ? "bg-safe/10 text-safe"
+                          : job.status === "DRAFT"
+                            ? "bg-investigate/10 text-investigate"
+                            : "bg-muted text-muted-foreground"
                       }`}>
                         {job.status}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {job.jdAnalyzedAt ? new Date(job.jdAnalyzedAt).toLocaleDateString() : 'Not analyzed'}
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground font-body">
+                      {job.jdAnalyzedAt ? new Date(job.jdAnalyzedAt).toLocaleDateString() : "Not analyzed"}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {job.interviewKitGeneratedAt ? new Date(job.interviewKitGeneratedAt).toLocaleDateString() : 'Not generated'}
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground font-body">
+                      {job.interviewKitGeneratedAt ? new Date(job.interviewKitGeneratedAt).toLocaleDateString() : "Not generated"}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground font-body">
                       {new Date(job.createdAt).toLocaleDateString()}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <Link href={`/jobs/${job.id}`} className="text-indigo-600 hover:text-indigo-900">
+                      <Link href={`/app/jobs/${job.id}`} className="text-primary hover:text-primary/90 font-body">
                         View
                       </Link>
                     </td>
@@ -274,88 +274,82 @@ export default function JobsPage() {
 
       {/* Create Job Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
-          <div className="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-            <div className="mt-3">
-              <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
-                Create New Job
-              </h3>
-              <form onSubmit={handleCreateJob}>
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Job Title
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.title}
-                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    placeholder="e.g. Senior Frontend Developer"
-                  />
-                  {errors.title && (
-                    <p className="mt-1 text-sm text-red-600">{errors.title}</p>
-                  )}
-                </div>
+        <div className="fixed inset-0 bg-foreground/50 overflow-y-auto h-full w-full z-50 flex items-start justify-center pt-20 pb-8">
+          <div className="relative p-6 w-full max-w-md shadow-card rounded-xl border border-border bg-card">
+            <h3 className="text-lg font-medium text-foreground font-display mb-4">
+              Create New Job
+            </h3>
+            <form onSubmit={handleCreateJob}>
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-foreground font-body mb-2">
+                  Job Title
+                </label>
+                <input
+                  type="text"
+                  value={formData.title}
+                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                  className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring bg-background text-foreground font-body"
+                  placeholder="e.g. Senior Frontend Developer"
+                />
+                {errors.title && (
+                  <p className="mt-1 text-sm text-destructive">{errors.title}</p>
+                )}
+              </div>
 
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Job Description
-                  </label>
-                  <textarea
-                    value={formData.rawJD}
-                    onChange={(e) => setFormData({ ...formData, rawJD: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    rows={6}
-                    placeholder="Paste the complete job description here..."
-                  />
-                  <div className="mt-1 flex justify-between">
-                    {errors.rawJD && (
-                      <p className="text-sm text-red-600">{errors.rawJD}</p>
-                    )}
-                    <div className="flex items-center space-x-2">
-                      {formData.rawJD.length >= 8000 && formData.rawJD.length < 10000 && (
-                        <p className="text-sm text-yellow-600">
-                          ⚠️ Approaching limit
-                        </p>
-                      )}
-                      {formData.rawJD.length >= 10000 && (
-                        <p className="text-sm text-red-600">
-                          ❌ Limit exceeded
-                        </p>
-                      )}
-                      <p className={`text-sm ${
-                        formData.rawJD.length > 10000 ? "text-red-600" : 
-                        formData.rawJD.length >= 8000 ? "text-yellow-600" : 
-                        "text-gray-500"
-                      }`}>
-                        {formData.rawJD.length.toLocaleString()} / 10,000 characters
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-foreground font-body mb-2">
+                  Job Description
+                </label>
+                <textarea
+                  value={formData.rawJD}
+                  onChange={(e) => setFormData({ ...formData, rawJD: e.target.value })}
+                  className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring bg-background text-foreground font-body"
+                  rows={6}
+                  placeholder="Paste the complete job description here..."
+                />
+                <div className="mt-1 flex justify-between flex-wrap gap-1">
+                  {errors.rawJD && (
+                    <p className="text-sm text-destructive">{errors.rawJD}</p>
+                  )}
+                  <div className="flex items-center space-x-2">
+                    {formData.rawJD.length >= 8000 && formData.rawJD.length < 10000 && (
+                      <p className="text-sm text-investigate">
+                        Approaching limit
                       </p>
-                    </div>
+                    )}
+                    {formData.rawJD.length >= 10000 && (
+                      <p className="text-sm text-destructive">
+                        Limit exceeded
+                      </p>
+                    )}
+                    <p className={`text-sm font-body ${
+                      formData.rawJD.length > 10000 ? "text-destructive" :
+                      formData.rawJD.length >= 8000 ? "text-investigate" :
+                      "text-muted-foreground"
+                    }`}>
+                      {formData.rawJD.length.toLocaleString()} / 10,000 characters
+                    </p>
                   </div>
                 </div>
+              </div>
 
-                <div className="flex justify-end space-x-3 pt-4">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowCreateModal(false);
-                      setFormData({ title: "", rawJD: "" });
-                      setErrors({ title: "", rawJD: "" });
-                    }}
-                    className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isCreating}
-                    className="px-4 py-2 bg-indigo-600 border border-transparent rounded-md text-sm font-medium text-white hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isCreating ? "Creating..." : "Create Job"}
-                  </button>
-                </div>
-              </form>
-            </div>
+              <div className="flex justify-end space-x-3 pt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setShowCreateModal(false);
+                    setFormData({ title: "", rawJD: "" });
+                    setErrors({ title: "", rawJD: "" });
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={isCreating}>
+                  {isCreating ? "Creating..." : "Create Job"}
+                </Button>
+              </div>
+            </form>
           </div>
         </div>
       )}
