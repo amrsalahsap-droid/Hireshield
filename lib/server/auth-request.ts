@@ -38,26 +38,33 @@ export async function getAuthUserFromRequestWithReason(
 
   let requestForAuth: Request;
   if (hasBearerToken) {
-    // Strip cookies so Clerk is forced onto the Bearer-only path.
-    // Without this, Clerk may process the session cookie first and return
-    // HandshakeState, ignoring the valid Bearer token.
-    const strippedHeaders = new Headers();
-    strippedHeaders.set("Authorization", authHeader!);
-    requestForAuth = new Request(request.url, { headers: strippedHeaders });
+    // Keep all headers except cookie so Clerk stays on Bearer auth path
+    // while preserving Origin/Host context for azp validation.
+    const strippedHeaders = new Headers(request.headers);
+    strippedHeaders.delete("cookie");
+    requestForAuth = new Request(request.url, {
+      method: request.method,
+      headers: strippedHeaders,
+    });
   } else {
     requestForAuth = request;
   }
 
-  const allowedOrigins = hasBearerToken ? undefined : getAllowedOrigins(request);
+  const allowedOrigins = getAllowedOrigins(request);
   const state = await clerkClient.authenticateRequest(requestForAuth, {
     ...(allowedOrigins && allowedOrigins.length > 0 ? { authorizedParties: allowedOrigins } : {}),
     ...(jwtKey ? { jwtKey } : {}),
   });
 
   if (!state.isAuthenticated || !state.toAuth) {
-    const s = state as { reason?: string; message?: string };
-    const reason = s.reason ?? "unknown";
-    console.warn("Clerk auth failed — reason:", reason, "message:", s.message ?? "(none)");
+    const s = state as { reason?: string; message?: string; status?: string };
+    const reason = s.reason ?? s.status ?? "unknown";
+    console.warn(
+      "Clerk auth failed — reason:",
+      reason,
+      "message:",
+      s.message ?? "(none)"
+    );
     return { user: null, reason };
   }
 
