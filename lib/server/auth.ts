@@ -91,8 +91,9 @@ export async function ensureProvisioned(): Promise<AuthUser> {
   }
 
   if (dbUser && (!dbUser.orgMemberships || dbUser.orgMemberships.length === 0)) {
+    const userToProvision = dbUser;
     const result = await prisma.$transaction(async (tx) => {
-      const orgName = dbUser!.name ? `${dbUser.name.split(' ')[0]} Workspace` : "My Workspace";
+      const orgName = userToProvision.name ? `${userToProvision.name.split(' ')[0]} Workspace` : "My Workspace";
       const newOrg = await tx.org.create({
         data: { name: orgName },
       });
@@ -100,7 +101,7 @@ export async function ensureProvisioned(): Promise<AuthUser> {
       await tx.orgMember.create({
         data: {
           orgId: newOrg.id,
-          userId: dbUser!.id,
+          userId: userToProvision.id,
           role: Role.OWNER,
         },
       });
