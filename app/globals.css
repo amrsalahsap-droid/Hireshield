@@ -188,3 +188,7 @@ main .cl-formButtonPrimary:focus,
   background: hsl(var(--accent)) !important;
   color: hsl(var(--accent-foreground)) !important;
 }
+/* Hide "Secured by Clerk" / "Development mode" footer */
+.cl-footer {
+  display: none !important;
+}
