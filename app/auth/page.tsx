@@ -63,16 +63,18 @@ export default function AuthPage() {
   }
 
   return (
-    <main className="min-h-screen w-full bg-background flex items-center justify-center p-6 relative overflow-hidden">
-      {/* Same background as landing: grid + gradient orbs */}
-      <div
-        className="absolute inset-0 opacity-[0.03]"
-        style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23000' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-        }}
-      />
-      <div className="absolute top-1/4 right-1/4 w-[500px] h-[500px] rounded-full bg-accent/10 blur-[120px]" />
-      <div className="absolute bottom-1/4 left-1/6 w-[300px] h-[300px] rounded-full bg-primary/5 blur-[100px]" />
+    <main className="min-h-screen w-full bg-background flex items-center justify-center p-6 relative">
+      {/* Same background as landing: grid + gradient orbs (clip orbs only so form is not cropped) */}
+      <div className="absolute inset-0 overflow-hidden" aria-hidden="true">
+        <div
+          className="absolute inset-0 opacity-[0.03]"
+          style={{
+            backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23000' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+          }}
+        />
+        <div className="absolute top-1/4 right-1/4 w-[500px] h-[500px] rounded-full bg-accent/10 blur-[120px]" />
+        <div className="absolute bottom-1/4 left-1/6 w-[300px] h-[300px] rounded-full bg-primary/5 blur-[100px]" />
+      </div>
 
       <div className="relative z-10 w-full flex items-center justify-center">
         {/* Late-loading override so auth buttons use accent (teal), not Clerk blue */}
@@ -89,7 +91,7 @@ export default function AuthPage() {
             color: #fff !important;
           }
         `}} />
-        <div className="max-w-md md:max-w-lg w-full rounded-xl border border-border bg-card shadow-sm p-8">
+        <div className="max-w-md md:max-w-lg w-full rounded-xl border border-border bg-card shadow-sm p-8 overflow-visible">
         {/* Header */}
         <div className="text-center mb-8">
           <div className="flex justify-center mb-4">
@@ -153,8 +155,8 @@ export default function AuthPage() {
                   headerSubtitle: "hidden",
                   footer: "hidden",
                   socialButtonsBlockButton: "w-full flex justify-center items-center py-3 px-4 border border-input rounded-button text-sm font-medium bg-background hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-ring h-11",
-                  formButtonPrimary: "w-full flex justify-center py-3 px-4 border border-transparent rounded-button text-sm font-medium text-accent-foreground bg-accent hover:bg-accent/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-ring h-11",
-                  formFieldInput: "appearance-none block w-full px-3 py-3 border border-input rounded-button placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring text-sm h-11",
+                  formButtonPrimary: "w-full flex justify-center py-3 px-4 border border-transparent rounded-button text-sm font-medium text-accent-foreground bg-accent hover:bg-accent/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-ring h-11 box-border max-w-full",
+                  formFieldInput: "appearance-none block w-full px-3 py-3 border border-input rounded-button placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring text-sm h-11 box-border max-w-full",
                   dividerText: "text-muted-foreground text-sm",
                   footerActionLink: "text-primary hover:text-primary/90 text-sm font-medium",
                   identityPreviewText: "text-foreground text-sm font-medium",
@@ -177,8 +179,8 @@ export default function AuthPage() {
                   headerSubtitle: "hidden",
                   footer: "hidden",
                   socialButtonsBlockButton: "w-full flex justify-center items-center py-3 px-4 border border-input rounded-button text-sm font-medium bg-background hover:bg-accent hover:text-accent-foreground focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-ring h-11",
-                  formButtonPrimary: "w-full flex justify-center py-3 px-4 border border-transparent rounded-button text-sm font-medium text-accent-foreground bg-accent hover:bg-accent/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-ring h-11",
-                  formFieldInput: "appearance-none block w-full px-3 py-3 border border-input rounded-button placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring text-sm h-11",
+                  formButtonPrimary: "w-full flex justify-center py-3 px-4 border border-transparent rounded-button text-sm font-medium text-accent-foreground bg-accent hover:bg-accent/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-ring h-11 box-border max-w-full",
+                  formFieldInput: "appearance-none block w-full px-3 py-3 border border-input rounded-button placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-ring text-sm h-11 box-border max-w-full",
                   dividerText: "text-muted-foreground text-sm",
                   footerActionLink: "text-primary hover:text-primary/90 text-sm font-medium",
                   identityPreviewText: "text-foreground text-sm font-medium",

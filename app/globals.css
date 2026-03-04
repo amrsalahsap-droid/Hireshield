@@ -192,3 +192,8 @@ main .cl-formButtonPrimary:focus,
 .cl-footer {
   display: none !important;
 }
+/* Prevent Clerk form from clipping inputs/button focus rings */
+.cl-rootBox,
+.cl-cardBox {
+  overflow: visible !important;
+}
