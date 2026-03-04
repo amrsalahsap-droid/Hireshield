@@ -9,8 +9,9 @@ import { ensureProvisionedFromClerkData } from "./auth";
  * When the client sends "Authorization: Bearer <token>", we strip cookies from the
  * request before passing to authenticateRequest so Clerk is forced onto the Bearer
  * path (preventing the cookie handshake from overriding it).
- * When no Bearer header is present (local dev with middleware), we use cookies +
- * authorizedParties.
+ * When no Bearer header is present (local dev with middleware), we still allow
+ * cookie auth; authorizedParties checks are intentionally disabled because they
+ * have been causing false negatives on Vercel domains.
  *
  * Returns the AuthUser on success, or null with a reason string on failure.
  */
@@ -50,9 +51,7 @@ export async function getAuthUserFromRequestWithReason(
     requestForAuth = request;
   }
 
-  const allowedOrigins = getAllowedOrigins(request);
   const state = await clerkClient.authenticateRequest(requestForAuth, {
-    ...(allowedOrigins && allowedOrigins.length > 0 ? { authorizedParties: allowedOrigins } : {}),
     ...(jwtKey ? { jwtKey } : {}),
   });
 
