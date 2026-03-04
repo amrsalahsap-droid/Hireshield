@@ -48,10 +48,12 @@ export async function getCurrentUserOrThrow() {
   };
 }
 
-export async function ensureProvisioned(): Promise<AuthUser> {
-  const { clerkUserId, email, name } = await getCurrentUserOrThrow();
-
-  // Check if user exists
+/** Shared provisioning: find or create User and Org from Clerk identity. */
+export async function ensureProvisionedFromClerkData(
+  clerkUserId: string,
+  email: string,
+  name: string | null
+): Promise<AuthUser> {
   let dbUser = await prisma.user.findUnique({
     where: { clerkUserId },
     include: { orgMemberships: { include: { org: true } } },
@@ -135,6 +137,11 @@ export async function ensureProvisioned(): Promise<AuthUser> {
     name: dbUser.name,
     orgId: dbUser.orgMemberships[0].orgId,
   };
+}
+
+export async function ensureProvisioned(): Promise<AuthUser> {
+  const { clerkUserId, email, name } = await getCurrentUserOrThrow();
+  return ensureProvisionedFromClerkData(clerkUserId, email, name);
 }
 
 export async function requireAuthAndOrg(): Promise<AuthUser> {
