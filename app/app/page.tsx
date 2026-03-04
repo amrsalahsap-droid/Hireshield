@@ -91,16 +91,19 @@ function statusBadge(status: string) {
 }
 
 export default async function AppPage() {
-  const { userId } = await auth();
-  if (!userId) {
-    redirect("/auth");
-  }
-
   let user;
   try {
+    const { userId } = await auth();
+    if (!userId) {
+      redirect("/auth");
+    }
     user = await ensureProvisioned();
   } catch (error) {
     if (error instanceof NoSessionError) {
+      redirect("/auth");
+    }
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes("clerkMiddleware") || message.includes("Clerk")) {
       redirect("/auth");
     }
     console.error("Failed to provision user:", error);
