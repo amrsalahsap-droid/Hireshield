@@ -13,19 +13,19 @@ function statusBadge(status: string) {
   return "text-muted-foreground";
 }
 
+type DiagStep = "clerk-not-loaded" | "not-signed-in" | "no-token" | "api-401" | "api-error";
+
 export default function AppPage() {
   const { isLoaded, isSignedIn, getToken } = useAuth();
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [loading, setLoading] = useState(true);
-  const [unauthorized, setUnauthorized] = useState(false);
+  const [diagStep, setDiagStep] = useState<DiagStep | null>(null);
 
   useEffect(() => {
-    // Wait for Clerk to finish loading before doing anything.
     if (!isLoaded) return;
 
-    // If not signed in, show the sign-in prompt immediately.
     if (!isSignedIn) {
-      setUnauthorized(true);
+      setDiagStep("not-signed-in");
       setLoading(false);
       return;
     }
@@ -36,7 +36,7 @@ export default function AppPage() {
         const token = await getToken();
         if (!token) {
           if (!cancelled) {
-            setUnauthorized(true);
+            setDiagStep("no-token");
             setLoading(false);
           }
           return;
@@ -47,11 +47,14 @@ export default function AppPage() {
         });
         if (cancelled) return;
         if (res.status === 401) {
-          setUnauthorized(true);
+          setDiagStep("api-401");
           setSummary(null);
           return;
         }
-        if (!res.ok) throw new Error("Failed to load dashboard");
+        if (!res.ok) {
+          setDiagStep("api-error");
+          throw new Error("Failed to load dashboard");
+        }
         const data = await res.json();
         if (!cancelled) setSummary(data);
       } catch {
@@ -73,13 +76,27 @@ export default function AppPage() {
     );
   }
 
-  if (unauthorized || !summary) {
+  if (diagStep || !summary) {
+    const diagMessages: Record<DiagStep, string> = {
+      "not-signed-in": "Clerk loaded but you are not signed in.",
+      "no-token": "You are signed in but Clerk returned no session token.",
+      "api-401": "Token sent to /api/dashboard but server returned 401 (token rejected).",
+      "api-error": "Server returned an unexpected error.",
+      "clerk-not-loaded": "Clerk has not loaded.",
+    };
     return (
       <div className="px-4 py-6 sm:px-0">
         <div className="text-center max-w-md mx-auto space-y-4">
-          <p className="font-body text-foreground">
-            We couldn&apos;t verify your session. Please sign in to view the dashboard.
+          <p className="font-body text-foreground font-semibold">
+            Session verification failed
           </p>
+          {diagStep && (
+            <p className="font-mono text-xs bg-muted border border-border rounded px-3 py-2 text-left text-foreground">
+              Step: <span className="font-bold">{diagStep}</span>
+              <br />
+              {diagMessages[diagStep]}
+            </p>
+          )}
           <Link
             href="/auth"
             className="inline-flex items-center justify-center rounded-button bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 font-body"
