@@ -16,12 +16,25 @@ export default async function AppLayout({
     user = null;
   }
 
-  const navigation = [
+  const topNav = [
     { name: "Dashboard", href: "/app", icon: "📊" },
-    { name: "Jobs", href: "/app/jobs", icon: "💼" },
+    { name: "Billing", href: "/app/billing", icon: "💳" },
+    { name: "Update", href: "/app/update", icon: "🔄" },
+  ];
+
+  const jobsNav = [
+    { name: "JD Analysis", href: "/app/jobs", icon: "📄" },
+    { name: "Interview Kit", href: "/app/jobs", icon: "🎤" },
     { name: "Candidates", href: "/app/candidates", icon: "👥" },
+    { name: "Evaluations", href: "/app/evaluations", icon: "📋" },
+  ];
+
+  const bottomNav = [
     { name: "Reports", href: "/app/reports", icon: "📈" },
   ];
+
+  const navLinkClass =
+    "flex items-center px-3 py-2 text-sm font-medium font-body rounded-button text-muted-foreground hover:text-foreground hover:bg-accent transition-colors";
 
   return (
     <div className="min-h-screen bg-background flex">
@@ -46,12 +59,31 @@ export default async function AppLayout({
         
         {/* Navigation */}
         <nav className="p-4 space-y-1">
-          {navigation.map((item) => (
-            <Link
-              key={item.name}
-              href={item.href}
-              className="flex items-center px-3 py-2 text-sm font-medium font-body rounded-button text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-            >
+          {topNav.map((item) => (
+            <Link key={item.name} href={item.href} className={navLinkClass}>
+              <span className="mr-3 text-lg">{item.icon}</span>
+              {item.name}
+            </Link>
+          ))}
+          <div className="pt-2">
+            <div className="px-3 py-1.5 text-xs font-semibold font-display text-muted-foreground uppercase tracking-wider">
+              Jobs
+            </div>
+            <div className="mt-1 space-y-0.5">
+              {jobsNav.map((item) => (
+                <Link
+                  key={item.name}
+                  href={item.href}
+                  className={`${navLinkClass} pl-6`}
+                >
+                  <span className="mr-3 text-lg">{item.icon}</span>
+                  {item.name}
+                </Link>
+              ))}
+            </div>
+          </div>
+          {bottomNav.map((item) => (
+            <Link key={item.name} href={item.href} className={navLinkClass}>
               <span className="mr-3 text-lg">{item.icon}</span>
               {item.name}
             </Link>
