@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState, useEffect } from "react";
+import { useAuth } from "@clerk/nextjs";
 import type { DashboardJobRow, DashboardSummary } from "@/lib/server/dashboard";
 
 function statusBadge(status: string) {
@@ -13,14 +14,19 @@ function statusBadge(status: string) {
 }
 
 export default function AppPage() {
+  const { getToken } = useAuth();
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [unauthorized, setUnauthorized] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    fetch("/api/dashboard", { credentials: "include" })
-      .then((res) => {
+    (async () => {
+      try {
+        const token = await getToken();
+        const headers: Record<string, string> = {};
+        if (token) headers["Authorization"] = `Bearer ${token}`;
+        const res = await fetch("/api/dashboard", { credentials: "include", headers });
         if (cancelled) return;
         if (res.status === 401) {
           setUnauthorized(true);
@@ -28,21 +34,18 @@ export default function AppPage() {
           return;
         }
         if (!res.ok) throw new Error("Failed to load dashboard");
-        return res.json();
-      })
-      .then((data) => {
-        if (!cancelled && data) setSummary(data);
-      })
-      .catch(() => {
+        const data = await res.json();
+        if (!cancelled) setSummary(data);
+      } catch {
         if (!cancelled) setSummary(null);
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) setLoading(false);
-      });
+      }
+    })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [getToken]);
 
   if (loading) {
     return (
