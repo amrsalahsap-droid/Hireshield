@@ -91,7 +91,7 @@ export default function AuthPage() {
             color: #fff !important;
           }
         `}} />
-        <div className="max-w-md md:max-w-lg w-full rounded-xl border border-border bg-card shadow-sm p-8 overflow-visible">
+        <div className="max-w-md md:max-w-lg w-full rounded-xl border border-border bg-card shadow-sm px-10 py-8 overflow-visible">
         {/* Header */}
         <div className="text-center mb-8">
           <div className="flex justify-center mb-4">
@@ -142,14 +142,14 @@ export default function AuthPage() {
         </div>
 
         {/* Clerk Component */}
-        <div className="w-full">
+        <div className="w-full flex flex-col items-center">
           {mode === 'signin' ? (
             <SignIn 
               redirectUrl="/app"
               appearance={{
                 variables: clerkVariables,
                 elements: {
-                  rootBox: "mx-auto w-full",
+                  rootBox: "mx-auto w-full max-w-sm",
                   card: "shadow-none border-0 p-0",
                   headerTitle: "hidden",
                   headerSubtitle: "hidden",
@@ -173,7 +173,7 @@ export default function AuthPage() {
               appearance={{
                 variables: clerkVariables,
                 elements: {
-                  rootBox: "mx-auto w-full",
+                  rootBox: "mx-auto w-full max-w-sm",
                   card: "shadow-none border-0 p-0",
                   headerTitle: "hidden",
                   headerSubtitle: "hidden",
