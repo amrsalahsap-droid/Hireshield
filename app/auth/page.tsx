@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { SignIn, SignUp } from '@clerk/nextjs';
 import { Logo } from '@/components/ui/logo';
 import { Button } from '@/components/ui/button';
+import { clerkVariables } from '@/lib/clerk-appearance';
 
 export const dynamic = 'force-dynamic';
 
@@ -119,6 +120,7 @@ export default function AuthPage() {
             <SignIn 
               redirectUrl="/app"
               appearance={{
+                variables: clerkVariables,
                 elements: {
                   rootBox: "mx-auto w-full",
                   card: "shadow-none border-0 p-0",
@@ -141,6 +143,7 @@ export default function AuthPage() {
             <SignUp 
               redirectUrl="/app"
               appearance={{
+                variables: clerkVariables,
                 elements: {
                   rootBox: "mx-auto w-full",
                   card: "shadow-none border-0 p-0",
