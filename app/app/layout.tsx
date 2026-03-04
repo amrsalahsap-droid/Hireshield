@@ -45,7 +45,7 @@ export default async function AppLayout({
           <div className="flex items-center space-x-3">
             {/* HireShield Logo */}
             <Logo 
-              src="/hireshield-logo.png" 
+              src="/hireshield-logo.svg" 
               alt="HireShield Logo" 
               className="h-8 w-auto"
               fallback={
@@ -93,9 +93,11 @@ export default async function AppLayout({
         {/* User info */}
         <div className="absolute bottom-0 w-64 p-6 border-t border-border">
           <div className="flex flex-col space-y-3">
-            <div className="text-muted-foreground font-body text-sm">
-              {user?.id ? `User: ${user.id.slice(0, 8)}...` : "Not authenticated"}
-            </div>
+            {user?.id && (
+              <div className="text-muted-foreground font-body text-sm truncate">
+                {user.fullName || user.primaryEmailAddress?.emailAddress || `User ${user.id.slice(0, 8)}...`}
+              </div>
+            )}
             <UserButton 
               afterSignOutUrl="/"
               appearance={{
