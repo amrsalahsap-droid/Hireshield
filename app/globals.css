@@ -67,6 +67,10 @@
     --shadow-card-hover: 0 4px 12px -2px hsl(222 47% 11% / 0.08), 0 8px 32px -4px hsl(222 47% 11% / 0.1);
     --shadow-hero: 0 20px 60px -15px hsl(222 60% 18% / 0.25);
     --shadow-subtle: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+
+    /* Clerk: use accent (teal) so auth CTAs match landing "Get Started" */
+    --clerk-color-primary: hsl(162, 63%, 41%);
+    --clerk-color-primary-foreground: hsl(0, 0%, 100%);
   }
 
   .dark {
@@ -154,4 +158,33 @@
   .shadow-subtle {
     box-shadow: var(--shadow-subtle);
   }
+}
+
+/* Clerk auth: force button colors to match landing (accent/teal, not blue) */
+main button.cl-formButtonPrimary,
+main .cl-formButtonPrimary,
+.cl-rootBox button.cl-formButtonPrimary,
+.cl-rootBox .cl-formButtonPrimary {
+  background-color: hsl(162, 63%, 41%) !important;
+  background: hsl(162, 63%, 41%) !important;
+  color: hsl(0, 0%, 100%) !important;
+}
+main button.cl-formButtonPrimary:hover,
+main button.cl-formButtonPrimary:focus,
+main .cl-formButtonPrimary:hover,
+main .cl-formButtonPrimary:focus,
+.cl-rootBox button.cl-formButtonPrimary:hover,
+.cl-rootBox button.cl-formButtonPrimary:focus {
+  background-color: hsl(162, 63%, 36%) !important;
+  background: hsl(162, 63%, 36%) !important;
+  color: hsl(0, 0%, 100%) !important;
+}
+.cl-socialButtonsBlockButton {
+  background: hsl(var(--background)) !important;
+  color: hsl(var(--foreground)) !important;
+  border-color: hsl(var(--input)) !important;
+}
+.cl-socialButtonsBlockButton:hover {
+  background: hsl(var(--accent)) !important;
+  color: hsl(var(--accent-foreground)) !important;
 }

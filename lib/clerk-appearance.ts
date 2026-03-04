@@ -4,9 +4,9 @@
  */
 
 export const clerkVariables = {
-  // Colors (HSL from design tokens)
-  colorPrimary: "hsl(222, 60%, 18%)",
-  colorPrimaryForeground: "hsl(210, 40%, 98%)",
+  // Primary = accent (teal) so auth CTAs match landing "Get Started", not navy/blue
+  colorPrimary: "hsl(162, 63%, 41%)",
+  colorPrimaryForeground: "hsl(0, 0%, 100%)",
   colorBackground: "hsl(220, 20%, 97%)",
   colorForeground: "hsl(222, 47%, 11%)",
   colorMuted: "hsl(220, 14%, 95%)",
