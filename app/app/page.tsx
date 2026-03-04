@@ -1,6 +1,92 @@
+import Link from "next/link";
 import { ensureProvisioned } from "@/lib/server/auth";
+import { prisma } from "@/lib/prisma";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
+
+type JDAnalysisStatus = "NOT_STARTED" | "RUNNING" | "DONE" | "FAILED";
+type InterviewKitStatus = "NOT_STARTED" | "RUNNING" | "DONE" | "FAILED";
+
+async function getDashboardJobsSummary(orgId: string) {
+  const [activeCount, archivedCount, recentJobs] = await Promise.all([
+    prisma.job.count({ where: { orgId, status: "ACTIVE" } }),
+    prisma.job.count({ where: { orgId, status: "ARCHIVED" } }),
+    prisma.job.findMany({
+      where: { orgId },
+      orderBy: { updatedAt: "desc" },
+      take: 5,
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        updatedAt: true,
+        jdExtractionJson: true,
+        jdAnalysisStatus: true,
+        interviewKitStatus: true,
+      },
+    }),
+  ]);
+
+  const jobIds = recentJobs.map((j) => j.id);
+  if (jobIds.length === 0) {
+    return {
+      activeCount,
+      archivedCount,
+      recentJobs: [] as Array<{
+        id: string;
+        title: string;
+        seniority: string;
+        candidateCount: number;
+        jdAnalysisStatus: JDAnalysisStatus;
+        interviewKitStatus: InterviewKitStatus;
+        href: string;
+      }>,
+    };
+  }
+
+  const [interviewsForJobs, evaluationsForJobs] = await Promise.all([
+    prisma.interview.findMany({
+      where: { jobId: { in: jobIds } },
+      select: { jobId: true, candidateId: true },
+    }),
+    prisma.evaluation.findMany({
+      where: { jobId: { in: jobIds } },
+      select: { jobId: true, candidateId: true },
+    }),
+  ]);
+
+  const candidateCountByJob = new Map<string, Set<string>>();
+  for (const id of jobIds) candidateCountByJob.set(id, new Set());
+  for (const i of interviewsForJobs) candidateCountByJob.get(i.jobId)!.add(i.candidateId);
+  for (const e of evaluationsForJobs) candidateCountByJob.get(e.jobId)!.add(e.candidateId);
+
+  const recentJobsWithMeta = recentJobs.map((job) => {
+    const jd = job.jdExtractionJson as { seniorityLevel?: string } | null;
+    return {
+      id: job.id,
+      title: job.title,
+      seniority: jd?.seniorityLevel ?? "—",
+      candidateCount: candidateCountByJob.get(job.id)?.size ?? 0,
+      jdAnalysisStatus: job.jdAnalysisStatus as JDAnalysisStatus,
+      interviewKitStatus: job.interviewKitStatus as InterviewKitStatus,
+      href: `/app/jobs/${job.id}`,
+    };
+  });
+
+  return {
+    activeCount,
+    archivedCount,
+    recentJobs: recentJobsWithMeta,
+  };
+}
+
+function statusBadge(status: string) {
+  const s = status.toLowerCase();
+  if (s === "done") return "text-safe";
+  if (s === "running") return "text-investigate";
+  if (s === "failed") return "text-destructive";
+  return "text-muted-foreground";
+}
 
 export default async function AppPage() {
   let user;
@@ -8,7 +94,6 @@ export default async function AppPage() {
     user = await ensureProvisioned();
   } catch (error) {
     console.error("Failed to provision user:", error);
-    // This should be handled by middleware, but as a fallback
     return (
       <div className="px-4 py-6 sm:px-0">
         <div className="text-center text-destructive">
@@ -18,111 +103,103 @@ export default async function AppPage() {
     );
   }
 
-  // Mock stats for now - will be replaced with real API calls
-  const stats = [
-    { name: "Total Jobs", value: "12", icon: "💼", color: "bg-primary" },
-    { name: "Total Candidates", value: "48", icon: "👥", color: "bg-safe" },
-    { name: "Interviews Conducted", value: "23", icon: "🎤", color: "bg-accent" },
-    { name: "Evaluations Completed", value: "15", icon: "📋", color: "bg-investigate" },
-  ];
-
-  const recentActivity = [
-    {
-      id: "1",
-      type: "Job Created",
-      description: "Senior Frontend Developer position created",
-      time: "2 hours ago",
-      icon: "💼"
-    },
-    {
-      id: "2", 
-      type: "Candidate Added",
-      description: "Alice Johnson added to candidate pool",
-      time: "4 hours ago",
-      icon: "👥"
-    },
-    {
-      id: "3",
-      type: "Interview Completed", 
-      description: "Interview with Bob Wilson completed",
-      time: "6 hours ago",
-      icon: "🎤"
-    },
-    {
-      id: "4",
-      type: "Evaluation Created",
-      description: "Evaluation for Carol Davis generated",
-      time: "1 day ago", 
-      icon: "📋"
-    },
-  ];
+  const { activeCount, archivedCount, recentJobs } = await getDashboardJobsSummary(user.orgId);
 
   return (
     <div>
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-foreground font-display mb-2">Overview</h1>
         <p className="text-muted-foreground font-body">
-          Welcome to your HireShield dashboard. Here&apos;s what&apos;s happening with your hiring process.
-        </p>
-        <p className="text-sm text-muted-foreground font-body mt-1">
-          Organization ID: {user.orgId}
+          High-level view of hiring activity and readiness. Click a job to open its details.
         </p>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        {stats.map((stat) => (
-          <div key={stat.name} className="bg-card overflow-hidden shadow-card rounded-xl border border-border">
-            <div className="p-5">
-              <div className="flex items-center">
-                <div className="flex-shrink-0">
-                  <span className="text-2xl">{stat.icon}</span>
-                </div>
-                <div className="ml-5 w-0 flex-1">
-                  <dl>
-                    <dt className="text-sm font-medium text-muted-foreground font-body truncate">{stat.name}</dt>
-                    <dd className="text-lg font-semibold text-foreground font-display">{stat.value}</dd>
-                  </dl>
-                </div>
+      {/* Jobs summary stats */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+        <div className="bg-card overflow-hidden shadow-card rounded-xl border border-border">
+          <div className="p-5">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <span className="text-2xl">💼</span>
               </div>
-              <div className={`mt-4 h-2 ${stat.color} rounded-full`}></div>
+              <div className="ml-5 w-0 flex-1">
+                <dl>
+                  <dt className="text-sm font-medium text-muted-foreground font-body truncate">Active jobs</dt>
+                  <dd className="text-lg font-semibold text-foreground font-display">{activeCount}</dd>
+                </dl>
+              </div>
             </div>
+            <div className="mt-4 h-2 bg-primary rounded-full" />
           </div>
-        ))}
+        </div>
+        <div className="bg-card overflow-hidden shadow-card rounded-xl border border-border">
+          <div className="p-5">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <span className="text-2xl">📦</span>
+              </div>
+              <div className="ml-5 w-0 flex-1">
+                <dl>
+                  <dt className="text-sm font-medium text-muted-foreground font-body truncate">Archived jobs</dt>
+                  <dd className="text-lg font-semibold text-foreground font-display">{archivedCount}</dd>
+                </dl>
+              </div>
+            </div>
+            <div className="mt-4 h-2 bg-muted rounded-full" />
+          </div>
+        </div>
       </div>
 
-      {/* Recent Activity */}
+      {/* Recently active jobs */}
       <div className="bg-card shadow-card rounded-xl border border-border">
         <div className="px-4 py-5 sm:p-6">
           <h3 className="text-lg leading-6 font-medium text-foreground font-display mb-4">
-            Recent Activity
+            Recently active jobs
           </h3>
 
-          <div className="flow-root">
-            <ul className="-mb-8">
-              {recentActivity.map((activity) => (
-                <li key={activity.id}>
-                  <div className="relative pb-8">
-                    <div className="relative flex space-x-3">
-                      <div>
-                        <span className="h-8 w-8 rounded-full bg-muted flex items-center justify-center ring-8 ring-card border border-border">
-                          <span className="text-sm">{activity.icon}</span>
+          {recentJobs.length === 0 ? (
+            <p className="text-muted-foreground font-body text-sm">No jobs yet. Create one from Jobs.</p>
+          ) : (
+            <div className="rounded-button border border-border overflow-hidden">
+              <table className="w-full">
+                <thead className="bg-muted/50 border-b border-border">
+                  <tr>
+                    <th className="text-left px-4 py-3 text-sm font-medium text-foreground font-display">Job title</th>
+                    <th className="text-left px-4 py-3 text-sm font-medium text-foreground font-display">Seniority</th>
+                    <th className="text-left px-4 py-3 text-sm font-medium text-foreground font-display">Candidates</th>
+                    <th className="text-left px-4 py-3 text-sm font-medium text-foreground font-display">JD analysis</th>
+                    <th className="text-left px-4 py-3 text-sm font-medium text-foreground font-display">Interview kit</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {recentJobs.map((job) => (
+                    <tr key={job.id} className="hover:bg-accent/50 transition-colors">
+                      <td className="px-4 py-3">
+                        <Link
+                          href={job.href}
+                          className="font-medium text-foreground font-body text-primary hover:text-primary/90"
+                        >
+                          {job.title}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground font-body text-sm">{job.seniority}</td>
+                      <td className="px-4 py-3 text-muted-foreground font-body text-sm">{job.candidateCount}</td>
+                      <td className="px-4 py-3">
+                        <span className={`text-sm font-body ${statusBadge(job.jdAnalysisStatus)}`}>
+                          {job.jdAnalysisStatus.replace("_", " ")}
                         </span>
-                      </div>
-                      <div className="min-w-0 flex-1 py-0.5">
-                        <div className="h-full border-l-2 border-border pl-4"></div>
-                        <div className="text-sm text-muted-foreground font-body">
-                          <p className="font-medium text-foreground">{activity.type}</p>
-                          <p className="mt-1">{activity.description}</p>
-                          <p className="mt-1 text-xs text-muted-foreground">{activity.time}</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`text-sm font-body ${statusBadge(job.interviewKitStatus)}`}>
+                          {job.interviewKitStatus.replace("_", " ")}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </div>
     </div>
