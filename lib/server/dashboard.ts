@@ -13,15 +13,26 @@ export type DashboardJobRow = {
   href: string;
 };
 
+export type AwaitingEvaluationRow = {
+  evaluationId: string;
+  candidateName: string;
+  jobTitle: string;
+  stage: "Interviewed" | "Awaiting Interview";
+  hasTranscript: boolean;
+  evaluationStatus: "Pending";
+  href: string;
+};
+
 export type DashboardSummary = {
   activeCount: number;
   draftCount: number;
   archivedCount: number;
   recentJobs: DashboardJobRow[];
+  candidatesAwaitingEvaluation: AwaitingEvaluationRow[];
 };
 
 export async function getDashboardJobsSummary(orgId: string): Promise<DashboardSummary> {
-  const [activeCount, draftCount, archivedCount, recentJobs] = await Promise.all([
+  const [activeCount, draftCount, archivedCount, recentJobs, pendingEvaluations] = await Promise.all([
     prisma.job.count({ where: { orgId, status: "ACTIVE" } }),
     prisma.job.count({ where: { orgId, status: "DRAFT" } }),
     prisma.job.count({ where: { orgId, status: "ARCHIVED" } }),
@@ -39,11 +50,61 @@ export async function getDashboardJobsSummary(orgId: string): Promise<DashboardS
         interviewKitStatus: true,
       },
     }),
+    prisma.evaluation.findMany({
+      where: {
+        orgId,
+        OR: [{ signalsJson: null as any }, { finalScoreJson: null as any }],
+      },
+      orderBy: { createdAt: "asc" },
+      take: 5,
+      select: {
+        id: true,
+        jobId: true,
+        candidateId: true,
+        candidate: { select: { fullName: true } },
+        job: { select: { title: true } },
+      },
+    }),
   ]);
+
+  const pendingPairs = pendingEvaluations.map((e) => ({
+    jobId: e.jobId,
+    candidateId: e.candidateId,
+  }));
+  const interviewsForPending = pendingPairs.length
+    ? await prisma.interview.findMany({
+        where: { orgId, OR: pendingPairs },
+        select: { jobId: true, candidateId: true, transcriptText: true },
+      })
+    : [];
+  const transcriptByPair = new Set(
+    interviewsForPending
+      .filter((i) => i.transcriptText.trim().length > 0)
+      .map((i) => `${i.jobId}:${i.candidateId}`)
+  );
+  const candidatesAwaitingEvaluation: AwaitingEvaluationRow[] = pendingEvaluations.map((e) => {
+    const key = `${e.jobId}:${e.candidateId}`;
+    const hasTranscript = transcriptByPair.has(key);
+    return {
+      evaluationId: e.id,
+      candidateName: e.candidate.fullName,
+      jobTitle: e.job.title,
+      stage: hasTranscript ? "Interviewed" : "Awaiting Interview",
+      hasTranscript,
+      evaluationStatus: "Pending",
+      href: `/app/evaluations/${e.id}`,
+    };
+  });
 
   const jobIds = recentJobs.map((j) => j.id);
   if (jobIds.length === 0) {
-    return { activeCount, draftCount, archivedCount, recentJobs: [] };
+    return {
+      activeCount,
+      draftCount,
+      archivedCount,
+      recentJobs: [],
+      candidatesAwaitingEvaluation,
+    };
   }
 
   const [interviewsForJobs, evaluationsForJobs] = await Promise.all([
@@ -82,5 +143,6 @@ export async function getDashboardJobsSummary(orgId: string): Promise<DashboardS
     draftCount,
     archivedCount,
     recentJobs: recentJobsWithMeta,
+    candidatesAwaitingEvaluation,
   };
 }
