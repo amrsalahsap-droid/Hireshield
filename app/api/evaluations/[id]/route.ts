@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { withOrgContext } from "@/lib/server/org-context";
 import { prisma } from "@/lib/prisma";
 import { CandidateSignals_v1 } from "@/lib/schemas/candidate-signals";
+import { FinalScore_v1 } from "@/lib/schemas/final-score";
 import { candidateSignalsExtractorV1 } from "@/lib/prompts/candidate_signals_v1";
 import { callLLMAndParseJSON } from "@/lib/server/ai/call";
 import { randomUUID } from "crypto";
@@ -71,10 +72,12 @@ export const PUT = withOrgContext(async (request: NextRequest, orgId: string, { 
     }
 
     const body = await request.json();
+    const hasFinalScoreInBody = Object.prototype.hasOwnProperty.call(body, "finalScoreJson");
     const { 
       signalsJson, 
       signalsPromptVersion, 
-      rawModelOutputSnippet 
+      rawModelOutputSnippet,
+      finalScoreJson,
     } = body;
 
     // Validate that evaluation exists and belongs to the organization
@@ -96,12 +99,23 @@ export const PUT = withOrgContext(async (request: NextRequest, orgId: string, { 
     if (signalsJson) {
       try {
         const validatedSignals = CandidateSignals_v1.parse(signalsJson);
-        // Store the validated data
         body.signalsJson = validatedSignals;
       } catch (validationError) {
         console.error("Signals validation error:", validationError);
         return NextResponse.json(
           { error: "Invalid signals data format", details: validationError },
+          { status: 400 }
+        );
+      }
+    }
+
+    if (hasFinalScoreInBody && finalScoreJson !== null) {
+      try {
+        body.finalScoreJson = FinalScore_v1.parse(finalScoreJson);
+      } catch (validationError) {
+        console.error("Final score validation error:", validationError);
+        return NextResponse.json(
+          { error: "Invalid final score data format", details: validationError },
           { status: 400 }
         );
       }
@@ -113,15 +127,28 @@ export const PUT = withOrgContext(async (request: NextRequest, orgId: string, { 
       truncatedSnippet = rawModelOutputSnippet.substring(0, 4000);
     }
 
+    const updateData: Record<string, unknown> = {
+      signalsJson: signalsJson || undefined,
+      signalsPromptVersion: signalsPromptVersion || undefined,
+      signalsGeneratedAt: signalsJson ? new Date() : undefined,
+      rawModelOutputSnippet: truncatedSnippet || undefined,
+    };
+    if (hasFinalScoreInBody) {
+      if (finalScoreJson === null) {
+        updateData.finalScoreJson = null;
+        updateData.status = "PENDING";
+        updateData.completedAt = null;
+      } else {
+        updateData.finalScoreJson = body.finalScoreJson;
+        updateData.status = "COMPLETED";
+        updateData.completedAt = new Date();
+      }
+    }
+
     // Update evaluation with signals data
     const updatedEvaluation = await prisma.evaluation.update({
       where: { id },
-      data: {
-        signalsJson: signalsJson || undefined,
-        signalsPromptVersion: signalsPromptVersion || undefined,
-        signalsGeneratedAt: signalsJson ? new Date() : undefined,
-        rawModelOutputSnippet: truncatedSnippet || undefined,
-      },
+      data: updateData,
       include: {
         job: {
           select: {

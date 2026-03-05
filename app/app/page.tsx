@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { useAuth } from "@clerk/nextjs";
+import { RiskBadge } from "@/components/ui/risk-badge";
 import type {
   AwaitingEvaluationRow,
   DashboardJobRow,
   DashboardSummary,
+  RecentEvaluationRow,
 } from "@/lib/server/dashboard";
 
 function statusBadge(status: string) {
@@ -15,6 +17,12 @@ function statusBadge(status: string) {
   if (s === "running") return "text-investigate";
   if (s === "failed") return "text-destructive";
   return "text-muted-foreground";
+}
+
+function toRiskBadge(riskLevel: RecentEvaluationRow["riskLevel"]) {
+  if (riskLevel === "GREEN") return { level: "safe" as const, label: "Low" };
+  if (riskLevel === "YELLOW") return { level: "investigate" as const, label: "Medium" };
+  return { level: "high" as const, label: "High" };
 }
 
 type DiagStep = string;
@@ -128,7 +136,14 @@ export default function AppPage() {
     );
   }
 
-  const { activeCount, draftCount, archivedCount, recentJobs, candidatesAwaitingEvaluation } =
+  const {
+    activeCount,
+    draftCount,
+    archivedCount,
+    recentJobs,
+    candidatesAwaitingEvaluation,
+    recentEvaluations,
+  } =
     summary;
 
   return (
@@ -300,6 +315,73 @@ export default function AppPage() {
                       </td>
                     </tr>
                   ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="bg-card shadow-card rounded-xl border border-border mt-8">
+        <div className="px-4 py-5 sm:p-6">
+          <h3 className="text-lg leading-6 font-medium text-foreground font-display mb-4">
+            Recent Evaluations
+          </h3>
+
+          {recentEvaluations.length === 0 ? (
+            <p className="text-muted-foreground font-body text-sm">
+              No completed evaluations yet.
+            </p>
+          ) : (
+            <div className="rounded-button border border-border overflow-hidden">
+              <table className="w-full">
+                <thead className="bg-muted/50 border-b border-border">
+                  <tr>
+                    <th className="text-left px-4 py-3 text-sm font-medium text-foreground font-display">
+                      Candidate
+                    </th>
+                    <th className="text-left px-4 py-3 text-sm font-medium text-foreground font-display">
+                      Job
+                    </th>
+                    <th className="text-left px-4 py-3 text-sm font-medium text-foreground font-display">
+                      Score
+                    </th>
+                    <th className="text-left px-4 py-3 text-sm font-medium text-foreground font-display">
+                      Risk
+                    </th>
+                    <th className="text-left px-4 py-3 text-sm font-medium text-foreground font-display">
+                      Completed
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {recentEvaluations.map((item: RecentEvaluationRow) => {
+                    const risk = toRiskBadge(item.riskLevel);
+                    return (
+                      <tr key={item.evaluationId} className="hover:bg-accent/50 transition-colors">
+                        <td className="px-4 py-3">
+                          <Link
+                            href={item.href}
+                            className="font-medium text-foreground font-body text-primary hover:text-primary/90"
+                          >
+                            {item.candidateName}
+                          </Link>
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground font-body text-sm">
+                          {item.jobTitle}
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground font-body text-sm">
+                          {item.score}
+                        </td>
+                        <td className="px-4 py-3">
+                          <RiskBadge level={risk.level} label={risk.label} />
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground font-body text-sm">
+                          {new Date(item.completedAt).toLocaleString()}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
