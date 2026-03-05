@@ -1,7 +1,10 @@
 import { createClerkClient } from "@clerk/backend";
 import type { NextRequest } from "next/server";
 import type { AuthUser } from "./auth";
-import { ensureProvisionedFromClerkData } from "./auth";
+import {
+  ensureProvisionedFromClerkData,
+  getProvisionedUserByClerkId,
+} from "./auth";
 
 /**
  * Authenticate from request using Clerk Backend SDK (no Next.js middleware required).
@@ -85,6 +88,12 @@ async function fetchAndProvisionClerkUser(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   clerkClient: any
 ): Promise<AuthUser | null> {
+  // Fast path: most requests are for already-provisioned users.
+  const existing = await getProvisionedUserByClerkId(userId);
+  if (existing) {
+    return existing;
+  }
+
   const user = await clerkClient.users.getUser(userId);
   const primaryEmail = user.emailAddresses?.find(
     (e: { id: string }) => e.id === user.primaryEmailAddressId
