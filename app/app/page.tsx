@@ -3,7 +3,11 @@
 import Link from "next/link";
 import { useState, useEffect } from "react";
 import { useAuth } from "@clerk/nextjs";
-import type { DashboardJobRow, DashboardSummary } from "@/lib/server/dashboard";
+import type {
+  AwaitingEvaluationRow,
+  DashboardJobRow,
+  DashboardSummary,
+} from "@/lib/server/dashboard";
 
 function statusBadge(status: string) {
   const s = status.toLowerCase();
@@ -112,7 +116,8 @@ export default function AppPage() {
     );
   }
 
-  const { activeCount, draftCount, archivedCount, recentJobs } = summary;
+  const { activeCount, draftCount, archivedCount, recentJobs, candidatesAwaitingEvaluation } =
+    summary;
 
   return (
     <div>
@@ -216,6 +221,70 @@ export default function AppPage() {
                         <span className={`text-sm font-body ${statusBadge(job.interviewKitStatus)}`}>
                           {job.interviewKitStatus.replace("_", " ")}
                         </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="bg-card shadow-card rounded-xl border border-border mt-8">
+        <div className="px-4 py-5 sm:p-6">
+          <h3 className="text-lg leading-6 font-medium text-foreground font-display mb-4">
+            Candidates Awaiting Evaluation
+          </h3>
+
+          {candidatesAwaitingEvaluation.length === 0 ? (
+            <p className="text-muted-foreground font-body text-sm">
+              No pending evaluations right now.
+            </p>
+          ) : (
+            <div className="rounded-button border border-border overflow-hidden">
+              <table className="w-full">
+                <thead className="bg-muted/50 border-b border-border">
+                  <tr>
+                    <th className="text-left px-4 py-3 text-sm font-medium text-foreground font-display">
+                      Candidate
+                    </th>
+                    <th className="text-left px-4 py-3 text-sm font-medium text-foreground font-display">
+                      Job
+                    </th>
+                    <th className="text-left px-4 py-3 text-sm font-medium text-foreground font-display">
+                      Stage
+                    </th>
+                    <th className="text-left px-4 py-3 text-sm font-medium text-foreground font-display">
+                      Transcript
+                    </th>
+                    <th className="text-left px-4 py-3 text-sm font-medium text-foreground font-display">
+                      Evaluation Status
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {candidatesAwaitingEvaluation.map((item: AwaitingEvaluationRow) => (
+                    <tr key={item.evaluationId} className="hover:bg-accent/50 transition-colors">
+                      <td className="px-4 py-3">
+                        <Link
+                          href={item.href}
+                          className="font-medium text-foreground font-body text-primary hover:text-primary/90"
+                        >
+                          {item.candidateName}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground font-body text-sm">
+                        {item.jobTitle}
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground font-body text-sm">
+                        {item.stage}
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground font-body text-sm">
+                        {item.hasTranscript ? "Available" : "Missing"}
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground font-body text-sm">
+                        {item.evaluationStatus}
                       </td>
                     </tr>
                   ))}
