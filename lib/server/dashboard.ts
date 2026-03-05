@@ -15,13 +15,15 @@ export type DashboardJobRow = {
 
 export type DashboardSummary = {
   activeCount: number;
+  draftCount: number;
   archivedCount: number;
   recentJobs: DashboardJobRow[];
 };
 
 export async function getDashboardJobsSummary(orgId: string): Promise<DashboardSummary> {
-  const [activeCount, archivedCount, recentJobs] = await Promise.all([
+  const [activeCount, draftCount, archivedCount, recentJobs] = await Promise.all([
     prisma.job.count({ where: { orgId, status: "ACTIVE" } }),
+    prisma.job.count({ where: { orgId, status: "DRAFT" } }),
     prisma.job.count({ where: { orgId, status: "ARCHIVED" } }),
     prisma.job.findMany({
       where: { orgId },
@@ -41,7 +43,7 @@ export async function getDashboardJobsSummary(orgId: string): Promise<DashboardS
 
   const jobIds = recentJobs.map((j) => j.id);
   if (jobIds.length === 0) {
-    return { activeCount, archivedCount, recentJobs: [] };
+    return { activeCount, draftCount, archivedCount, recentJobs: [] };
   }
 
   const [interviewsForJobs, evaluationsForJobs] = await Promise.all([
@@ -75,6 +77,7 @@ export async function getDashboardJobsSummary(orgId: string): Promise<DashboardS
 
   return {
     activeCount,
+    draftCount,
     archivedCount,
     recentJobs: recentJobsWithMeta,
   };
