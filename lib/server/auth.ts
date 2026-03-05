@@ -139,6 +139,28 @@ export async function ensureProvisionedFromClerkData(
   };
 }
 
+/** Fast-path lookup when user is already provisioned in DB. */
+export async function getProvisionedUserByClerkId(
+  clerkUserId: string
+): Promise<AuthUser | null> {
+  const dbUser = await prisma.user.findUnique({
+    where: { clerkUserId },
+    include: { orgMemberships: { include: { org: true } } },
+  });
+
+  if (!dbUser || !dbUser.orgMemberships?.[0]) {
+    return null;
+  }
+
+  return {
+    userId: dbUser.id,
+    clerkUserId: dbUser.clerkUserId,
+    email: dbUser.email,
+    name: dbUser.name,
+    orgId: dbUser.orgMemberships[0].orgId,
+  };
+}
+
 export async function ensureProvisioned(): Promise<AuthUser> {
   const { clerkUserId, email, name } = await getCurrentUserOrThrow();
   return ensureProvisionedFromClerkData(clerkUserId, email, name);

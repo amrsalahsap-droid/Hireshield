@@ -50,10 +50,12 @@ export async function getDashboardJobsSummary(orgId: string): Promise<DashboardS
     prisma.interview.findMany({
       where: { jobId: { in: jobIds } },
       select: { jobId: true, candidateId: true },
+      distinct: ["jobId", "candidateId"],
     }),
     prisma.evaluation.findMany({
       where: { jobId: { in: jobIds } },
       select: { jobId: true, candidateId: true },
+      distinct: ["jobId", "candidateId"],
     }),
   ]);
 
