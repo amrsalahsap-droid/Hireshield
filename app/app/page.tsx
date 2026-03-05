@@ -112,7 +112,7 @@ export default function AppPage() {
     );
   }
 
-  const { activeCount, archivedCount, recentJobs } = summary;
+  const { activeCount, draftCount, archivedCount, recentJobs } = summary;
 
   return (
     <div>
@@ -123,7 +123,7 @@ export default function AppPage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <div className="bg-card overflow-hidden shadow-card rounded-xl border border-border">
           <div className="p-5">
             <div className="flex items-center">
@@ -138,6 +138,22 @@ export default function AppPage() {
               </div>
             </div>
             <div className="mt-4 h-2 bg-primary rounded-full" />
+          </div>
+        </div>
+        <div className="bg-card overflow-hidden shadow-card rounded-xl border border-border">
+          <div className="p-5">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <span className="text-2xl">📝</span>
+              </div>
+              <div className="ml-5 w-0 flex-1">
+                <dl>
+                  <dt className="text-sm font-medium text-muted-foreground font-body truncate">Draft jobs</dt>
+                  <dd className="text-lg font-semibold text-foreground font-display">{draftCount}</dd>
+                </dl>
+              </div>
+            </div>
+            <div className="mt-4 h-2 bg-investigate rounded-full" />
           </div>
         </div>
         <div className="bg-card overflow-hidden shadow-card rounded-xl border border-border">
