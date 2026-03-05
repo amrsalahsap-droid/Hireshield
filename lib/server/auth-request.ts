@@ -79,7 +79,10 @@ export async function getAuthUserFromRequestWithReason(
     return { user };
   } catch (err) {
     console.error("Failed to provision user:", err);
-    return { user: null, reason: "provision-failed" };
+    return {
+      user: null,
+      reason: isDbUnavailableError(err) ? "db-unreachable" : "provision-failed",
+    };
   }
 }
 
@@ -154,4 +157,14 @@ function getRequestOrigin(request: NextRequest): string | null {
   } catch {
     return null;
   }
+}
+
+function isDbUnavailableError(err: unknown): boolean {
+  const e = err as { name?: string; message?: string };
+  const name = e?.name ?? "";
+  const message = e?.message ?? "";
+  return (
+    name === "PrismaClientInitializationError" ||
+    message.includes("Can't reach database server")
+  );
 }
