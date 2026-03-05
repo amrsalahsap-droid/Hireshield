@@ -1,12 +1,13 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getAuthUserFromRequest } from "@/lib/server/auth-request";
 
 /**
  * Resolves organization ID from request context
  * 
  * Priority order:
- * 1. x-org-id header (production)
- * 2. User's org from authentication (authenticated routes)
+ * 1. User's org from authentication (authenticated routes)
+ * 2. x-org-id header (legacy/manual override)
  * 3. Default seeded org (development stub mode)
  * 
  * @param request - Next.js request object
@@ -14,13 +15,20 @@ import { prisma } from "@/lib/prisma";
  * @throws Error if orgId cannot be resolved (unless in dev stub mode)
  */
 export async function getOrgId(request: NextRequest): Promise<string> {
-  // 1. Check for x-org-id header (primary method for API calls)
+  // 1. Prefer authenticated user's org to avoid cross-org mismatches
+  // caused by stale hardcoded x-org-id headers on client pages.
+  const authUser = await getAuthUserFromRequest(request);
+  if (authUser?.orgId) {
+    return authUser.orgId;
+  }
+
+  // 2. Fallback to x-org-id header (legacy/manual override)
   const orgIdHeader = request.headers.get("x-org-id");
   if (orgIdHeader) {
     return orgIdHeader;
   }
 
-  // 2. Check if we're in development stub mode
+  // 3. Check if we're in development stub mode
   if (process.env.NODE_ENV !== "production") {
     // Use the default seeded org for development
     const defaultOrg = await prisma.org.findFirst({
