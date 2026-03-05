@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 
 export type JDAnalysisStatus = "NOT_STARTED" | "RUNNING" | "DONE" | "FAILED";
 export type InterviewKitStatus = "NOT_STARTED" | "RUNNING" | "DONE" | "FAILED";
@@ -53,7 +54,10 @@ export async function getDashboardJobsSummary(orgId: string): Promise<DashboardS
     prisma.evaluation.findMany({
       where: {
         orgId,
-        OR: [{ signalsJson: null as any }, { finalScoreJson: null as any }],
+        OR: [
+          { signalsJson: { equals: Prisma.AnyNull } },
+          { finalScoreJson: { equals: Prisma.AnyNull } },
+        ],
       },
       orderBy: { createdAt: "asc" },
       take: 5,
