@@ -24,16 +24,58 @@ export type AwaitingEvaluationRow = {
   href: string;
 };
 
+export type RecentEvaluationRiskLevel = "GREEN" | "YELLOW" | "RED";
+
+export type RecentEvaluationRow = {
+  evaluationId: string;
+  candidateName: string;
+  jobTitle: string;
+  score: number;
+  riskLevel: RecentEvaluationRiskLevel;
+  completedAt: string;
+  href: string;
+};
+
 export type DashboardSummary = {
   activeCount: number;
   draftCount: number;
   archivedCount: number;
   recentJobs: DashboardJobRow[];
   candidatesAwaitingEvaluation: AwaitingEvaluationRow[];
+  recentEvaluations: RecentEvaluationRow[];
 };
 
+function parseRecentEvaluationMetrics(
+  finalScoreJson: Prisma.JsonValue
+): { score: number; riskLevel: RecentEvaluationRiskLevel } | null {
+  if (!finalScoreJson || typeof finalScoreJson !== "object" || Array.isArray(finalScoreJson)) {
+    return null;
+  }
+  const rawScore = (finalScoreJson as { finalScore?: unknown }).finalScore;
+  const rawRiskLevel = (finalScoreJson as { riskLevel?: unknown }).riskLevel;
+  if (typeof rawScore !== "number") return null;
+  if (!Number.isFinite(rawScore)) return null;
+  const score = Math.max(0, Math.min(100, Math.round(rawScore)));
+  if (typeof rawRiskLevel !== "string") return null;
+  const normalizedRisk = rawRiskLevel.toUpperCase();
+  if (normalizedRisk !== "GREEN" && normalizedRisk !== "YELLOW" && normalizedRisk !== "RED") {
+    return null;
+  }
+  return {
+    score,
+    riskLevel: normalizedRisk,
+  };
+}
+
 export async function getDashboardJobsSummary(orgId: string): Promise<DashboardSummary> {
-  const [activeCount, draftCount, archivedCount, recentJobs, pendingEvaluations] = await Promise.all([
+  const [
+    activeCount,
+    draftCount,
+    archivedCount,
+    recentJobs,
+    pendingEvaluations,
+    recentCompletedEvaluations,
+  ] = await Promise.all([
     prisma.job.count({ where: { orgId, status: "ACTIVE" } }),
     prisma.job.count({ where: { orgId, status: "DRAFT" } }),
     prisma.job.count({ where: { orgId, status: "ARCHIVED" } }),
@@ -69,6 +111,22 @@ export async function getDashboardJobsSummary(orgId: string): Promise<DashboardS
         job: { select: { title: true } },
       },
     }),
+    prisma.evaluation.findMany({
+      where: {
+        orgId,
+        status: "COMPLETED",
+        completedAt: { not: null },
+      },
+      orderBy: [{ completedAt: "desc" }, { updatedAt: "desc" }],
+      take: 5,
+      select: {
+        id: true,
+        completedAt: true,
+        finalScoreJson: true,
+        candidate: { select: { fullName: true } },
+        job: { select: { title: true } },
+      },
+    }),
   ]);
 
   const pendingPairs = pendingEvaluations.map((e) => ({
@@ -99,6 +157,21 @@ export async function getDashboardJobsSummary(orgId: string): Promise<DashboardS
       href: `/app/evaluations/${e.id}`,
     };
   });
+  const recentEvaluations: RecentEvaluationRow[] = recentCompletedEvaluations
+    .map((e) => {
+      const metrics = parseRecentEvaluationMetrics(e.finalScoreJson as Prisma.JsonValue);
+      if (!metrics || !e.completedAt) return null;
+      return {
+        evaluationId: e.id,
+        candidateName: e.candidate.fullName,
+        jobTitle: e.job.title,
+        score: metrics.score,
+        riskLevel: metrics.riskLevel,
+        completedAt: e.completedAt.toISOString(),
+        href: `/app/evaluations/${e.id}`,
+      };
+    })
+    .filter((row): row is RecentEvaluationRow => row !== null);
 
   const jobIds = recentJobs.map((j) => j.id);
   if (jobIds.length === 0) {
@@ -108,6 +181,7 @@ export async function getDashboardJobsSummary(orgId: string): Promise<DashboardS
       archivedCount,
       recentJobs: [],
       candidatesAwaitingEvaluation,
+      recentEvaluations,
     };
   }
 
@@ -148,5 +222,6 @@ export async function getDashboardJobsSummary(orgId: string): Promise<DashboardS
     archivedCount,
     recentJobs: recentJobsWithMeta,
     candidatesAwaitingEvaluation,
+    recentEvaluations,
   };
 }

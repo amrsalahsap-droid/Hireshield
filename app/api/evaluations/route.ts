@@ -11,6 +11,7 @@ export const GET = withOrgContext(async (request: NextRequest, orgId: string) =>
     const candidateId = searchParams.get("candidateId");
     const limit = parseInt(searchParams.get("limit") || "20");
     const offset = parseInt(searchParams.get("offset") || "0");
+    const recentCompleted = searchParams.get("recentCompleted") === "1";
 
     const where: any = { orgId };
     
@@ -22,6 +23,68 @@ export const GET = withOrgContext(async (request: NextRequest, orgId: string) =>
     // Add candidate filtering
     if (candidateId) {
       where.candidateId = candidateId;
+    }
+
+    if (recentCompleted) {
+      where.status = "COMPLETED";
+      where.completedAt = { not: null };
+
+      const evaluations = await prisma.evaluation.findMany({
+        where,
+        include: {
+          job: {
+            select: {
+              id: true,
+              title: true,
+              status: true,
+            },
+          },
+          candidate: {
+            select: {
+              id: true,
+              fullName: true,
+              email: true,
+            },
+          },
+        },
+        orderBy: [{ completedAt: "desc" }, { updatedAt: "desc" }],
+        take: 5,
+      });
+
+      const recentEvaluations = evaluations
+        .map((evaluation) => {
+          const json = evaluation.finalScoreJson as
+            | { finalScore?: unknown; riskLevel?: unknown }
+            | null;
+          if (!json || typeof json !== "object" || Array.isArray(json)) return null;
+          if (!evaluation.completedAt) return null;
+          if (typeof json.finalScore !== "number" || !Number.isFinite(json.finalScore)) return null;
+          if (typeof json.riskLevel !== "string") return null;
+          const riskLevel = json.riskLevel.toUpperCase();
+          if (!["GREEN", "YELLOW", "RED"].includes(riskLevel)) return null;
+
+          return {
+            id: evaluation.id,
+            jobId: evaluation.jobId,
+            candidateId: evaluation.candidateId,
+            job: evaluation.job,
+            candidate: evaluation.candidate,
+            score: Math.max(0, Math.min(100, Math.round(json.finalScore))),
+            riskLevel,
+            completedAt: evaluation.completedAt,
+          };
+        })
+        .filter((evaluation): evaluation is NonNullable<typeof evaluation> => evaluation !== null);
+
+      return NextResponse.json({
+        evaluations: recentEvaluations,
+        pagination: {
+          total: recentEvaluations.length,
+          limit: 5,
+          offset: 0,
+          hasMore: false,
+        },
+      });
     }
 
     const [evaluations, total] = await Promise.all([
@@ -140,6 +203,8 @@ export const POST = withOrgContext(async (request: NextRequest, orgId: string) =
         candidateId,
         signalsJson: null as any,
         finalScoreJson: null as any,
+        status: "PENDING",
+        completedAt: null,
         orgId,
       },
       include: {

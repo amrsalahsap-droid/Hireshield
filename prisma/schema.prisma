@@ -129,6 +129,8 @@ model Evaluation {
   signalsGeneratedAt    DateTime?
   rawModelOutputSnippet String?  // Truncated 2-4k chars for debugging
   finalScoreJson        Json?
+  status                EvaluationStatus @default(PENDING)
+  completedAt           DateTime?
   orgId                 String
   jobId                 String
   candidateId           String
@@ -140,6 +142,7 @@ model Evaluation {
   candidate Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
   
   @@index([orgId])
+  @@index([orgId, status, completedAt])
   @@index([jobId])
   @@index([candidateId])
   @@unique([orgId, jobId, candidateId])
@@ -169,6 +172,11 @@ enum InterviewKitStatus {
   RUNNING
   DONE
   FAILED
+}
+
+enum EvaluationStatus {
+  PENDING
+  COMPLETED
 }
 
 model AuditLog {
