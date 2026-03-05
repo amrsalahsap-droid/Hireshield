@@ -56,6 +56,12 @@ export default function AppPage() {
           setSummary(null);
           return;
         }
+        if (res.status === 503) {
+          const body = await res.json().catch(() => ({}));
+          setDiagStep(`api-503:${body?.reason ?? "unknown"}` as DiagStep);
+          setSummary(null);
+          return;
+        }
         if (!res.ok) {
           setDiagStep("api-error");
           throw new Error("Failed to load dashboard");
@@ -91,12 +97,18 @@ export default function AppPage() {
     const diagMessage =
       diagStep && diagStep.startsWith("api-401:")
         ? `Token rejected by server. Clerk reason: ${diagStep.slice(8)}`
+        : diagStep && diagStep.startsWith("api-503:")
+          ? `Database temporarily unreachable. Reason: ${diagStep.slice(8)}`
         : (diagMessages[diagStep ?? ""] ?? diagStep);
+    const diagTitle =
+      diagStep && diagStep.startsWith("api-503:")
+        ? "Dashboard temporarily unavailable"
+        : "Session verification failed";
     return (
       <div className="px-4 py-6 sm:px-0">
         <div className="text-center max-w-md mx-auto space-y-4">
           <p className="font-body text-foreground font-semibold">
-            Session verification failed
+            {diagTitle}
           </p>
           {diagStep && (
             <p className="font-mono text-xs bg-muted border border-border rounded px-3 py-2 text-left text-foreground">

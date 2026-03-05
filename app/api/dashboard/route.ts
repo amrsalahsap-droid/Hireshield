@@ -8,6 +8,12 @@ export async function GET(request: NextRequest) {
   try {
     const { user, reason } = await getAuthUserFromRequestWithReason(request);
     if (!user) {
+      if (reason === "db-unreachable") {
+        return NextResponse.json(
+          { error: "Database unavailable", reason },
+          { status: 503 }
+        );
+      }
       return NextResponse.json(
         { error: "Unauthorized", reason: reason ?? "unknown" },
         { status: 401 }
