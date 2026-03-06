@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withOrgContext } from "@/lib/server/org-context";
+import { getAuthUserFromRequest } from "@/lib/server/auth-request";
 import { prisma } from "@/lib/prisma";
+import { createAuditLog, AUDIT_ACTIONS } from "@/lib/audit";
 
 // GET /api/candidates - List candidates for the organization
 export const GET = withOrgContext(async (request: NextRequest, orgId: string) => {
@@ -125,6 +127,17 @@ export const POST = withOrgContext(async (request: NextRequest, orgId: string) =
         email: true,
       },
     });
+
+    const authUser = await getAuthUserFromRequest(request).catch(() => null);
+    if (authUser?.id) {
+      createAuditLog({
+        orgId,
+        actorUserId: authUser.id,
+        action: AUDIT_ACTIONS.CANDIDATE_ADDED,
+        entityType: 'CANDIDATE',
+        entityId: candidate.id,
+      });
+    }
 
     return NextResponse.json({ candidate }, { status: 201 });
   } catch (error) {

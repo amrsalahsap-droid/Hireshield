@@ -7,6 +7,20 @@
     --font-display: "Space Grotesk", sans-serif;
     --font-body: "Inter", sans-serif;
 
+    /* Typography Scale */
+    --font-title: 28px;
+    --font-section: 18px;
+    --font-card: 14px;
+    --font-metric: 34px;
+    --font-body-size: 14px;
+    --font-meta: 12px;
+
+    /* Spacing System */
+    --space-1: 8px;   /* icon spacing */
+    --space-2: 16px;  /* card inner spacing */
+    --space-3: 24px;  /* card padding */
+    --space-4: 32px;  /* section spacing */
+
     --background: 220 20% 97%;
     --foreground: 222 47% 11%;
 
@@ -137,6 +151,58 @@
   .font-body {
     font-family: var(--font-body);
   }
+  
+  /* Typography Scale Utilities */
+  .text-title {
+    font-size: var(--font-title);
+    font-weight: 700;
+    line-height: 1.2;
+  }
+  .text-section {
+    font-size: var(--font-section);
+    font-weight: 600;
+    line-height: 1.3;
+  }
+  .text-card {
+    font-size: var(--font-card);
+    font-weight: 500;
+    line-height: 1.4;
+  }
+  .text-metric {
+    font-size: var(--font-metric);
+    font-weight: 700;
+    line-height: 1.1;
+  }
+  .text-body-size {
+    font-size: var(--font-body-size);
+    font-weight: 400;
+    line-height: 1.5;
+  }
+  .text-meta {
+    font-size: var(--font-meta);
+    font-weight: 400;
+    line-height: 1.4;
+  }
+
+  /* Spacing System Utilities */
+  .space-1 { padding: var(--space-1); }
+  .space-2 { padding: var(--space-2); }
+  .space-3 { padding: var(--space-3); }
+  .space-4 { padding: var(--space-4); }
+  
+  .gap-1 { gap: var(--space-1); }
+  .gap-2 { gap: var(--space-2); }
+  .gap-3 { gap: var(--space-3); }
+  .gap-4 { gap: var(--space-4); }
+  
+  .p-card { padding: var(--space-3); }
+  .rounded-card { border-radius: 10px; }
+  
+  .grid-stretch {
+    display: grid;
+    align-items: stretch;
+  }
+  
   .gradient-hero {
     background: var(--gradient-hero);
   }

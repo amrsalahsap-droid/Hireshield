@@ -17,8 +17,6 @@ import { RiskDistribution } from "@/components/ui/risk-distribution";
 import { Tooltip } from "@/components/ui/tooltip";
 import { SkeletonGrid, SkeletonTable, SkeletonList } from "@/components/ui/skeleton-card";
 import { DashboardStatusPanel } from "@/components/ui/dashboard-status-panel";
-import { MetricsPanel } from "@/components/ui/metrics-panel";
-import { Panel } from "@/components/ui/panel";
 import { Briefcase, UserPlus, FileSearch, ShieldAlert, Inbox, CheckCircle, AlertTriangle, Clock, Users, Mic, FileCheck, Timer, Calendar, ChevronRight, Info, TrendingUp, TrendingDown, Minus, RefreshCw, Play, FileText, UserCheck, AlertCircle, Zap } from "lucide-react";
 import type {
   AwaitingEvaluationRow,
@@ -1039,25 +1037,24 @@ export default function AppPage() {
       {/* Header */}
       <div className="mb-12">
         <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <div className="flex items-center gap-3 mb-4">
-              <h1 className="text-title text-foreground font-display">Hiring Overview</h1>
-              <button
-                onClick={handleRefresh}
-                disabled={isRefreshing}
-                className="flex items-center gap-2 px-3 py-1 bg-muted/50 text-muted-foreground rounded-full hover:bg-muted transition-colors cursor-pointer group disabled:opacity-50 disabled:cursor-not-allowed"
-                title="Click to refresh data"
-              >
-                <RefreshCw className={`w-3 h-3 group-hover:rotate-180 transition-transform duration-500 ${isRefreshing ? 'animate-spin' : ''}`} />
-                <span className="text-xs font-medium font-body">
-                  {isRefreshing ? 'Refreshing...' : `Updated ${formatDataFreshness(lastUpdated)}`}
-                </span>
-              </button>
+          <div className="flex-1 min-w-0">
+            <div className="mb-4">
+              <h1 className="text-title text-foreground font-display mb-2">Hiring Overview</h1>
+              <p className="text-body-size text-foreground font-body leading-relaxed max-w-2xl">
+                {generateDashboardSummary()}
+              </p>
             </div>
-            <p className="text-body-size text-foreground font-body leading-relaxed max-w-2xl">
-              {generateDashboardSummary()}
-            </p>
+            
+            {/* Status Panel */}
+            <DashboardStatusPanel
+              highRiskCount={highRiskAlerts.length}
+              pendingCount={candidatesAwaitingEvaluation.length}
+              lastUpdated={lastUpdated}
+              onRefresh={handleRefresh}
+              isRefreshing={isRefreshing}
+            />
           </div>
+          
           <div className="text-right text-sm text-muted-foreground font-body">
             {new Date().toLocaleDateString('en-US', { 
               weekday: 'long', 
@@ -1072,125 +1069,111 @@ export default function AppPage() {
       {/* Attention Required */}
       <AttentionWidget items={generateAttentionItems()} />
 
-      {/* Metrics Row - Summary Metrics */}
-      {activeCount === 0 && draftCount === 0 && archivedCount === 0 && candidatesAwaitingEvaluation.length === 0 && highRiskAlerts.length === 0 ? (
-        <div className="mt-8">
-          <Panel title="">
-            <div className="text-center py-12">
-              <div className="w-16 h-16 mx-auto mb-4 flex items-center justify-center rounded-full bg-muted">
-                <Briefcase className="w-8 h-8 text-muted-foreground" />
-              </div>
-              <h3 className="text-lg font-medium text-foreground font-display mb-2">
-                Welcome to HireShield!
-              </h3>
-              <p className="text-muted-foreground font-body mb-6 max-w-md mx-auto">
-                Get started by creating your first job posting to begin building your hiring pipeline.
-              </p>
-              <button
-                onClick={() => router.push("/app/jobs")}
-                className="inline-flex items-center justify-center rounded-button px-4 py-2 text-sm font-medium font-body transition-colors bg-primary text-primary-foreground hover:bg-primary/90"
-              >
-                Create Your First Job
-              </button>
-            </div>
-          </Panel>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mt-8">
-          {priorityMetrics.map(({ title, value, context, subtitle, trend, metricTrend, additionalInfo, href, accent }) => {
-            const inner = (
-              <div className={`rounded-card border p-card h-full flex flex-col justify-between transition-all duration-200 hover:shadow-md hover:border-primary/50 ${accent || 'border-border bg-card'}`}>
-                {/* Header */}
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <p className="text-card text-muted-foreground font-body">{title}</p>
-                    <Tooltip content={title || "No description available"}>
-                      <div className="w-3 h-3 text-muted-foreground cursor-help flex items-center justify-center">
-                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <circle cx="12" cy="12" r="10" strokeWidth="2"/>
-                          <circle cx="12" cy="12" r="1" fill="currentColor"/>
-                        </svg>
+      {/* 1. Top Metrics */}
+      <DashboardSection title="Key Metrics">
+        {activeCount === 0 && draftCount === 0 && archivedCount === 0 && candidatesAwaitingEvaluation.length === 0 && highRiskAlerts.length === 0 ? (
+          <EmptyState
+            icon={Briefcase}
+            title="Welcome to HireShield!"
+            description="Get started by creating your first job posting to begin building your hiring pipeline."
+            action={{
+              label: "Create Your First Job",
+              onClick: () => router.push("/app/jobs"),
+              variant: "default"
+            }}
+            size="lg"
+          />
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 grid-stretch">
+            {priorityMetrics.map(({ title, value, context, subtitle, trend, metricTrend, additionalInfo, href, accent }) => {
+              const inner = (
+                <div className={`rounded-card border p-card h-full flex flex-col justify-between ${accent}`}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <p className="text-card text-muted-foreground font-body">{title}</p>
+                      <Tooltip content={metricTooltips[title as keyof typeof metricTooltips] || "No description available"}>
+                        <Info className="w-3 h-3 text-muted-foreground cursor-help" />
+                      </Tooltip>
+                    </div>
+                    {trend && (
+                      <TrendIndicator trend={trend.trend} change={trend.change} />
+                    )}
+                  </div>
+                  <div className="flex items-baseline gap-2 my-2">
+                    <Tooltip content={metricTooltips[title as keyof typeof metricTooltips] || "Click for details"}>
+                      <p className="text-metric text-foreground font-display leading-none cursor-help">{value}</p>
+                    </Tooltip>
+                    {metricTrend && (
+                      <div className="flex items-center gap-1">
+                        {metricTrend.direction === "up" && <TrendingUp className={`w-4 h-4 ${metricTrend.color}`} />}
+                        {metricTrend.direction === "down" && <TrendingDown className={`w-4 h-4 ${metricTrend.color}`} />}
+                        {metricTrend.direction === "neutral" && <Minus className={`w-4 h-4 ${metricTrend.color}`} />}
+                        <span className={`text-xs font-medium font-body ${metricTrend.color}`}>
+                          {metricTrend.text}
+                        </span>
                       </div>
+                    )}
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-meta text-muted-foreground font-body">{context}</p>
+                    {subtitle && (
+                      <p className="text-xs text-primary font-medium font-body">{subtitle}</p>
+                    )}
+                    {additionalInfo && (
+                      <p className="text-meta text-muted-foreground font-body">{additionalInfo}</p>
+                    )}
+                    {trend && (
+                      <p className="text-xs text-muted-foreground font-body">{trend.description}</p>
+                    )}
+                  </div>
+                </div>
+              );
+              return href ? (
+                <Link key={title} href={href} className="block hover:opacity-90 transition-opacity">
+                  {inner}
+                </Link>
+              ) : (
+                <div key={title}>{inner}</div>
+              );
+            })}
+          </div>
+        )}
+      </DashboardSection>
+
+      {/* 2. Pipeline Overview */}
+      <DashboardSection title="Pipeline Overview">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <PipelineBar stages={generatePipelineStages()} />
+          <HiringVelocity metrics={calculateHiringVelocity()} />
+        </div>
+        
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
+          <div className="lg:col-span-2">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {(
+                [
+                  { label: "Total Candidates", value: pipelineHealth.totalCandidates },
+                  { label: "Interviews Completed", value: pipelineHealth.interviewsCompleted },
+                  { label: "Evaluations Completed", value: pipelineHealth.evaluationsCompleted },
+                ] as { label: string; value: number }[]
+              ).map(({ label, value }) => (
+                <div key={label} className="bg-card border border-border rounded-xl p-6">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium text-muted-foreground font-body truncate">{label}</p>
+                    <Tooltip content={metricTooltips[label as keyof typeof metricTooltips] || "No description available"}>
+                      <Info className="w-3 h-3 text-muted-foreground cursor-help" />
                     </Tooltip>
                   </div>
-                  {trend && (
-                    <div className="flex items-center gap-1">
-                      <div className="w-4 h-4 text-muted-foreground/70 flex items-center justify-center">
-                        {trend.trend === "up" && <TrendingUp className="w-4 h-4 text-red-500" />}
-                        {trend.trend === "down" && <TrendingDown className="w-4 h-4 text-green-500" />}
-                        {trend.trend === "neutral" && <Minus className="w-4 h-4 text-muted-foreground" />}
-                      </div>
-                      <span className={`text-xs font-medium font-body ${
-                        trend.trend === "up" ? "text-red-500" :
-                        trend.trend === "down" ? "text-green-500" :
-                        "text-muted-foreground"
-                      }`}>
-                        {Math.abs(trend.change)}
-                      </span>
-                    </div>
-                  )}
+                  <p className="mt-2 text-3xl font-bold text-foreground font-display">{value}</p>
                 </div>
-
-                {/* Main Value */}
-                <div className="flex items-baseline gap-2 my-2">
-                  <Tooltip content={title || "Click for details"}>
-                    <p className="text-metric text-foreground font-display leading-none cursor-help">{value}</p>
-                  </Tooltip>
-                  {metricTrend && (
-                    <div className="flex items-center gap-1">
-                      {metricTrend.direction === "up" && <TrendingUp className={`w-4 h-4 ${metricTrend.color}`} />}
-                      {metricTrend.direction === "down" && <TrendingDown className={`w-4 h-4 ${metricTrend.color}`} />}
-                      {metricTrend.direction === "neutral" && <Minus className={`w-4 h-4 ${metricTrend.color}`} />}
-                      <span className={`text-xs font-medium font-body ${metricTrend.color}`}>
-                        {metricTrend.text}
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Context Section */}
-                <div className="space-y-1">
-                  {context && (
-                    <p className="text-body-size text-muted-foreground font-body">{context}</p>
-                  )}
-                  {subtitle && (
-                    <p className="text-body-size text-muted-foreground font-body">{subtitle}</p>
-                  )}
-                  {additionalInfo && (
-                    <p className="text-body-size text-muted-foreground font-body">{additionalInfo}</p>
-                  )}
-                  {trend && (
-                    <p className="text-xs text-muted-foreground font-body">{trend.description}</p>
-                  )}
-                </div>
-              </div>
-            );
-            return href ? (
-              <Link key={title} href={href} className="block hover:opacity-90 transition-opacity">
-                {inner}
-              </Link>
-            ) : (
-              <div key={title}>{inner}</div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Analytics Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
-        {/* Pipeline Analytics */}
-        <Panel title="Pipeline Overview">
-          <div className="space-y-6">
-            <PipelineBar stages={generatePipelineStages()} />
-            <HiringVelocity metrics={calculateHiringVelocity()} />
+              ))}
+            </div>
           </div>
-        </Panel>
-
-        {/* Risk Analytics */}
-        <Panel title="Risk Distribution">
-          <RiskDistribution data={calculateRiskDistribution()} />
-        </Panel>
-      </div>
+          <div>
+            <RiskDistribution data={calculateRiskDistribution()} />
+          </div>
+        </div>
+      </DashboardSection>
 
       {/* 3. Quick Actions */}
       <DashboardSection title="Quick Actions">

@@ -131,6 +131,7 @@ model Evaluation {
   finalScoreJson        Json?
   status                EvaluationStatus @default(PENDING)
   completedAt           DateTime?
+  riskLevel             EvaluationRiskLevel?
   orgId                 String
   jobId                 String
   candidateId           String
@@ -143,6 +144,7 @@ model Evaluation {
   
   @@index([orgId])
   @@index([orgId, status, completedAt])
+  @@index([orgId, riskLevel, completedAt])
   @@index([jobId])
   @@index([candidateId])
   @@unique([orgId, jobId, candidateId])
@@ -177,6 +179,12 @@ enum InterviewKitStatus {
 enum EvaluationStatus {
   PENDING
   COMPLETED
+}
+
+enum EvaluationRiskLevel {
+  LOW
+  MEDIUM
+  HIGH
 }
 
 model AuditLog {

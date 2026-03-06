@@ -152,63 +152,51 @@ export default function JobsPage() {
     }
   };
 
+  // Organize jobs by status
+  const activeJobs = jobs.filter(job => job.status === "ACTIVE");
+  const draftJobs = jobs.filter(job => job.status === "DRAFT");
+  const archivedJobs = jobs.filter(job => job.status === "ARCHIVED");
+
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "ACTIVE": return "bg-green-100 text-green-800";
-      case "DRAFT": return "bg-yellow-100 text-yellow-800";
-      case "ARCHIVED": return "bg-gray-100 text-gray-800";
-      default: return "bg-gray-100 text-gray-800";
+      case "ACTIVE": return "bg-safe/10 text-safe border-safe/20";
+      case "DRAFT": return "bg-warning/10 text-warning border-warning/20";
+      case "ARCHIVED": return "bg-muted/10 text-muted-foreground border-muted/20";
+      default: return "bg-muted/10 text-muted-foreground border-muted/20";
     }
   };
 
-  // Error state
-  if (error) {
-    return (
-      <ErrorState
-        title="Unable to Load Jobs"
-        message={error}
-        onRetry={fetchJobs}
-        onBack={() => window.location.href = "/app"}
-        backText="Back to Dashboard"
-      />
-    );
-  }
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case "ACTIVE": return "✓";
+      case "DRAFT": return "○";
+      case "ARCHIVED": return "⊗";
+      default: return "○";
+    }
+  };
 
-  // Loading state
-  if (loading) {
-    return <LoadingState message="Loading jobs..." />;
-  }
-
-  return (
-    <div>
-      <div className="mb-8">
-        <div className="flex justify-between items-center">
-          <h1 className="text-2xl font-bold text-foreground font-display">Jobs</h1>
-          <Button onClick={() => setShowCreateModal(true)}>
-            Create New Job
-          </Button>
-        </div>
-        <p className="text-muted-foreground font-body">
-          Manage your job postings and track applicant progress.
-        </p>
+  // Jobs Section Component
+  const JobsSection = ({ title, jobs, icon, emptyMessage, status }: { 
+    title: string; 
+    jobs: Job[]; 
+    icon: string; 
+    emptyMessage: string; 
+    status: string;
+  }) => (
+    <div className="mb-8">
+      <div className="flex items-center gap-2 mb-4">
+        <span className="text-2xl">{icon}</span>
+        <h2 className="text-xl font-semibold text-foreground font-display">{title}</h2>
+        <span className="text-sm text-muted-foreground font-body">({jobs.length})</span>
       </div>
-
-      {/* Empty State */}
-      {jobs.length === 0 && (
-        <EmptyState
-          title="No jobs yet"
-          message="Get started by creating your first job posting."
-          action={{
-            text: "Create Your First Job",
-            onClick: () => setShowCreateModal(true)
-          }}
-          icon="💼"
-        />
-      )}
-
-      {/* Jobs Table */}
-      {jobs.length > 0 && (
-        <div className="bg-card shadow-card border border-border rounded-xl overflow-hidden">
+      
+      {jobs.length === 0 ? (
+        <div className="bg-card border border-border rounded-lg p-8 text-center">
+          <div className="text-4xl mb-3 opacity-50">{icon}</div>
+          <p className="text-muted-foreground font-body">{emptyMessage}</p>
+        </div>
+      ) : (
+        <div className="bg-card shadow-card border border-border rounded-card overflow-hidden">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-border">
               <thead className="bg-muted">
@@ -235,32 +223,35 @@ export default function JobsPage() {
               </thead>
               <tbody className="bg-card divide-y divide-border">
                 {jobs.map((job) => (
-                  <tr key={job.id} className="hover:bg-muted/50">
+                  <tr 
+                    key={job.id} 
+                    className="hover:bg-muted/50 transition-colors cursor-pointer group"
+                    onClick={() => window.location.href = `/app/jobs/${job.id}`}
+                  >
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-foreground font-body">{job.title}</div>
+                      <div className="text-card text-foreground font-body group-hover:text-primary transition-colors">{job.title}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full font-body ${
-                        job.status === "ACTIVE"
-                          ? "bg-safe/10 text-safe"
-                          : job.status === "DRAFT"
-                            ? "bg-investigate/10 text-investigate"
-                            : "bg-muted text-muted-foreground"
-                      }`}>
+                      <span className={`inline-flex items-center gap-1 px-3 py-1 text-xs font-semibold rounded-full font-body border ${getStatusColor(job.status)}`}>
+                        <span className="text-xs">{getStatusIcon(job.status)}</span>
                         {job.status}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground font-body">
+                    <td className="px-6 py-4 whitespace-nowrap text-body-size text-muted-foreground font-body">
                       {job.jdAnalyzedAt ? new Date(job.jdAnalyzedAt).toLocaleDateString() : "Not analyzed"}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground font-body">
+                    <td className="px-6 py-4 whitespace-nowrap text-body-size text-muted-foreground font-body">
                       {job.interviewKitGeneratedAt ? new Date(job.interviewKitGeneratedAt).toLocaleDateString() : "Not generated"}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-muted-foreground font-body">
+                    <td className="px-6 py-4 whitespace-nowrap text-body-size text-muted-foreground font-body">
                       {new Date(job.createdAt).toLocaleDateString()}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <Link href={`/app/jobs/${job.id}`} className="text-primary hover:text-primary/90 font-body">
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-card font-medium">
+                      <Link 
+                        href={`/app/jobs/${job.id}`} 
+                        className="text-primary hover:text-primary/90 font-body group-hover:underline transition-colors"
+                        onClick={(e) => e.stopPropagation()}
+                      >
                         View
                       </Link>
                     </td>
@@ -270,6 +261,87 @@ export default function JobsPage() {
             </table>
           </div>
         </div>
+      )}
+    </div>
+  );
+
+  // Error state
+  if (error) {
+    return (
+      <ErrorState
+        title="Unable to Load Jobs"
+        message={error}
+        onRetry={fetchJobs}
+        onBack={() => window.location.href = "/app"}
+        backText="Back to Dashboard"
+      />
+    );
+  }
+
+  // Loading state
+  if (loading) {
+    return <LoadingState message="Loading jobs..." />;
+  }
+
+  return (
+    <div>
+      <div className="mb-8">
+        <div className="flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <span className="text-3xl">💼</span>
+            <div>
+              <h1 className="text-2xl font-bold text-foreground font-display">Jobs</h1>
+              <p className="text-muted-foreground font-body">
+                Manage your job postings and track applicant progress.
+              </p>
+            </div>
+          </div>
+          <Button onClick={() => setShowCreateModal(true)}>
+            Create New Job
+          </Button>
+        </div>
+      </div>
+
+      {/* Empty State */}
+      {jobs.length === 0 && (
+        <EmptyState
+          title="No jobs yet"
+          message="Get started by creating your first job posting."
+          action={{
+            text: "Create Your First Job",
+            onClick: () => setShowCreateModal(true)
+          }}
+          icon="💼"
+        />
+      )}
+
+      {/* Jobs Sections */}
+      {jobs.length > 0 && (
+        <>
+          <JobsSection 
+            title="Active Jobs" 
+            jobs={activeJobs} 
+            icon="🟢"
+            emptyMessage="No active jobs. Publish a draft job to make it active."
+            status="ACTIVE"
+          />
+          
+          <JobsSection 
+            title="Draft Jobs" 
+            jobs={draftJobs} 
+            icon="📝"
+            emptyMessage="No draft jobs. Create a new job to get started."
+            status="DRAFT"
+          />
+          
+          <JobsSection 
+            title="Archived Jobs" 
+            jobs={archivedJobs} 
+            icon="📦"
+            emptyMessage="No archived jobs. Archived jobs will appear here."
+            status="ARCHIVED"
+          />
+        </>
       )}
 
       {/* Create Job Modal */}

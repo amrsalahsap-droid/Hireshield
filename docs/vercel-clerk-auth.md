@@ -29,13 +29,22 @@ The dashboard and `/api/me` do **not** use Clerk’s Next.js middleware. They us
 If the dashboard still shows “We couldn’t verify your session” after sign-in:
 
 1. **Check Vercel function logs**  
-   When auth fails, the API logs `Clerk auth failed: <reason> <message>`. Look for that line to see whether the failure is e.g. `session-token-missing`, an authorized-party mismatch, or something else.
+   When auth fails, the API logs `Clerk auth failed` with structured fields (`reason`, `rawReason`, `clerkStatus`, `message`). Use those values to identify whether the failure is e.g. `session-token-missing`, an authorized-party mismatch, or an upstream verification issue.
 
-2. **Allowed origins**  
+2. **Know how reasons map to status codes**
+   - `401 Unauthorized` is returned for user/session-invalid conditions (for example `session-token-missing`, `no-user-id`, `provision-failed`).
+   - `503 Service Unavailable` is returned for transient infrastructure conditions (`db-unreachable`, `unexpected-error`, `clerk-auth-exception`).
+   - The dashboard displays the `reason` value to help narrow root cause quickly.
+
+3. **Allowed origins**  
    Ensure your app’s URL is allowed by Clerk. The code allows: request origin, the request `Origin` header (when present, so the dashboard origin is accepted even if env/request URL differ), `https://${VERCEL_URL}`, `https://${VERCEL_BRANCH_URL}`, and `NEXT_PUBLIC_APP_URL`. If you use a custom domain, set `NEXT_PUBLIC_APP_URL` to that URL (e.g. `https://app.example.com`).
 
-3. **Clerk Dashboard**  
+4. **Clerk Dashboard**  
    In Clerk Dashboard, confirm your production (and preview) domains are in the allowed redirect/origin settings for the application.
+
+5. **Quick env checklist**
+   - `CLERK_SECRET_KEY` must be set and match the same Clerk instance as `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`.
+   - `CLERK_JWT_KEY` is strongly recommended (JWT public key PEM) to reduce network-dependent verification failures like `unexpected-error`.
 
 ## Current setup (middleware disabled)
 

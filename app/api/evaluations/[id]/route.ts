@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withOrgContext } from "@/lib/server/org-context";
+import { getAuthUserFromRequest } from "@/lib/server/auth-request";
 import { prisma } from "@/lib/prisma";
+import { createAuditLog, AUDIT_ACTIONS } from "@/lib/audit";
 import { CandidateSignals_v1 } from "@/lib/schemas/candidate-signals";
 import { FinalScore_v1 } from "@/lib/schemas/final-score";
 import { candidateSignalsExtractorV1 } from "@/lib/prompts/candidate_signals_v1";
@@ -138,10 +140,17 @@ export const PUT = withOrgContext(async (request: NextRequest, orgId: string, { 
         updateData.finalScoreJson = null;
         updateData.status = "PENDING";
         updateData.completedAt = null;
+        updateData.riskLevel = null;
       } else {
         updateData.finalScoreJson = body.finalScoreJson;
         updateData.status = "COMPLETED";
         updateData.completedAt = new Date();
+        const rawRisk = (body.finalScoreJson as { riskLevel?: unknown })?.riskLevel;
+        if (typeof rawRisk === "string") {
+          const r = rawRisk.toUpperCase();
+          updateData.riskLevel =
+            r === "RED" ? "HIGH" : r === "YELLOW" ? "MEDIUM" : r === "GREEN" ? "LOW" : null;
+        }
       }
     }
 
@@ -166,6 +175,19 @@ export const PUT = withOrgContext(async (request: NextRequest, orgId: string, { 
         },
       },
     });
+
+    if (hasFinalScoreInBody && finalScoreJson !== null) {
+      const authUser = await getAuthUserFromRequest(request).catch(() => null);
+      if (authUser?.id) {
+        createAuditLog({
+          orgId,
+          actorUserId: authUser.id,
+          action: AUDIT_ACTIONS.CANDIDATE_EVALUATED,
+          entityType: 'EVALUATION',
+          entityId: id,
+        });
+      }
+    }
 
     return NextResponse.json({ evaluation: updatedEvaluation });
   } catch (error) {
