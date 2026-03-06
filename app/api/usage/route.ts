@@ -5,16 +5,21 @@ import { prisma } from "@/lib/prisma";
 // GET /api/usage - Get organization usage statistics
 export const GET = withOrgContext(async (request: NextRequest, orgId: string) => {
   try {
-    // Get organization usage data
-    const org = await prisma.org.findUnique({
-      where: { id: orgId },
-      select: {
-        id: true,
-        name: true,
-        jdAnalysisCount: true,
-        createdAt: true,
-      },
-    });
+    const [org, evaluationsCompleted] = await Promise.all([
+      prisma.org.findUnique({
+        where: { id: orgId },
+        select: {
+          id: true,
+          name: true,
+          jdAnalysisCount: true,
+          interviewKitCount: true,
+          createdAt: true,
+        },
+      }),
+      prisma.evaluation.count({
+        where: { orgId, status: "COMPLETED" },
+      }),
+    ]);
 
     if (!org) {
       return NextResponse.json(
@@ -31,6 +36,8 @@ export const GET = withOrgContext(async (request: NextRequest, orgId: string) =>
       },
       usage: {
         jdAnalysisCount: org.jdAnalysisCount,
+        interviewKitCount: org.interviewKitCount,
+        evaluationsCompleted,
       },
     });
   } catch (error) {

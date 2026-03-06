@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ErrorState, EmptyState, LoadingState } from "@/components/ui/ErrorState";
 import { RiskBadge } from "@/components/ui/risk-badge";
 
@@ -32,6 +33,7 @@ function toRiskBadge(riskLevel: RecentEvaluation["riskLevel"]) {
 }
 
 export default function EvaluationsPage() {
+  const router = useRouter();
   const [recentEvaluations, setRecentEvaluations] = useState<RecentEvaluation[]>([]);
   const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -161,7 +163,13 @@ export default function EvaluationsPage() {
       {evaluations.length === 0 && (
         <EmptyState
           title="No evaluations yet"
-          message="Evaluations will appear here once you run them from a job or candidate."
+          message="Start evaluating candidates to see assessment results and risk analysis here."
+          action={{
+            text: "View Candidates",
+            onClick: () => router.push("/app/candidates")
+          }}
+          icon="📋"
+          size="lg"
         />
       )}
 

@@ -1,4 +1,4 @@
-import { createClerkClient } from "@clerk/backend";
+import { createClerkClient, verifyToken } from "@clerk/backend";
 import type { NextRequest } from "next/server";
 import type { AuthUser } from "./auth";
 import {
@@ -9,12 +9,14 @@ import {
 /**
  * Authenticate from request using Clerk Backend SDK (no Next.js middleware required).
  *
- * When the client sends "Authorization: Bearer <token>", we strip cookies from the
- * request before passing to authenticateRequest so Clerk is forced onto the Bearer
- * path (preventing the cookie handshake from overriding it).
- * When no Bearer header is present (local dev with middleware), we still allow
- * cookie auth; authorizedParties checks are intentionally disabled because they
- * have been causing false negatives on Vercel domains.
+ * Two paths:
+ * 1. Bearer token present → verifyToken(token, { secretKey, jwtKey? }).
+ *    When CLERK_JWT_KEY (PEM public key) is set the verification is fully networkless.
+ *    Without it the SDK fetches JWKS from Clerk's servers, which works in production
+ *    but can fail locally if the network call is blocked (returns "unexpected-error").
+ *    Set CLERK_JWT_KEY in your local .env to eliminate this dependency.
+ * 2. No bearer token → authenticateRequest(request) cookie path (local dev fallback).
+ *    Optionally uses CLERK_JWT_KEY for networkless verification if set.
  *
  * Returns the AuthUser on success, or null with a reason string on failure.
  */
@@ -36,37 +38,76 @@ export async function getAuthUserFromRequestWithReason(
   }
 
   const clerkClient = createClerkClient({ secretKey, publishableKey });
-  const jwtKey = process.env.CLERK_JWT_KEY;
   const authHeader = request.headers.get("authorization");
   const hasBearerToken = authHeader?.startsWith("Bearer ") ?? false;
 
-  let requestForAuth: Request;
+  // Fast path: bearer token verification.
+  // When CLERK_JWT_KEY (PEM public key) is set, verification is fully networkless.
+  // Without it, the SDK fetches JWKS from Clerk's servers — works in production
+  // but may fail locally if the network request is blocked or slow.
   if (hasBearerToken) {
-    // Keep all headers except cookie so Clerk stays on Bearer auth path
-    // while preserving Origin/Host context for azp validation.
-    const strippedHeaders = new Headers(request.headers);
-    strippedHeaders.delete("cookie");
-    requestForAuth = new Request(request.url, {
-      method: request.method,
-      headers: strippedHeaders,
-    });
-  } else {
-    requestForAuth = request;
+    const token = authHeader!.slice(7);
+    const jwtKey = process.env.CLERK_JWT_KEY;
+    try {
+      const payload = await verifyToken(token, {
+        secretKey,
+        ...(jwtKey ? { jwtKey } : {}),
+      });
+      const userId = payload.sub;
+      if (!userId) return { user: null, reason: "no-user-id" };
+      try {
+        const user = await fetchAndProvisionClerkUser(userId, clerkClient);
+        if (!user) return { user: null, reason: "provision-failed" };
+        return { user };
+      } catch (err) {
+        console.error("Failed to provision user (bearer path):", err);
+        return {
+          user: null,
+          reason: isDbUnavailableError(err) ? "db-unreachable" : "provision-failed",
+        };
+      }
+    } catch (err) {
+      const message = (err instanceof Error ? err.message : String(err)).toLowerCase();
+      // Network/JWKS failures are transient — surface as unexpected-error (→ 503) so
+      // the client shows a retry prompt rather than "Sign in again".
+      const isTransient =
+        message.includes("jwks") ||
+        message.includes("network") ||
+        message.includes("fetch") ||
+        message.includes("connect") ||
+        message.includes("timeout");
+      const reason = isTransient ? "unexpected-error" : "session-token-invalid";
+      console.error("Bearer token verification failed", { message, reason, hasJwtKey: !!jwtKey });
+      return { user: null, reason };
+    }
   }
 
-  const state = await clerkClient.authenticateRequest(requestForAuth, {
-    ...(jwtKey ? { jwtKey } : {}),
-  });
+  // Cookie path fallback: used when no bearer token is present (e.g. local dev without client-side auth).
+  const jwtKey = process.env.CLERK_JWT_KEY;
+  let state: Awaited<ReturnType<typeof clerkClient.authenticateRequest>>;
+  try {
+    state = await clerkClient.authenticateRequest(request, {
+      ...(jwtKey ? { jwtKey } : {}),
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unknown authenticateRequest error";
+    console.error("Clerk authenticateRequest threw", {
+      reason: "clerk-auth-exception",
+      message,
+    });
+    return { user: null, reason: "clerk-auth-exception" };
+  }
 
   if (!state.isAuthenticated || !state.toAuth) {
     const s = state as { reason?: string; message?: string; status?: string };
-    const reason = s.reason ?? s.status ?? "unknown";
-    console.warn(
-      "Clerk auth failed — reason:",
+    const reason = normalizeClerkFailureReason(s.reason, s.status);
+    console.warn("Clerk auth failed (cookie path)", {
       reason,
-      "message:",
-      s.message ?? "(none)"
-    );
+      rawReason: s.reason ?? null,
+      clerkStatus: s.status ?? null,
+      message: s.message ?? null,
+    });
     return { user: null, reason };
   }
 
@@ -76,14 +117,29 @@ export async function getAuthUserFromRequestWithReason(
 
   try {
     const user = await fetchAndProvisionClerkUser(userId, clerkClient);
+    if (!user) {
+      return { user: null, reason: "provision-failed" };
+    }
     return { user };
   } catch (err) {
-    console.error("Failed to provision user:", err);
+    console.error("Failed to provision user (cookie path):", err);
     return {
       user: null,
       reason: isDbUnavailableError(err) ? "db-unreachable" : "provision-failed",
     };
   }
+}
+
+function normalizeClerkFailureReason(
+  reason: string | undefined,
+  status: string | undefined
+): string {
+  const raw = (reason ?? status ?? "unknown").toLowerCase();
+  if (raw === "unexpected-error") return "unexpected-error";
+  if (raw === "client-error") return "unexpected-error";
+  if (raw === "network-error") return "unexpected-error";
+  if (raw === "server-error") return "unexpected-error";
+  return reason ?? status ?? "unknown";
 }
 
 async function fetchAndProvisionClerkUser(

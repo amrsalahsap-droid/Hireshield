@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 interface ErrorStateProps {
   title?: string;
@@ -48,28 +49,50 @@ interface EmptyStateProps {
   action?: {
     text: string;
     onClick: () => void;
+    variant?: "default" | "outline";
   };
   icon?: string;
+  size?: "sm" | "md" | "lg";
 }
 
 export function EmptyState({
   title = "No data found",
   message = "There's nothing to show here yet.",
   action,
-  icon = "📋"
+  icon = "📋",
+  size = "md"
 }: EmptyStateProps) {
+  const sizeClasses = {
+    sm: "py-8",
+    md: "py-12", 
+    lg: "py-16"
+  };
+
+  const iconSizes = {
+    sm: "text-4xl",
+    md: "text-5xl",
+    lg: "text-6xl"
+  };
+
+  const titleSizes = {
+    sm: "text-section",
+    md: "text-lg font-medium",
+    lg: "text-xl font-medium"
+  };
+
   return (
-    <div className="text-center py-12 bg-white rounded-lg shadow">
-      <div className="text-gray-400 text-5xl mb-4">{icon}</div>
-      <h3 className="text-lg font-medium text-gray-900 mb-2">{title}</h3>
-      <p className="text-gray-500 mb-6">{message}</p>
+    <div className={`text-center ${sizeClasses[size]} bg-card border border-border rounded-card`}>
+      <div className={`${iconSizes[size]} text-muted-foreground mb-4`}>{icon}</div>
+      <h3 className={`${titleSizes[size]} text-foreground font-display mb-2`}>{title}</h3>
+      <p className="text-body-size text-muted-foreground font-body mb-6 max-w-md mx-auto">{message}</p>
       {action && (
-        <button
+        <Button 
           onClick={action.onClick}
-          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 transition-colors"
+          variant={action.variant || "default"}
+          className="mx-auto"
         >
           {action.text}
-        </button>
+        </Button>
       )}
     </div>
   );
@@ -78,17 +101,32 @@ export function EmptyState({
 interface LoadingStateProps {
   message?: string;
   icon?: string;
+  size?: "sm" | "md" | "lg";
 }
 
 export function LoadingState({
   message = "Loading...",
-  icon = "🔄"
+  icon = "🔄",
+  size = "md"
 }: LoadingStateProps) {
+  const sizeClasses = {
+    sm: "h-8 w-8",
+    md: "h-12 w-12", 
+    lg: "h-16 w-16"
+  };
+
+  const iconSizes = {
+    sm: "text-2xl",
+    md: "text-3xl",
+    lg: "text-4xl"
+  };
+
   return (
     <div className="flex items-center justify-center min-h-screen">
       <div className="text-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-        <div className="text-muted-foreground font-body">{message}</div>
+        <div className={`animate-spin rounded-full ${sizeClasses[size]} border-b-2 border-primary mx-auto mb-4`}></div>
+        <div className={`${iconSizes[size]} text-muted-foreground mb-2`}>{icon}</div>
+        <div className="text-body-size text-muted-foreground font-body">{message}</div>
       </div>
     </div>
   );
