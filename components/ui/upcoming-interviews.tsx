@@ -2,6 +2,7 @@ import React from "react";
 import Link from "next/link";
 import { Calendar, Clock, User, Briefcase, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { EmptyStateCard } from "@/components/ui/empty-state-card";
 
 interface InterviewItem {
   id: string;
@@ -80,18 +81,21 @@ export function UpcomingInterviews({ interviews, className }: UpcomingInterviews
 
   if (interviews.length === 0) {
     return (
-      <div className={cn("bg-card shadow-card rounded-xl border border-border p-6", className)}>
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-            <Calendar className="w-4 h-4 text-primary" />
-          </div>
-          <h3 className="text-lg font-medium text-foreground font-display">Upcoming Interviews</h3>
-        </div>
-        <div className="text-center py-8">
-          <Calendar className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-          <p className="text-muted-foreground font-body text-sm">No upcoming interviews scheduled</p>
-        </div>
-      </div>
+      <EmptyStateCard
+        icon={<Calendar className="w-6 h-6 text-muted-foreground" />}
+        title="No interviews scheduled yet"
+        description="Start by adding a candidate and scheduling your first interview."
+        action={{
+          label: "Schedule Interview",
+          href: "/app/interviews"
+        }}
+        secondaryAction={{
+          label: "Add Candidate",
+          href: "/app/candidates"
+        }}
+        size="md"
+        className={className}
+      />
     );
   }
 

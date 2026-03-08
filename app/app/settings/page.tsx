@@ -45,6 +45,7 @@ const Button = ({
 // Icon components using simple text/emojis to avoid import issues
 const Building2 = () => <span>🏢</span>;
 const Users = () => <span>👥</span>;
+const Building = () => <span>🏬</span>;
 const PuzzlePiece = () => <span>🧩</span>;
 const Key = () => <span>🔑</span>;
 const Save = () => <span>💾</span>;
@@ -95,6 +96,41 @@ export default function SettingsPage() {
     }
   ]);
 
+  const [departmentsData, setDepartmentsData] = useState([
+    {
+      id: "1",
+      name: "Engineering",
+      description: "Software development and technical teams",
+      head: "John Doe",
+      memberCount: 25,
+      budget: "$500,000"
+    },
+    {
+      id: "2",
+      name: "Sales",
+      description: "Sales and business development teams",
+      head: "Jane Smith",
+      memberCount: 15,
+      budget: "$300,000"
+    },
+    {
+      id: "3",
+      name: "Marketing",
+      description: "Marketing and communications teams",
+      head: "Mike Johnson",
+      memberCount: 10,
+      budget: "$200,000"
+    },
+    {
+      id: "4",
+      name: "Human Resources",
+      description: "HR and people operations teams",
+      head: "Sarah Wilson",
+      memberCount: 8,
+      budget: "$150,000"
+    }
+  ]);
+
   const [integrations, setIntegrations] = useState([
     {
       id: "1",
@@ -141,6 +177,7 @@ export default function SettingsPage() {
   const tabs = [
     { id: "organization", label: "Organization", icon: Building2 },
     { id: "team", label: "Team", icon: Users },
+    { id: "departments", label: "Departments", icon: Building },
     { id: "integrations", label: "Integrations", icon: PuzzlePiece },
     { id: "api-keys", label: "API Keys", icon: Key }
   ];
@@ -374,6 +411,61 @@ export default function SettingsPage() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+
+        {/* Departments Tab */}
+        {activeTab === "departments" && (
+          <div className="bg-card border border-border rounded-xl p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-lg font-semibold text-foreground font-display flex items-center gap-2">
+                <Building className="w-5 h-5" />
+                Departments
+              </h2>
+              <Button className="flex items-center gap-2">
+                <Plus className="w-4 h-4" />
+                Add Department
+              </Button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {departmentsData.map((department) => (
+                <div key={department.id} className="border border-border rounded-lg p-6">
+                  <div className="flex items-start justify-between mb-4">
+                    <div>
+                      <h3 className="font-medium text-foreground font-display mb-2">{department.name}</h3>
+                      <p className="text-sm text-muted-foreground font-body mb-4">{department.description}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-muted-foreground font-body">Department Head:</span>
+                      <span className="text-sm font-medium text-foreground font-body">{department.head}</span>
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-muted-foreground font-body">Team Members:</span>
+                      <span className="text-sm font-medium text-foreground font-body">{department.memberCount}</span>
+                    </div>
+                    
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-muted-foreground font-body">Annual Budget:</span>
+                      <span className="text-sm font-medium text-foreground font-body">{department.budget}</span>
+                    </div>
+                  </div>
+                  
+                  <div className="flex items-center gap-2 mt-4 pt-4 border-t border-border">
+                    <Button variant="outline" size="sm">
+                      Edit
+                    </Button>
+                    <Button variant="outline" size="sm" className="text-destructive hover:text-destructive">
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         )}

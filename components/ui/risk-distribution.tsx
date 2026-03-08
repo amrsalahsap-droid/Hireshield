@@ -157,7 +157,7 @@ export function RiskDistribution({ data, className }: RiskDistributionProps) {
         {/* Legend - Right */}
         <div className="flex-1 flex flex-col justify-center space-y-3 -ml-4">
           {riskItems.map((item) => (
-            <div key={item.level} className="flex items-center justify-between">
+            <div key={item.level} className="flex items-center" style={{ gridTemplateColumns: '16px 1fr auto' }}>
               <div className="flex items-center gap-2">
                 <div className={cn("w-3 h-3 rounded-full", item.bgColor, "border-2", item.color.replace('text', 'border'))} />
                 <span className="text-card text-foreground font-body">{item.level}</span>
