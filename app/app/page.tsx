@@ -19,7 +19,14 @@ import { SkeletonGrid, SkeletonTable, SkeletonList } from "@/components/ui/skele
 import { DashboardStatusPanel } from "@/components/ui/dashboard-status-panel";
 import { MetricsPanel } from "@/components/ui/metrics-panel";
 import { Panel } from "@/components/ui/panel";
-import { Briefcase, UserPlus, FileSearch, ShieldAlert, Inbox, CheckCircle, AlertTriangle, Clock, Users, Mic, FileCheck, Timer, Calendar, ChevronRight, Info, TrendingUp, TrendingDown, Minus, RefreshCw, Play, FileText, UserCheck, AlertCircle, Zap } from "lucide-react";
+import { Modal } from "@/components/ui/modal";
+import { RiskAnalyticsModal } from "@/components/app/risk-analytics-modal";
+import { EmptyStateCard } from "@/components/ui/empty-state-card";
+import { AIInsightCards } from "@/components/app/ai-insight-cards";
+import { InsightCard } from "@/components/app/insight-card";
+import { LiveActivityPulse, useLiveActivity } from "@/components/app/live-activity-pulse";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { Briefcase, UserPlus, FileSearch, ShieldAlert, Inbox, CheckCircle, AlertTriangle, Clock, Users, Mic, FileCheck, Timer, Calendar, ChevronRight, Info, TrendingUp, TrendingDown, Minus, RefreshCw, Play, FileText, UserCheck, AlertCircle, Zap, Expand, Maximize2, Brain, Lightbulb, Target, Activity, Wifi } from "lucide-react";
 import type {
   AwaitingEvaluationRow,
   DashboardJobRow,
@@ -48,8 +55,8 @@ function toRiskBadge(riskLevel: RecentEvaluationRow["riskLevel"]) {
 type DiagStep = string;
 
 export default function AppPage() {
-  const { isLoaded, isSignedIn, getToken } = useAuth();
   const router = useRouter();
+  const { isLoaded, isSignedIn, getToken } = useAuth();
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [diagStep, setDiagStep] = useState<DiagStep | null>(null);
@@ -60,8 +67,317 @@ export default function AppPage() {
   const [activityPageSize] = useState<AllowedPageSize>(10);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
+  // Modal states
+  const [riskModalOpen, setRiskModalOpen] = useState(false);
+  const [dismissedInsights, setDismissedInsights] = useState<Set<string>>(new Set());
+
+  // Live activity monitoring
+  const { isLive, lastUpdate, activityCount, checkForActivity } = useLiveActivity(30000); // Poll every 30 seconds
+
+  // Calculate hiring system status
+  function getHiringStatus(): "healthy" | "medium-risk" | "high-risk" {
+    // Calculate risk factors
+    const highRiskCount = highRiskAlerts.length;
+    const pendingCount = candidatesAwaitingEvaluation.length;
+    const totalCandidates = recentEvaluations.length;
+    
+    // Risk scoring algorithm
+    let riskScore = 0;
+    
+    // High risk candidates (most critical)
+    if (highRiskCount >= 3) riskScore += 3;
+    else if (highRiskCount >= 1) riskScore += 2;
+    
+    // Pending evaluations (medium priority)
+    if (pendingCount >= 10) riskScore += 2;
+    else if (pendingCount >= 5) riskScore += 1;
+    
+    // No active jobs (business risk)
+    if (activeCount === 0 && draftCount === 0) riskScore += 2;
+    else if (activeCount === 0) riskScore += 1;
+    
+    // No recent evaluations (stagnation risk)
+    if (totalCandidates === 0) riskScore += 1;
+    
+    // Determine status based on risk score
+    if (riskScore >= 4) return "high-risk";
+    if (riskScore >= 2) return "medium-risk";
+    return "healthy";
+  }
+
+  // Generate hiring insights based on risk thresholds
+  function generateHiringInsights() {
+    const insights = [];
+    const riskThreshold = 30; // 30% risk threshold
+    const highRiskThreshold = 50; // 50% high risk threshold
+
+    // Analyze risk by job title
+    const riskByJob = recentEvaluations.reduce((acc, evaluation) => {
+      const jobTitle = evaluation.jobTitle;
+      if (!acc[jobTitle]) {
+        acc[jobTitle] = {
+          total: 0,
+          highRisk: 0,
+          mediumRisk: 0,
+          lowRisk: 0,
+          riskScores: []
+        };
+      }
+      acc[jobTitle].total++;
+      acc[jobTitle].riskScores.push(
+        evaluation.riskLevel === "RED" ? 75 : 
+        evaluation.riskLevel === "YELLOW" ? 50 : 25
+      );
+      
+      if (evaluation.riskLevel === "RED") acc[jobTitle].highRisk++;
+      else if (evaluation.riskLevel === "YELLOW") acc[jobTitle].mediumRisk++;
+      else acc[jobTitle].lowRisk++;
+      
+      return acc;
+    }, {} as Record<string, { total: number; highRisk: number; mediumRisk: number; lowRisk: number; riskScores: number[] }>);
+
+    // Generate insights for jobs with high risk rates
+    Object.entries(riskByJob).forEach(([jobTitle, data]) => {
+      const avgRiskScore = data.riskScores.reduce((sum, score) => sum + score, 0) / data.riskScores.length;
+      const riskRate = (data.highRisk / data.total) * 100;
+
+      // High risk insight
+      if (riskRate > highRiskThreshold && !dismissedInsights.has(`high-risk-${jobTitle}`)) {
+        insights.push({
+          id: `high-risk-${jobTitle}`,
+          type: "risk" as const,
+          title: `High Risk Rate for ${jobTitle}`,
+          description: `Candidates for ${jobTitle} show higher than normal risk (${riskRate.toFixed(1)}% high risk). Consider reviewing evaluation criteria or job requirements.`,
+          severity: "high" as const,
+          data: {
+            metric: "Risk Rate",
+            value: `${riskRate.toFixed(1)}%`,
+            threshold: `${highRiskThreshold}%`,
+            actual: data.highRisk,
+            trend: "up" as const
+          },
+          actions: [
+            { label: "Review Criteria", href: "/app/evaluations", variant: "primary" as const },
+            { label: "View Job Details", href: "/app/jobs", variant: "secondary" as const }
+          ],
+          timeAgo: "1 hour ago"
+        });
+      }
+
+      // Medium risk insight
+      else if (avgRiskScore > riskThreshold && !dismissedInsights.has(`medium-risk-${jobTitle}`)) {
+        insights.push({
+          id: `medium-risk-${jobTitle}`,
+          type: "warning" as const,
+          title: `Elevated Risk Levels for ${jobTitle}`,
+          description: `Average risk score of ${avgRiskScore.toFixed(1)}% for ${jobTitle} candidates is above normal range. Monitor this position closely.`,
+          severity: "medium" as const,
+          data: {
+            metric: "Avg Risk Score",
+            value: `${avgRiskScore.toFixed(1)}%`,
+            threshold: `${riskThreshold}%`,
+            actual: data.total,
+            trend: "neutral" as const
+          },
+          actions: [
+            { label: "View Candidates", href: "/app/candidates", variant: "primary" as const },
+            { label: "Risk Analytics", href: "#", variant: "secondary" as const }
+          ],
+          timeAgo: "2 hours ago"
+        });
+      }
+    });
+
+    // Low risk opportunity insight
+    const lowRiskJobs = Object.entries(riskByJob).filter(([_, data]) => {
+      const avgRiskScore = data.riskScores.reduce((sum, score) => sum + score, 0) / data.riskScores.length;
+      return avgRiskScore < 25 && data.total >= 3;
+    });
+
+    if (lowRiskJobs.length > 0 && !dismissedInsights.has("low-risk-opportunity")) {
+      const [jobTitle] = lowRiskJobs[0];
+      insights.push({
+        id: "low-risk-opportunity",
+        type: "opportunity" as const,
+        title: "Low Risk Candidate Pool",
+        description: `${jobTitle} position shows excellent candidate quality with low risk scores. Consider accelerating the hiring process for this role.`,
+        severity: "low" as const,
+        data: {
+          metric: "Risk Level",
+          value: "Low",
+          threshold: "< 25%",
+          actual: lowRiskJobs[0][1].total,
+          trend: "down" as const
+        },
+        actions: [
+          { label: "Accelerate Hiring", href: "/app/interviews", variant: "primary" as const },
+          { label: "View Pipeline", href: "/app/jobs", variant: "secondary" as const }
+        ],
+        timeAgo: "3 hours ago"
+      });
+    }
+
+    return insights;
+  }
+
+  const dismissInsight = (insightId: string) => {
+    setDismissedInsights(prev => new Set([...prev, insightId]));
+  };
+
+  // Generate AI insights for dashboard
+  function generateAIInsights() {
+    const insights = [];
+    
+    // Risk-based insights
+    if (highRiskAlerts.length > 0) {
+      insights.push({
+        id: "risk-1",
+        type: "risk" as const,
+        title: "High Risk Candidates Require Attention",
+        description: `You have ${highRiskAlerts.length} candidate${highRiskAlerts.length === 1 ? '' : 's'} flagged as high risk. Immediate review recommended to prevent potential hiring issues.`,
+        impact: "high" as const,
+        confidence: 85,
+        data: {
+          value: highRiskAlerts.length,
+          change: 2,
+          trend: "up" as const
+        },
+        actions: [
+          { label: "Review Candidates", href: "/app/evaluations", variant: "default" as const },
+          { label: "View Risk Analytics", href: "#", variant: "outline" as const }
+        ],
+        timeAgo: "2 hours ago"
+      });
+    }
+
+    // Opportunity insights
+    if (activeCount > 0 && candidatesAwaitingEvaluation.length === 0) {
+      insights.push({
+        id: "opportunity-1",
+        type: "opportunity" as const,
+        title: "Optimal Hiring Pipeline",
+        description: "Your active positions have no pending evaluations. This is an excellent time to source new candidates or focus on interview scheduling.",
+        impact: "medium" as const,
+        confidence: 92,
+        data: {
+          value: activeCount,
+          change: 1,
+          trend: "up" as const
+        },
+        actions: [
+          { label: "Source Candidates", href: "/app/candidates", variant: "default" as const },
+          { label: "Schedule Interviews", href: "/app/interviews", variant: "outline" as const }
+        ],
+        timeAgo: "1 hour ago"
+      });
+    }
+
+    // Trend insights
+    if (recentEvaluations.length > 5) {
+      insights.push({
+        id: "trend-1",
+        type: "trend" as const,
+        title: "Evaluation Velocity Improving",
+        description: `Your team completed ${recentEvaluations.length} evaluations this week, showing a 25% improvement in evaluation speed compared to last month.`,
+        impact: "medium" as const,
+        confidence: 78,
+        data: {
+          value: recentEvaluations.length,
+          change: 25,
+          trend: "up" as const
+        },
+        actions: [
+          { label: "View Analytics", href: "/app/reports", variant: "default" as const }
+        ],
+        timeAgo: "3 hours ago"
+      });
+    }
+
+    // Recommendation insights
+    if (draftCount > 0) {
+      insights.push({
+        id: "recommendation-1",
+        type: "recommendation" as const,
+        title: "Publish Draft Jobs",
+        description: `You have ${draftCount} draft job${draftCount === 1 ? '' : 's'} ready to publish. Publishing these positions could increase your candidate pool by an estimated 40%.`,
+        impact: "medium" as const,
+        confidence: 88,
+        data: {
+          value: draftCount,
+          change: 40,
+          trend: "up" as const
+        },
+        actions: [
+          { label: "Review Drafts", href: "/app/jobs?filter=drafts", variant: "default" as const },
+          { label: "Create New Job", href: "/app/jobs", variant: "outline" as const }
+        ],
+        timeAgo: "5 hours ago"
+      });
+    }
+
+    return insights;
+  }
+
   useEffect(() => {
     if (!isLoaded) return;
+
+    // In development mode, bypass authentication check
+    if (process.env.NODE_ENV === "development") {
+      let cancelled = false;
+      (async () => {
+        try {
+          // Parallel data loading using Promise.all()
+          const [dashboardRes, activityRes] = await Promise.all([
+            fetch("/api/dashboard-dev", {
+              credentials: "omit",
+              headers: {},
+            }),
+            fetch(`/api/activity-dev?page=${activityPage}&pageSize=${activityPageSize}`, {
+              headers: {
+                "x-org-id": "cmm87bloy0000v9nvvzyt6aqn",
+              },
+            })
+          ]);
+
+          if (cancelled) return;
+
+          // Handle dashboard response
+          if (!dashboardRes.ok) {
+            setDiagStep("api-error");
+            throw new Error("Failed to load dashboard");
+          }
+
+          // Handle activity response
+          if (!activityRes.ok) {
+            console.error("Failed to load activity data");
+          }
+
+          // Parse both responses in parallel
+          const [dashboardData, activityData] = await Promise.all([
+            dashboardRes.json(),
+            activityRes.ok ? activityRes.json() : Promise.resolve(null)
+          ]);
+
+          if (!cancelled) {
+            setSummary(dashboardData);
+            if (activityData) {
+              setActivityData(activityData);
+            }
+          }
+        } catch (error) {
+          console.error("Error loading dashboard data:", error);
+          if (!cancelled) {
+            setSummary(null);
+            setActivityData(null);
+          }
+        } finally {
+          if (!cancelled) setLoading(false);
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }
 
     if (!isSignedIn) {
       router.push("/auth");
@@ -82,9 +398,9 @@ export default function AppPage() {
 
         // Parallel data loading using Promise.all()
         const [dashboardRes, activityRes] = await Promise.all([
-          fetch("/api/dashboard", {
+          fetch(process.env.NODE_ENV === "development" ? "/api/dashboard-dev" : "/api/dashboard", {
             credentials: "omit",
-            headers: { Authorization: `Bearer ${token}` },
+            headers: process.env.NODE_ENV === "development" ? {} : { Authorization: `Bearer ${token}` },
           }),
           fetch(`/api/activity?page=${activityPage}&pageSize=${activityPageSize}`, {
             headers: {
@@ -148,14 +464,10 @@ export default function AppPage() {
 
   const fetchActivity = useCallback(
     async (page: number, pageSize: AllowedPageSize) => {
-      if (!isSignedIn) return;
       setActivityLoading(true);
       try {
-        const token = await getToken();
-        if (!token) return;
-        const res = await fetch(`/api/activity?page=${page}&pageSize=${pageSize}`, {
+        const res = await fetch(`/api/activity-dev?page=${page}&pageSize=${pageSize}`, {
           headers: {
-            Authorization: `Bearer ${token}`,
             "x-org-id": "cmm87bloy0000v9nvvzyt6aqn",
           },
         });
@@ -180,13 +492,12 @@ export default function AppPage() {
       
       // Parallel refresh using Promise.all()
       const [dashboardRes, activityRes] = await Promise.all([
-        fetch("/api/dashboard", {
+        fetch(process.env.NODE_ENV === "development" ? "/api/dashboard-dev" : "/api/dashboard", {
           credentials: "omit",
-          headers: { Authorization: `Bearer ${token}` },
+          headers: process.env.NODE_ENV === "development" ? {} : { Authorization: `Bearer ${token}` },
         }),
-        fetch(`/api/activity?page=${activityPage}&pageSize=${activityPageSize}`, {
+        fetch(`/api/activity-dev?page=${activityPage}&pageSize=${activityPageSize}`, {
           headers: {
-            Authorization: `Bearer ${token}`,
             "x-org-id": "cmm87bloy0000v9nvvzyt6aqn",
           },
         })
@@ -904,6 +1215,27 @@ export default function AppPage() {
     );
   };
 
+  // Generate risk analytics data for modal
+  function generateRiskAnalyticsData() {
+    const distribution = calculateRiskDistribution();
+    
+    // Generate mock candidate data based on recent evaluations
+    const candidates = summary?.recentEvaluations.slice(0, 10).map((evaluation, index) => ({
+      id: evaluation.id,
+      name: evaluation.candidateName,
+      jobTitle: evaluation.jobTitle,
+      riskLevel: evaluation.riskLevel as "HIGH" | "MEDIUM" | "LOW",
+      score: Math.floor(Math.random() * 40) + 60, // Random score between 60-100
+      flags: Math.floor(Math.random() * 5) + 1, // Random flags between 1-5
+      lastEvaluated: formatRelativeTime(evaluation.completedAt)
+    })) || [];
+
+    return {
+      ...distribution,
+      candidates
+    };
+  }
+
   // Calculate risk distribution from recent evaluations
   function calculateRiskDistribution() {
     const distribution = {
@@ -940,6 +1272,15 @@ export default function AppPage() {
   const { pendingSubtitle, riskSubtitle, activeSubtitle, draftSubtitle, archivedSubtitle } = calculateMetricSubtitles();
   const trends = calculateTrends();
 
+  // Metric descriptions for tooltips
+  const metricDescriptions: Record<string, string> = {
+    "Pending Evaluations": "Candidates who completed interviews but are not yet evaluated. These require immediate attention to keep the hiring process moving.",
+    "High Risk Candidates": "Candidates flagged by AI evaluation as potentially high-risk. These require manual review before proceeding in the hiring process.",
+    "Active Jobs": "Job positions currently open and accepting candidates. These are your ongoing hiring opportunities.",
+    "Draft Jobs": "Job positions created but not yet published. These are ready to be activated when you're ready to start hiring.",
+    "Archived Jobs": "Closed or completed job positions. These help track your hiring history and performance over time."
+  };
+
   const priorityMetrics = [
     {
       title: "Pending Evaluations",
@@ -954,7 +1295,7 @@ export default function AppPage() {
       additionalInfo: candidatesAwaitingEvaluation.length > 0 
         ? `Oldest: ${candidatesAwaitingEvaluation.length > 1 ? '2 days ago' : 'Today'}`
         : "No pending items",
-      href: undefined as string | undefined,
+      href: "/app/candidates" as string | undefined,
       accent: candidatesAwaitingEvaluation.length > 0
         ? "bg-investigate/10 border-investigate/30"
         : "bg-card border-border",
@@ -973,7 +1314,7 @@ export default function AppPage() {
       additionalInfo: highRiskAlerts.length > 0
         ? `Review needed: ${highRiskAlerts.length === 1 ? '1 candidate' : `${highRiskAlerts.length} candidates`}`
         : "All candidates cleared",
-      href: undefined as string | undefined,
+      href: "/app/evaluations" as string | undefined,
       accent: highRiskAlerts.length > 0
         ? "bg-risk-high-bg/10 border-risk-high-bg"
         : "bg-card border-border",
@@ -1009,7 +1350,7 @@ export default function AppPage() {
       additionalInfo: draftCount > 0
         ? `${draftCount === 1 ? '1 draft' : `${draftCount} drafts`} to publish`
         : "No draft positions",
-      href: "/app/jobs" as string | undefined,
+      href: "/app/jobs?filter=drafts" as string | undefined,
       accent: draftCount > 0
         ? "bg-warning/10 border-warning/30"
         : "bg-card border-border",
@@ -1038,10 +1379,21 @@ export default function AppPage() {
     <div>
       {/* Header */}
       <div className="mb-12">
-        <div className="flex items-start justify-between gap-4 flex-wrap">
-          <div>
-            <div className="flex items-center gap-3 mb-4">
+        <div className="flex items-center justify-between bg-card border border-border rounded-xl p-6 min-h-[80px]">
+          {/* Left Section: Icon | Title | Message */}
+          <div className="flex items-center gap-12">
+            {/* Icon */}
+            <div className="flex items-center justify-center w-12 h-12 bg-primary/10 rounded-lg">
+              <Briefcase className="w-6 h-6 text-primary" />
+            </div>
+            
+            {/* Title */}
+            <div>
               <h1 className="text-title text-foreground font-display">Hiring Overview</h1>
+            </div>
+            
+            {/* Message */}
+            <div className="flex items-center gap-3">
               <button
                 onClick={handleRefresh}
                 disabled={isRefreshing}
@@ -1053,18 +1405,23 @@ export default function AppPage() {
                   {isRefreshing ? 'Refreshing...' : `Updated ${formatDataFreshness(lastUpdated)}`}
                 </span>
               </button>
+              <p className="text-body-size text-foreground font-body leading-relaxed max-w-2xl">
+                {generateDashboardSummary()}
+              </p>
             </div>
-            <p className="text-body-size text-foreground font-body leading-relaxed max-w-2xl">
-              {generateDashboardSummary()}
-            </p>
           </div>
-          <div className="text-right text-sm text-muted-foreground font-body">
-            {new Date().toLocaleDateString('en-US', { 
-              weekday: 'long', 
-              year: 'numeric', 
-              month: 'long', 
-              day: 'numeric' 
-            })}
+          
+          {/* Right Section: Status Badge */}
+          <div className="flex items-center gap-4">
+            <StatusBadge status={getHiringStatus()} />
+            <div className="text-right text-sm text-muted-foreground font-body border-l border-border pl-4">
+              {new Date().toLocaleDateString('en-US', { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+              })}
+            </div>
           </div>
         </div>
       </div>
@@ -1096,124 +1453,102 @@ export default function AppPage() {
           </Panel>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mt-8">
-          {priorityMetrics.map(({ title, value, context, subtitle, trend, metricTrend, additionalInfo, href, accent }) => {
-            const inner = (
-              <div className={`rounded-card border p-card h-full flex flex-col justify-between transition-all duration-200 hover:shadow-md hover:border-primary/50 ${accent || 'border-border bg-card'}`}>
-                {/* Header */}
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <p className="text-card text-muted-foreground font-body">{title}</p>
-                    <Tooltip content={title || "No description available"}>
-                      <div className="w-3 h-3 text-muted-foreground cursor-help flex items-center justify-center">
-                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <circle cx="12" cy="12" r="10" strokeWidth="2"/>
-                          <circle cx="12" cy="12" r="1" fill="currentColor"/>
-                        </svg>
-                      </div>
-                    </Tooltip>
-                  </div>
-                  {trend && (
-                    <div className="flex items-center gap-1">
-                      <div className="w-4 h-4 text-muted-foreground/70 flex items-center justify-center">
-                        {trend.trend === "up" && <TrendingUp className="w-4 h-4 text-red-500" />}
-                        {trend.trend === "down" && <TrendingDown className="w-4 h-4 text-green-500" />}
-                        {trend.trend === "neutral" && <Minus className="w-4 h-4 text-muted-foreground" />}
-                      </div>
-                      <span className={`text-xs font-medium font-body ${
-                        trend.trend === "up" ? "text-red-500" :
-                        trend.trend === "down" ? "text-green-500" :
-                        "text-muted-foreground"
-                      }`}>
-                        {Math.abs(trend.change)}
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Main Value */}
-                <div className="flex items-baseline gap-2 my-2">
-                  <Tooltip content={title || "Click for details"}>
-                    <p className="text-metric text-foreground font-display leading-none cursor-help">{value}</p>
-                  </Tooltip>
-                  {metricTrend && (
-                    <div className="flex items-center gap-1">
-                      {metricTrend.direction === "up" && <TrendingUp className={`w-4 h-4 ${metricTrend.color}`} />}
-                      {metricTrend.direction === "down" && <TrendingDown className={`w-4 h-4 ${metricTrend.color}`} />}
-                      {metricTrend.direction === "neutral" && <Minus className={`w-4 h-4 ${metricTrend.color}`} />}
-                      <span className={`text-xs font-medium font-body ${metricTrend.color}`}>
-                        {metricTrend.text}
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Context Section */}
-                <div className="space-y-1">
-                  {context && (
-                    <p className="text-body-size text-muted-foreground font-body">{context}</p>
-                  )}
-                  {subtitle && (
-                    <p className="text-body-size text-muted-foreground font-body">{subtitle}</p>
-                  )}
-                  {additionalInfo && (
-                    <p className="text-body-size text-muted-foreground font-body">{additionalInfo}</p>
-                  )}
-                  {trend && (
-                    <p className="text-xs text-muted-foreground font-body">{trend.description}</p>
-                  )}
-                </div>
-              </div>
-            );
-            return href ? (
-              <Link key={title} href={href} className="block hover:opacity-90 transition-opacity">
-                {inner}
-              </Link>
-            ) : (
-              <div key={title}>{inner}</div>
-            );
-          })}
+        <div className="mt-8">
+          <MetricsPanel 
+            title="Key Metrics" 
+            metrics={priorityMetrics.map(metric => ({
+              ...metric,
+              description: metricDescriptions[metric.title] || `${metric.title} metric information`
+            }))}
+          />
         </div>
       )}
 
       {/* Analytics Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
         {/* Pipeline Analytics */}
-        <Panel title="Pipeline Overview">
-          <div className="space-y-6">
-            <PipelineBar stages={generatePipelineStages()} />
-            <HiringVelocity metrics={calculateHiringVelocity()} />
-          </div>
-        </Panel>
+        <DashboardSection title="Pipeline Overview">
+          <Panel title="">
+            <div className="space-y-6">
+              <PipelineBar stages={generatePipelineStages()} />
+              <HiringVelocity metrics={calculateHiringVelocity()} />
+            </div>
+          </Panel>
+        </DashboardSection>
 
         {/* Risk Analytics */}
-        <Panel title="Risk Distribution">
-          <RiskDistribution data={calculateRiskDistribution()} />
-        </Panel>
+        <DashboardSection title="Risk Distribution">
+          <Panel title="">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-medium text-muted-foreground">Risk Overview</h3>
+              <button
+                onClick={() => setRiskModalOpen(true)}
+                className="flex items-center gap-1 px-2 py-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+              >
+                <Maximize2 className="w-3 h-3" />
+                Expand
+              </button>
+            </div>
+            <RiskDistribution data={calculateRiskDistribution()} />
+          </Panel>
+        </DashboardSection>
       </div>
 
-      {/* 3. Quick Actions */}
+      {/* AI Insights Row */}
+      <DashboardSection title="AI Insights">
+        <Panel title="">
+          <AIInsightCards insights={generateAIInsights()} maxItems={3} />
+        </Panel>
+      </DashboardSection>
+
+      {/* Hiring Insights Row */}
+      {generateHiringInsights().length > 0 && (
+        <DashboardSection title="Hiring Insights">
+          <Panel title="">
+            <div className="space-y-4">
+              {generateHiringInsights().map((insight) => (
+                <InsightCard
+                  key={insight.id}
+                  type={insight.type}
+                  title={insight.title}
+                  description={insight.description}
+                  severity={insight.severity}
+                  data={insight.data}
+                  actions={insight.actions}
+                  timeAgo={insight.timeAgo}
+                  isDismissible={true}
+                  onDismiss={() => dismissInsight(insight.id)}
+                />
+              ))}
+            </div>
+          </Panel>
+        </DashboardSection>
+      )}
+
+      {/* Quick Actions */}
       <DashboardSection title="Quick Actions">
-        <div className="flex gap-4 flex-wrap">
-          <Button asChild variant="outline" className="h-12 px-6">
-            <Link href="/app/jobs">
-              <Briefcase className="mr-2 h-4 w-4" />
-              Create Job
-            </Link>
-          </Button>
-          <Button asChild variant="outline" className="h-12 px-6">
-            <Link href="/app/candidates">
-              <UserPlus className="mr-2 h-4 w-4" />
-              Add Candidate
-            </Link>
-          </Button>
-          <Button asChild variant="outline" className="h-12 px-6">
-            <Link href="/app/jobs">
-              <FileSearch className="mr-2 h-4 w-4" />
-              Run JD Analysis
-            </Link>
-          </Button>
-        </div>
+        <Panel title="">
+          <div className="flex gap-4 flex-wrap">
+            <Button asChild variant="outline" className="h-12 px-6">
+              <Link href="/app/jobs">
+                <Briefcase className="mr-2 h-4 w-4" />
+                Create Job
+              </Link>
+            </Button>
+            <Button asChild variant="outline" className="h-12 px-6">
+              <Link href="/app/candidates">
+                <UserPlus className="mr-2 h-4 w-4" />
+                Add Candidate
+              </Link>
+            </Button>
+            <Button asChild variant="outline" className="h-12 px-6">
+              <Link href="/app/interviews">
+                <Mic className="mr-2 h-4 w-4" />
+                Schedule Interview
+              </Link>
+            </Button>
+          </div>
+        </Panel>
       </DashboardSection>
 
       {/* Smart Suggestions */}
@@ -1221,145 +1556,157 @@ export default function AppPage() {
 
       {/* Upcoming Interviews */}
       <DashboardSection title="Upcoming Interviews">
-        <UpcomingInterviews interviews={upcomingInterviews} />
+        <Panel title="">
+          <UpcomingInterviews interviews={upcomingInterviews} />
+        </Panel>
       </DashboardSection>
 
       {/* 4. Candidates Awaiting Evaluation */}
       <DashboardSection title="Candidates Awaiting Evaluation">
-        {candidatesAwaitingEvaluation.length === 0 ? (
-          <EmptyState
-            icon={Inbox}
-            title="No pending evaluations"
-            description="All candidates have been evaluated. Add new candidates to see them here."
-            action={{
-              label: "Add Candidate",
-              onClick: () => router.push("/app/candidates"),
-              variant: "secondary"
-            }}
-            size="sm"
-          />
-        ) : (
-          <div className="rounded-button border border-border overflow-hidden">
-            <table className="w-full">
-              <thead className="bg-muted/50 border-b border-border">
-                <tr>
-                  <th className="text-left px-4 py-4 text-sm font-medium text-foreground font-display">
-                    Candidate
-                  </th>
-                  <th className="text-left px-4 py-4 text-sm font-medium text-foreground font-display">
-                    Job
-                  </th>
-                  <th className="text-left px-4 py-4 text-sm font-medium text-foreground font-display">
-                    Added
-                  </th>
-                  <th className="text-left px-4 py-4 text-sm font-medium text-foreground font-display">
-                    Status
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {candidatesAwaitingEvaluation.map((item: AwaitingEvaluationRow) => (
-                  <tr 
-                    key={item.id}
-                    className="hover:bg-muted/30 cursor-pointer transition-colors group"
-                    onClick={() => router.push(item.href)}
-                  >
-                    <td className="px-4 py-4">
-                      <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-primary opacity-0 group-hover:opacity-100 transition-opacity" />
-                        <span className="text-primary hover:text-primary/80 font-body text-sm font-medium group-hover:underline">
-                          {item.candidateName}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-4 text-muted-foreground font-body text-sm group-hover:text-foreground transition-colors">
-                      {item.jobTitle}
-                    </td>
-                    <td className="px-4 py-4 text-muted-foreground font-body text-sm group-hover:text-foreground transition-colors">
-                      {formatRelativeTime(item.createdAt)}
-                    </td>
-                    <td className="px-4 py-4">
-                      <div className="flex items-center gap-2">
-                        <span className={statusBadge(item.evaluationStatus)}>
-                          {item.evaluationStatus}
-                        </span>
-                        <ChevronRight className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-all group-hover:translate-x-1" />
-                      </div>
-                    </td>
+        <Panel title="">
+          {candidatesAwaitingEvaluation.length === 0 ? (
+            <EmptyState
+              icon={Inbox}
+              title="No pending evaluations"
+              description="All candidates have been evaluated. Add new candidates to see them here."
+              action={{
+                label: "Add Candidates",
+                onClick: () => router.push("/app/candidates"),
+                variant: "primary"
+              }}
+              size="sm"
+            />
+          ) : (
+            <div className="rounded-button border border-border overflow-hidden">
+              <table className="w-full">
+                <thead className="bg-muted/50 border-b border-border">
+                  <tr>
+                    <th className="text-left px-4 py-4 text-sm font-medium text-foreground font-display">
+                      Candidate
+                    </th>
+                    <th className="text-left px-4 py-4 text-sm font-medium text-foreground font-display">
+                      Job
+                    </th>
+                    <th className="text-left px-4 py-4 text-sm font-medium text-foreground font-display">
+                      Status
+                    </th>
+                    <th className="text-left px-4 py-4 text-sm font-medium text-foreground font-display">
+                      Added
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {candidatesAwaitingEvaluation.map((item: AwaitingEvaluationRow) => (
+                    <tr 
+                      key={item.id}
+                      className="hover:bg-muted/30 cursor-pointer transition-colors group"
+                      onClick={() => router.push(item.href)}
+                    >
+                      <td className="px-4 py-4">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full bg-primary opacity-0 group-hover:opacity-100 transition-opacity" />
+                          <span className="text-primary hover:text-primary/80 font-body text-sm font-medium group-hover:underline">
+                            {item.candidateName}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4 text-muted-foreground font-body text-sm group-hover:text-foreground transition-colors">
+                        {item.jobTitle}
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="flex items-center gap-2">
+                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                            item.stage === "Interviewed" 
+                              ? "bg-blue-100 text-blue-800" 
+                              : "bg-amber-100 text-amber-800"
+                          }`}>
+                            {item.stage}
+                          </span>
+                          {!item.hasTranscript && (
+                            <span className="text-xs text-muted-foreground">No transcript</span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-4 py-4 text-muted-foreground font-body text-sm group-hover:text-foreground transition-colors">
+                        {formatRelativeTime(item.createdAt)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Panel>
       </DashboardSection>
 
       {/* 5. Recent Evaluations */}
       <DashboardSection title="Recent Evaluations">
-        {recentEvaluations.length === 0 ? (
-          <EmptyState
-            icon={CheckCircle}
-            title="No completed evaluations yet"
-            description="Start evaluating candidates to see their assessment results here."
-            action={{
-              label: "Evaluate Candidate",
-              onClick: () => router.push("/app/candidates"),
-              variant: "primary"
-            }}
-            size="sm"
-          />
-        ) : (
-          <div className="rounded-button border border-border overflow-hidden">
-            <table className="w-full">
-              <thead className="bg-muted/50 border-b border-border">
-                <tr>
-                  <th className="text-left px-4 py-4 text-sm font-medium text-foreground font-display">
-                    Candidate
-                  </th>
-                  <th className="text-left px-4 py-4 text-sm font-medium text-foreground font-display">
-                    Job
-                  </th>
-                  <th className="text-left px-4 py-4 text-sm font-medium text-foreground font-display">
-                    Risk Level
-                  </th>
-                  <th className="text-left px-4 py-4 text-sm font-medium text-foreground font-display">
-                    Completed
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {recentEvaluations.map((item: RecentEvaluationRow) => (
-                  <tr 
-                    key={item.id}
-                    className="hover:bg-muted/30 cursor-pointer transition-colors group"
-                    onClick={() => router.push(item.href)}
-                  >
-                    <td className="px-4 py-4">
-                      <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-primary opacity-0 group-hover:opacity-100 transition-opacity" />
-                        <span className="text-primary hover:text-primary/80 font-body text-sm font-medium group-hover:underline">
-                          {item.candidateName}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-4 py-4 text-muted-foreground font-body text-sm group-hover:text-foreground transition-colors">
-                      {item.jobTitle}
-                    </td>
-                    <td className="px-4 py-4">
-                      <div className="flex items-center gap-2">
-                        <RiskBadge {...toRiskBadge(item.riskLevel)} />
-                        <ChevronRight className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-all group-hover:translate-x-1" />
-                      </div>
-                    </td>
-                    <td className="px-4 py-4 text-muted-foreground font-body text-sm group-hover:text-foreground transition-colors">
-                      {formatRelativeTime(item.completedAt)}
-                    </td>
+        <Panel title="">
+          {recentEvaluations.length === 0 ? (
+            <EmptyState
+              icon={CheckCircle}
+              title="No completed evaluations yet"
+              description="Start evaluating candidates to see their assessment results here."
+              action={{
+                label: "Evaluate Candidate",
+                onClick: () => router.push("/app/candidates"),
+                variant: "primary"
+              }}
+              size="sm"
+            />
+          ) : (
+            <div className="rounded-button border border-border overflow-hidden">
+              <table className="w-full">
+                <thead className="bg-muted/50 border-b border-border">
+                  <tr>
+                    <th className="text-left px-4 py-4 text-sm font-medium text-foreground font-display">
+                      Candidate
+                    </th>
+                    <th className="text-left px-4 py-4 text-sm font-medium text-foreground font-display">
+                      Job
+                    </th>
+                    <th className="text-left px-4 py-4 text-sm font-medium text-foreground font-display">
+                      Risk Level
+                    </th>
+                    <th className="text-left px-4 py-4 text-sm font-medium text-foreground font-display">
+                      Completed
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {recentEvaluations.map((item: RecentEvaluationRow) => (
+                    <tr 
+                      key={item.id}
+                      className="hover:bg-muted/30 cursor-pointer transition-colors group"
+                      onClick={() => router.push(item.href)}
+                    >
+                      <td className="px-4 py-4">
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full bg-primary opacity-0 group-hover:opacity-100 transition-opacity" />
+                          <span className="text-primary hover:text-primary/80 font-body text-sm font-medium group-hover:underline">
+                            {item.candidateName}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4 text-muted-foreground font-body text-sm group-hover:text-foreground transition-colors">
+                        {item.jobTitle}
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="flex items-center gap-2">
+                          <RiskBadge {...toRiskBadge(item.riskLevel)} />
+                          <ChevronRight className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-all group-hover:translate-x-1" />
+                        </div>
+                      </td>
+                      <td className="px-4 py-4 text-muted-foreground font-body text-sm group-hover:text-foreground transition-colors">
+                        {formatRelativeTime(item.completedAt)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Panel>
       </DashboardSection>
 
       {/* 6. Risk Alerts */}
@@ -1370,102 +1717,92 @@ export default function AppPage() {
             <ShieldAlert className="h-5 w-5 text-risk-high" />
           }
         >
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {highRiskAlerts.map((alert: HighRiskAlertRow) => {
-              const style =
-                alert.riskLevel === "HIGH"
-                  ? { 
-                      border: "border-l-red-500",   
-                      bg: "bg-risk-high-bg/10",        
-                      hover: "hover:bg-risk-high-bg/20",        
-                      text: "text-red-600",        
-                      label: "High Risk",   
-                      badge: { level: "high" as const, label: "High" },
-                      stripBg: "bg-red-500",
-                      iconBg: "bg-red-100",
-                      badgeBg: "bg-red-500 text-white"
-                    }
-                  : alert.riskLevel === "MEDIUM"
-                  ? { 
-                      border: "border-l-amber-400",  
-                      bg: "bg-risk-investigate-bg/10", 
-                      hover: "hover:bg-risk-investigate-bg/20", 
-                      text: "text-amber-600", 
-                      label: "Medium Risk", 
-                      badge: { level: "investigate" as const, label: "Medium" },
-                      stripBg: "bg-amber-400",
-                      iconBg: "bg-amber-100", 
-                      badgeBg: "bg-amber-400 text-white"
-                    }
-                  : { 
-                      border: "border-l-green-500",  
-                      bg: "bg-risk-safe-bg/10",        
-                      hover: "hover:bg-risk-safe-bg/20",        
-                      text: "text-green-600",        
-                      label: "Low Risk",    
-                      badge: { level: "safe" as const, label: "Low" },
-                      stripBg: "bg-green-500",
-                      iconBg: "bg-green-100",
-                      badgeBg: "bg-green-500 text-white"
-                    };
-              return (
-                <Link
-                  key={alert.evaluationId}
-                  href={alert.href}
-                  className={`block rounded-card border border-border ${style.bg} border-l-4 ${style.border} ${style.hover} transition-all duration-200 hover:shadow-md overflow-hidden relative`}
-                >
-                  {/* Risk Color Strip */}
-                  <div className={`absolute top-0 left-0 bottom-0 w-1 ${style.stripBg}`} />
-                  
-                  <div className="p-card">
-                    {/* Header with Severity Badge and Flag Count */}
-                    <div className="flex items-center justify-between mb-3">
-                      {/* Severity Badge */}
-                      <div className={`px-3 py-1 rounded-full ${style.badgeBg} text-xs font-bold font-display uppercase tracking-wide`}>
-                        {style.label}
+          <Panel title="">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {highRiskAlerts.map((alert: HighRiskAlertRow) => {
+                const style =
+                  alert.riskLevel === "HIGH"
+                    ? { 
+                        border: "border-l-red-500",   
+                        bg: "bg-risk-high-bg/10",        
+                        hover: "hover:bg-risk-high-bg/20",        
+                        text: "text-red-600",        
+                        label: "High Risk",   
+                        badge: { level: "high" as const, label: "High" },
+                        stripBg: "bg-red-500",
+                        iconBg: "bg-red-100",
+                        badgeBg: "bg-red-500 text-white"
+                      }
+                    : alert.riskLevel === "MEDIUM"
+                    ? { 
+                        border: "border-l-amber-400",  
+                        bg: "bg-risk-investigate-bg/10", 
+                        hover: "hover:bg-risk-investigate-bg/20", 
+                        text: "text-amber-600", 
+                        label: "Medium Risk",
+                        badge: { level: "investigate" as const, label: "Medium" },
+                        stripBg: "bg-amber-400",
+                        iconBg: "bg-amber-100",
+                        badgeBg: "bg-amber-400 text-white"
+                      }
+                    : { 
+                        border: "border-l-green-500",    
+                        bg: "bg-risk-safe-bg/10",       
+                        hover: "hover:bg-risk-safe-bg/20",       
+                        text: "text-green-600",       
+                        label: "Low Risk",      
+                        badge: { level: "safe" as const, label: "Low" },
+                        stripBg: "bg-green-500",
+                        iconBg: "bg-green-100",
+                        badgeBg: "bg-green-500 text-white"
+                      };
+                
+                return (
+                  <Link
+                    key={alert.id}
+                    href={alert.href}
+                    className={`group relative rounded-lg border-l-4 ${style.border} ${style.bg} ${style.hover} p-4 transition-all duration-200 hover:shadow-md`}
+                  >
+                    {/* Alert Strip */}
+                    <div className={`absolute left-0 top-0 bottom-0 w-1 ${style.stripBg} rounded-l`} />
+                    
+                    {/* Content */}
+                    <div className="flex items-start gap-3">
+                      {/* Icon */}
+                      <div className={`w-8 h-8 rounded-full ${style.iconBg} flex items-center justify-center flex-shrink-0 mt-0.5`}>
+                        <AlertTriangle className={`w-4 h-4 ${style.text}`} />
                       </div>
                       
-                      {/* Flag Count Badge */}
-                      <div className={`px-2 py-1 rounded-full bg-muted text-xs font-bold font-display`}>
-                        {alert.flagCount} {alert.flagCount === 1 ? "flag" : "flags"}
-                      </div>
-                    </div>
-
-                    {/* Candidate Name and Role */}
-                    <div className="mb-3">
-                      <h4 className="text-card text-foreground font-body leading-tight mb-1">
-                        {alert.candidateName}
-                      </h4>
-                      <p className="text-body-size text-muted-foreground font-body">
-                        {alert.jobTitle}
-                      </p>
-                    </div>
-
-                    {/* Score Emphasis */}
-                    {alert.score !== null && alert.score !== undefined ? (
-                      <div className="text-center mb-3">
-                        <div className={`text-metric font-display ${style.text} leading-none`}>
-                          {alert.score}%
+                      {/* Details */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <RiskBadge {...style.badge} />
+                          <span className={`text-xs font-medium ${style.text}`}>
+                            {alert.score}% risk score
+                          </span>
                         </div>
-                        <p className="text-meta text-muted-foreground font-body">Score</p>
+                        
+                        <h4 className="font-semibold text-foreground text-sm mb-1 group-hover:text-primary transition-colors truncate">
+                          {alert.candidateName}
+                        </h4>
+                        
+                        <p className="text-xs text-muted-foreground mb-2">
+                          {alert.jobTitle}
+                        </p>
+                        
+                        <div className="flex items-center gap-2">
+                          <span className={`text-xs ${style.text}`}>
+                            {alert.flagCount} flag{alert.flagCount !== 1 ? 's' : ''}
+                          </span>
+                          <ChevronRight className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-all group-hover:translate-x-1" />
+                        </div>
                       </div>
-                    ) : (
-                      <div className="text-center mb-3">
-                        <RiskBadge level={style.badge.level} label={style.badge.label} />
-                      </div>
-                    )}
-
-                    {/* Alert Message */}
-                    <div className={`p-2 rounded-lg ${style.iconBg} border border-current/20`}>
-                      <p className={`text-meta font-medium ${style.text} font-body text-center`}>
-                        {alert.flagCount} {alert.flagCount === 1 ? "flag" : "flags"} detected
-                      </p>
                     </div>
-                  </div>
-                </Link>
-              );
-            })}
-          </div>
+                  </Link>
+                );
+              })}
+            </div>
+          </Panel>
         </DashboardSection>
       )}
 
@@ -1476,82 +1813,120 @@ export default function AppPage() {
             <ShieldAlert className="h-5 w-5 text-muted-foreground" />
           }
         >
-          <EmptyState
-            icon={AlertTriangle}
-            title="No risk alerts"
-            description="All candidates are within acceptable risk parameters. Continue monitoring for any changes."
-            size="sm"
-          />
+          <Panel title="">
+            <EmptyState
+              icon={AlertTriangle}
+              title="No risk alerts"
+              description="All candidates are within acceptable risk parameters."
+              size="sm"
+            />
+          </Panel>
         </DashboardSection>
       )}
 
       {/* 7. Recently Active Jobs */}
       <DashboardSection title="Recently Active Jobs">
-        {recentJobs.length === 0 ? (
-          <EmptyState
-            icon={Briefcase}
-            title="No jobs yet"
-            description="Create your first job posting to get started with hiring."
-            action={{
-              label: "Create Job",
-              onClick: () => router.push("/app/jobs"),
-              variant: "primary"
-            }}
-            size="sm"
-          />
-        ) : (
-          <div className="rounded-button border border-border overflow-hidden">
-            <table className="w-full">
-              <thead className="bg-muted/50 border-b border-border">
-                <tr>
-                  <th className="text-left px-4 py-4 text-sm font-medium text-foreground font-display">Job title</th>
-                  <th className="text-left px-4 py-4 text-sm font-medium text-foreground font-display">Seniority</th>
-                  <th className="text-left px-4 py-4 text-sm font-medium text-foreground font-display">Candidates</th>
-                  <th className="text-left px-4 py-4 text-sm font-medium text-foreground font-display">JD analysis</th>
-                  <th className="text-left px-4 py-4 text-sm font-medium text-foreground font-display">Interview kit</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {recentJobs.map((job: DashboardJobRow) => (
-                  <tr 
+        <Panel title="">
+          {recentJobs.length === 0 ? (
+            <EmptyState
+              icon={Briefcase}
+              title="No jobs yet"
+              description="Create your first job posting to get started with hiring."
+              action={{
+                label: "Create Job",
+                onClick: () => router.push("/app/jobs"),
+                variant: "primary"
+              }}
+              size="sm"
+            />
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {recentJobs.map((job: DashboardJobRow) => {
+                const statusColor = 
+                  job.status === "ACTIVE" ? "text-green-600" :
+                  job.status === "DRAFT" ? "text-amber-600" :
+                  "text-muted-foreground";
+                
+                const statusIcon = 
+                  job.status === "ACTIVE" ? <CheckCircle className="w-4 h-4" /> :
+                  job.status === "DRAFT" ? <Timer className="w-4 h-4" /> :
+                  <AlertTriangle className="w-4 h-4" />;
+                
+                return (
+                  <Link
                     key={job.id}
-                    className="hover:bg-muted/30 cursor-pointer transition-colors group"
-                    onClick={() => router.push(job.href)}
+                    href={job.href}
+                    className="group block rounded-card border border-border bg-card p-4 transition-all duration-200 hover:shadow-md hover:border-primary/50"
                   >
-                    <td className="px-4 py-4">
-                      <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-primary opacity-0 group-hover:opacity-100 transition-opacity" />
-                        <span className="text-primary hover:text-primary/80 font-body text-sm font-medium group-hover:underline">
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <div className="flex-1 min-w-0">
+                        <h4 className="font-semibold text-foreground text-sm mb-1 group-hover:text-primary transition-colors truncate">
                           {job.title}
+                        </h4>
+                        <p className="text-xs text-muted-foreground mb-2">
+                          {job.seniority}
+                        </p>
+                      </div>
+                      <div className={`flex items-center gap-1 ${statusColor}`}>
+                        {statusIcon}
+                        <span className="text-xs font-medium">
+                          {job.status}
                         </span>
                       </div>
-                    </td>
-                    <td className="px-4 py-4 text-muted-foreground font-body text-sm group-hover:text-foreground transition-colors">{job.seniority}</td>
-                    <td className="px-4 py-4 text-muted-foreground font-body text-sm group-hover:text-foreground transition-colors">{job.candidateCount}</td>
-                    <td className="px-4 py-4">
-                      <div className="flex items-center gap-2">
-                        <span className={statusBadge(job.jdAnalysisStatus)}>
-                          {job.jdAnalysisStatus}
-                        </span>
-                        <ChevronRight className="w-4 h-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-all group-hover:translate-x-1" />
+                    </div>
+                    
+                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                      <div className="flex items-center gap-1">
+                        <Users className="w-3 h-3" />
+                        <span>{job.candidateCount}</span>
                       </div>
-                    </td>
-                    <td className="px-4 py-4">
-                      <span className={statusBadge(job.interviewKitStatus)}>
-                        {job.interviewKitStatus}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+                      <div className="flex items-center gap-1">
+                        <FileCheck className="w-3 h-3" />
+                        <span className={
+                          job.jdAnalysisStatus === "DONE" ? "text-green-600" :
+                          job.jdAnalysisStatus === "RUNNING" ? "text-amber-600" :
+                          "text-muted-foreground"
+                        }>
+                          JD
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Mic className="w-3 h-3" />
+                        <span className={
+                          job.interviewKitStatus === "DONE" ? "text-green-600" :
+                          job.interviewKitStatus === "RUNNING" ? "text-amber-600" :
+                          "text-muted-foreground"
+                        }>
+                          Kit
+                        </span>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-1 mt-3 text-xs text-muted-foreground">
+                      <Clock className="w-3 h-3" />
+                      <span>Updated {formatRelativeTime(job.updatedAt)}</span>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+        </Panel>
       </DashboardSection>
 
       {/* 8. Recent Activity */}
       <DashboardSection 
-        title="Recent Activity"
+        title={
+          <div className="flex items-center gap-2">
+            Recent Activity
+            <LiveActivityPulse 
+              isLive={isLive} 
+              lastUpdate={lastUpdate} 
+              activityCount={activityCount}
+              className="text-xs"
+            />
+          </div>
+        }
         actions={
           <div className="flex items-center gap-2">
             <label className="text-sm text-muted-foreground font-body" htmlFor="activity-page-size">
@@ -1571,36 +1946,59 @@ export default function AppPage() {
               <option value={20}>20</option>
             </select>
             <span className="text-sm text-muted-foreground font-body">per page</span>
+            <button
+              onClick={checkForActivity}
+              className="text-sm font-body px-3 py-1.5 rounded-button border border-border bg-background text-foreground hover:bg-accent transition-colors flex items-center gap-1"
+            >
+              <Wifi className="w-3 h-3" />
+              Check Live
+            </button>
           </div>
         }
       >
-        <ActivityTimeline 
-          items={activityData?.items || []} 
-          isLoading={activityLoading}
-        />
+        <Panel title="">
+          <ActivityTimeline 
+            items={activityData?.items || []} 
+            isLoading={activityLoading}
+          />
 
-        {activityData && activityData.totalPages > 1 && (
-          <div className="flex items-center justify-between pt-4 border-t border-border mt-6">
-            <button
-              onClick={() => setActivityPage((p) => Math.max(1, p - 1))}
-              disabled={activityPage === 1}
-              className="text-sm font-body px-3 py-1.5 rounded-button border border-border bg-background text-foreground hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            >
-              Previous
-            </button>
-            <span className="text-sm text-muted-foreground font-body">
-              Page {activityData.page} of {activityData.totalPages}
-            </span>
-            <button
-              onClick={() => setActivityPage((p) => Math.min(activityData.totalPages, p + 1))}
-              disabled={activityPage === activityData.totalPages}
-              className="text-sm font-body px-3 py-1.5 rounded-button border border-border bg-background text-foreground hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            >
-              Next
-            </button>
-          </div>
-        )}
+          {activityData && activityData.totalPages > 1 && (
+            <div className="flex items-center justify-between pt-4 border-t border-border mt-6">
+              <button
+                onClick={() => setActivityPage((p) => Math.max(1, p - 1))}
+                disabled={activityPage === 1}
+                className="text-sm font-body px-3 py-1.5 rounded-button border border-border bg-background text-foreground hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                Previous
+              </button>
+              <span className="text-sm text-muted-foreground font-body">
+                Page {activityData.page} of {activityData.totalPages}
+              </span>
+              <button
+                onClick={() => setActivityPage((p) => Math.min(activityData.totalPages, p + 1))}
+                disabled={activityPage === activityData.totalPages}
+                className="text-sm font-body px-3 py-1.5 rounded-button border border-border bg-background text-foreground hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                Next
+              </button>
+            </div>
+          )}
+        </Panel>
       </DashboardSection>
+      
+      {/* Risk Analytics Modal */}
+      <Modal
+        isOpen={riskModalOpen}
+        onClose={() => setRiskModalOpen(false)}
+        title="Risk Analytics"
+        size="lg"
+      >
+        <RiskAnalyticsModal
+          isOpen={riskModalOpen}
+          onClose={() => setRiskModalOpen(false)}
+          data={generateRiskAnalyticsData()}
+        />
+      </Modal>
     </div>
   );
 }

@@ -43,12 +43,16 @@ interface SidebarNavItemProps {
 
 export function SidebarNavItem({ href, icon, children, isActive = false, className = "", isCollapsed = false, external = false }: SidebarNavItemProps) {
   const baseClasses = "flex items-center px-3 py-2 text-sm font-medium font-body rounded-button transition-colors";
-  const activeClasses = isActive ? "text-foreground bg-accent" : "text-muted-foreground hover:text-foreground hover:bg-accent";
+  const activeClasses = isActive 
+    ? "text-primary bg-primary/10 border border-primary/20 font-semibold" 
+    : "text-muted-foreground hover:text-foreground hover:bg-accent";
+  
+  const iconClasses = isActive ? "text-primary" : "text-muted-foreground";
   
   const linkContent = (
     <>
-      <span className="text-lg">{icon}</span>
-      {children && <span className="ml-3">{children}</span>}
+      <span className={`text-lg ${iconClasses}`}>{icon}</span>
+      {children && <span className={`ml-3 ${isActive ? 'font-semibold' : 'font-normal'}`}>{children}</span>}
     </>
   );
 

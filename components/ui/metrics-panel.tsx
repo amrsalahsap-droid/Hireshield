@@ -1,6 +1,6 @@
 import React from "react";
 import Link from "next/link";
-import { TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { TrendingUp, TrendingDown, Minus, Clock, AlertTriangle, Briefcase, FileText, Archive } from "lucide-react";
 import { Tooltip } from "@/components/ui/tooltip";
 
 interface MetricItem {
@@ -20,6 +20,7 @@ interface MetricItem {
   additionalInfo?: string;
   href?: string;
   accent?: string;
+  description?: string; // Add description field for tooltips
 }
 
 interface MetricsPanelProps {
@@ -29,6 +30,40 @@ interface MetricsPanelProps {
 }
 
 export function MetricsPanel({ title, metrics, className = "" }: MetricsPanelProps) {
+  const getMetricIcon = (metricTitle: string) => {
+    switch (metricTitle) {
+      case "Pending Evaluations":
+        return <Clock className="w-4 h-4 text-muted-foreground" />;
+      case "High Risk":
+        return <AlertTriangle className="w-4 h-4 text-muted-foreground" />;
+      case "Active Jobs":
+        return <Briefcase className="w-4 h-4 text-muted-foreground" />;
+      case "Draft Jobs":
+        return <FileText className="w-4 h-4 text-muted-foreground" />;
+      case "Archived Jobs":
+        return <Archive className="w-4 h-4 text-muted-foreground" />;
+      default:
+        return null;
+    }
+  };
+
+  const getMetricExplanation = (metricTitle: string) => {
+    switch (metricTitle) {
+      case "Pending Evaluations":
+        return "Candidates who completed interviews but are not yet evaluated";
+      case "High Risk":
+        return "Candidates flagged as high risk requiring immediate review";
+      case "Active Jobs":
+        return "Currently open positions accepting applications";
+      case "Draft Jobs":
+        return "Job positions created but not yet published";
+      case "Archived Jobs":
+        return "Closed positions and historical job records";
+      default:
+        return `${metricTitle} metric information`;
+    }
+  };
+
   return (
     <div className={`rounded-card border border-border bg-card p-6 ${className}`}>
       {/* Panel Title */}
@@ -41,17 +76,20 @@ export function MetricsPanel({ title, metrics, className = "" }: MetricsPanelPro
 
       {/* Metrics Grid */}
       <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(5, 1fr)' }}>
-        {metrics.map(({ title, value, context, subtitle, trend, metricTrend, additionalInfo, href, accent }, index) => {
+        {metrics.map(({ title, value, context, subtitle, trend, metricTrend, additionalInfo, href, accent, description }, index) => {
           const inner = (
             <Link
               href={href || "#"}
-              className={`block rounded-card border p-card h-full flex flex-col justify-between transition-all duration-200 hover:shadow-md hover:border-primary/50 ${accent || 'border-border'}`}
+              className={`block rounded-card border p-card h-full flex flex-col justify-between transition-all duration-200 hover:shadow-md hover:border-primary/50 cursor-pointer ${accent || 'border-border'}`}
             >
               {/* Header */}
               <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center gap-2">
-                  <p className="text-card text-muted-foreground font-body">{title}</p>
-                  <Tooltip content={title || "No description available"}>
+                  <div className="flex items-center gap-1.5">
+                    {getMetricIcon(title)}
+                    <p className="text-sm text-muted-foreground font-body">{title}</p>
+                  </div>
+                  <Tooltip content={getMetricExplanation(title)}>
                     <div className="w-3 h-3 text-muted-foreground cursor-help flex items-center justify-center">
                       <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <circle cx="12" cy="12" r="10" strokeWidth="2"/>
@@ -79,9 +117,9 @@ export function MetricsPanel({ title, metrics, className = "" }: MetricsPanelPro
               </div>
 
               {/* Main Value */}
-              <div className="flex items-baseline gap-2 my-2">
-                <Tooltip content={title || "Click for details"}>
-                  <p className="text-metric text-foreground font-display leading-none cursor-help">{value}</p>
+              <div className="flex items-baseline gap-2 my-3">
+                <Tooltip content={`Click to view ${title.toLowerCase()} details`}>
+                  <p className="text-[34px] font-display leading-none text-foreground cursor-pointer hover:text-primary transition-colors">{value}</p>
                 </Tooltip>
                 {metricTrend && (
                   <div className="flex items-center gap-1">
@@ -98,13 +136,13 @@ export function MetricsPanel({ title, metrics, className = "" }: MetricsPanelPro
               {/* Context Section */}
               <div className="space-y-1">
                 {context && (
-                  <p className="text-body-size text-muted-foreground font-body">{context}</p>
+                  <p className="text-xs text-muted-foreground font-body">{context}</p>
                 )}
                 {subtitle && (
-                  <p className="text-body-size text-muted-foreground font-body">{subtitle}</p>
+                  <p className="text-xs text-muted-foreground font-body">{subtitle}</p>
                 )}
                 {additionalInfo && (
-                  <p className="text-body-size text-muted-foreground font-body">{additionalInfo}</p>
+                  <p className="text-xs text-muted-foreground font-body">{additionalInfo}</p>
                 )}
               </div>
             </Link>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { usePathname } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -23,9 +24,59 @@ interface AppLayoutClientProps {
   } | null;
 }
 
+// Page title mapping
+const getPageInfo = (pathname: string) => {
+  const pathSegments = pathname.split('/').filter(Boolean);
+  
+  if (pathname === '/app' || pathname === '/app/') {
+    return { title: 'Dashboard', subtitle: 'Hiring Overview' };
+  }
+  
+  if (pathSegments[0] === 'app') {
+    const page = pathSegments[1];
+    
+    switch (page) {
+      case 'jobs':
+        return { title: 'Jobs', subtitle: 'Manage job postings' };
+      case 'candidates':
+        return { title: 'Candidates', subtitle: 'Track applicant progress' };
+      case 'evaluations':
+        return { title: 'Evaluations', subtitle: 'Review candidate assessments' };
+      case 'interviews':
+        return { title: 'Interviews', subtitle: 'Schedule and manage interviews' };
+      case 'reports':
+        return { title: 'Reports', subtitle: 'Analytics and insights' };
+      case 'billing':
+        return { title: 'Billing', subtitle: 'Subscription and usage' };
+      case 'settings':
+        return { title: 'Settings', subtitle: 'System configuration' };
+      default:
+        return { title: 'Dashboard', subtitle: 'Hiring Overview' };
+    }
+  }
+  
+  return { title: 'Dashboard', subtitle: 'Hiring Overview' };
+};
+
+// Helper function to check if a navigation item is active
+const isNavItemActive = (pathname: string, href: string, label?: string): boolean => {
+  // Exact match for dashboard
+  if (href === '/app' && (pathname === '/app' || pathname === '/app/')) {
+    return true;
+  }
+  
+  // For other pages, check if pathname starts with the href
+  if (href !== '/app') {
+    return pathname.startsWith(href);
+  }
+  
+  return false;
+};
+
 export default function AppLayoutClient({ children, user }: AppLayoutClientProps) {
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const router = useRouter();
+  const pathname = usePathname();
+  const pageInfo = getPageInfo(pathname);
 
   // Search state
   const [searchQuery, setSearchQuery] = useState("");
@@ -64,18 +115,9 @@ export default function AppLayoutClient({ children, user }: AppLayoutClientProps
     }
   ]);
 
-  // Load saved state from localStorage
-  useEffect(() => {
-    const savedState = localStorage.getItem('sidebarCollapsed');
-    if (savedState !== null) {
-      setSidebarCollapsed(savedState === 'true');
-    }
-  }, []);
-
-  // Save state to localStorage when it changes
-  useEffect(() => {
-    localStorage.setItem('sidebarCollapsed', sidebarCollapsed.toString());
-  }, [sidebarCollapsed]);
+  // Fixed sidebar dimensions
+  const sidebarWidth = 'w-64';
+  const contentMargin = 'ml-64';
 
   // Debounced search function
   const debounce = (func: Function, delay: number) => {
@@ -141,158 +183,70 @@ export default function AppLayoutClient({ children, user }: AppLayoutClientProps
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
   };
 
-  const toggleSidebar = () => {
-    setSidebarCollapsed(!sidebarCollapsed);
-  };
-
-  const sidebarWidth = sidebarCollapsed ? 'w-16' : 'w-64';
-  const contentMargin = sidebarCollapsed ? 'ml-16' : 'ml-64';
-
   return (
     <div className="min-h-screen bg-background">
       {/* Fixed Sidebar */}
       <div className={`fixed left-0 top-0 ${sidebarWidth} h-screen bg-card border-r border-border z-50 flex flex-col transition-all duration-300 ease-in-out`}>
         {/* Logo Header */}
         <div className="p-4 border-b border-border flex-shrink-0">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center space-x-3">
-              {/* HireShield Logo */}
-              <HireShieldLogo 
-                size={sidebarCollapsed ? 24 : 32}
-                className="transition-all duration-300"
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              {/* Notification Bell */}
-              <NotificationBell 
-                notifications={notifications}
-                onNotificationClick={handleNotificationClick}
-                onMarkAllRead={handleMarkAllRead}
-              />
-              
-              {/* Toggle Button */}
-              <button
-                onClick={toggleSidebar}
-                className="p-1.5 rounded-lg hover:bg-muted transition-colors"
-                title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-              >
-                {sidebarCollapsed ? (
-                  <ChevronRight className="w-4 h-4 text-muted-foreground" />
-                ) : (
-                  <X className="w-4 h-4 text-muted-foreground" />
-                )}
-              </button>
-            </div>
+          <div className="flex items-center space-x-3">
+            {/* HireShield Logo */}
+            <HireShieldLogo 
+              size={32}
+              className="transition-all duration-300"
+            />
           </div>
-
-          {/* Search Field */}
-          {!sidebarCollapsed && (
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <input
-                type="text"
-                placeholder="Search jobs and candidates..."
-                value={searchQuery}
-                onChange={(e) => handleSearchChange(e.target.value)}
-                onFocus={() => setShowSearchDropdown(searchQuery.length >= 2)}
-                onBlur={() => setTimeout(() => setShowSearchDropdown(false), 200)}
-                className="w-full pl-10 pr-4 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent placeholder:text-muted-foreground"
-              />
-              
-              {/* Search Dropdown */}
-              {showSearchDropdown && (
-                <div className="absolute top-full mt-2 w-full bg-background border border-border rounded-lg shadow-lg z-50 max-h-80 overflow-y-auto">
-                  {isSearching ? (
-                    <div className="p-4 text-center text-muted-foreground">
-                      <div className="animate-spin w-4 h-4 border-2 border-primary border-t-transparent rounded-full mx-auto mb-2"></div>
-                      Searching...
-                    </div>
-                  ) : searchResults.length === 0 ? (
-                    <div className="p-4 text-center text-muted-foreground">
-                      No results found
-                    </div>
-                  ) : (
-                    <div className="py-2">
-                      {searchResults.map((result, index) => (
-                        <button
-                          key={index}
-                          onClick={() => handleSearchResultClick(result)}
-                          className="w-full px-4 py-3 text-left hover:bg-muted transition-colors flex items-center gap-3"
-                        >
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                            result.type === 'job' 
-                              ? 'bg-blue-100 text-blue-600' 
-                              : 'bg-green-100 text-green-600'
-                          }`}>
-                            {result.type === 'job' ? (
-                              <span className="text-sm">💼</span>
-                            ) : (
-                              <span className="text-sm">👥</span>
-                            )}
-                          </div>
-                          <div className="flex-1 text-left">
-                            <p className="font-medium text-foreground text-sm">{result.title}</p>
-                            <p className="text-xs text-muted-foreground">{result.description}</p>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
         </div>
         
         {/* Navigation */}
         <nav className="flex-1 p-4 space-y-6 overflow-y-auto">
           {/* Dashboard */}
-          <SidebarSection title={sidebarCollapsed ? "" : "DASHBOARD"}>
-            <SidebarNavItem href="/app" icon="📊" isCollapsed={sidebarCollapsed}>
-              {!sidebarCollapsed && "Dashboard"}
+          <SidebarSection title="DASHBOARD">
+            <SidebarNavItem href="/app" icon="📊" isActive={isNavItemActive(pathname, '/app')}>
+              Dashboard
             </SidebarNavItem>
           </SidebarSection>
 
           {/* Hiring */}
-          <SidebarSection title={sidebarCollapsed ? "" : "HIRING"}>
-            <SidebarNavItem href="/app/jobs" icon="💼" isCollapsed={sidebarCollapsed}>
-              {!sidebarCollapsed && "Jobs"}
+          <SidebarSection title="HIRING">
+            <SidebarNavItem href="/app/jobs" icon="💼" isActive={isNavItemActive(pathname, '/app/jobs')}>
+              Jobs
             </SidebarNavItem>
-            <SidebarNavItem href="/app/candidates" icon="👥" isCollapsed={sidebarCollapsed}>
-              {!sidebarCollapsed && "Candidates"}
+            <SidebarNavItem href="/app/candidates" icon="👥" isActive={isNavItemActive(pathname, '/app/candidates')}>
+              Candidates
             </SidebarNavItem>
-            <SidebarNavItem href="/app/evaluations" icon="📋" isCollapsed={sidebarCollapsed}>
-              {!sidebarCollapsed && "Evaluations"}
+            <SidebarNavItem href="/app/evaluations" icon="📋" isActive={isNavItemActive(pathname, '/app/evaluations')}>
+              Evaluations
             </SidebarNavItem>
           </SidebarSection>
 
           {/* AI Tools */}
-          <SidebarSection title={sidebarCollapsed ? "" : "AI TOOLS"}>
-            <SidebarNavItem href="/app/jobs" icon="📄" isCollapsed={sidebarCollapsed}>
-              {!sidebarCollapsed && "JD Analysis"}
+          <SidebarSection title="AI TOOLS">
+            <SidebarNavItem href="/app/jobs" icon="📄" isActive={false}>
+              JD Analysis
             </SidebarNavItem>
-            <SidebarNavItem href="/app/jobs" icon="🎤" isCollapsed={sidebarCollapsed}>
-              {!sidebarCollapsed && "Interview Kit"}
+            <SidebarNavItem href="/app/jobs" icon="🎤" isActive={false}>
+              Interview Kit
             </SidebarNavItem>
           </SidebarSection>
 
           {/* Insights */}
-          <SidebarSection title={sidebarCollapsed ? "" : "INSIGHTS"}>
-            <SidebarNavItem href="/app/reports" icon="📈" isCollapsed={sidebarCollapsed}>
-              {!sidebarCollapsed && "Reports"}
+          <SidebarSection title="INSIGHTS">
+            <SidebarNavItem href="/app/reports" icon="📈" isActive={isNavItemActive(pathname, '/app/reports')}>
+              Reports
             </SidebarNavItem>
           </SidebarSection>
 
           {/* System */}
-          <SidebarSection title={sidebarCollapsed ? "" : "SYSTEM"}>
-            <SidebarNavItem href="/app/billing" icon="💳" isCollapsed={sidebarCollapsed}>
-              {!sidebarCollapsed && "Billing"}
+          <SidebarSection title="SYSTEM">
+            <SidebarNavItem href="/app/billing" icon="💳" isActive={isNavItemActive(pathname, '/app/billing')}>
+              Billing
             </SidebarNavItem>
-            <SidebarNavItem href="/app/settings" icon="⚙️" isCollapsed={sidebarCollapsed}>
-              {!sidebarCollapsed && "Settings"}
+            <SidebarNavItem href="/app/settings" icon="⚙️" isActive={isNavItemActive(pathname, '/app/settings')}>
+              Settings
             </SidebarNavItem>
-            <SidebarNavItem href="https://docs.hireshield.com" icon="❓" isCollapsed={sidebarCollapsed} external>
-              {!sidebarCollapsed && "Help"}
+            <SidebarNavItem href="https://docs.hireshield.com" icon="❓" external>
+              Help
             </SidebarNavItem>
           </SidebarSection>
         </nav>
@@ -307,21 +261,75 @@ export default function AppLayoutClient({ children, user }: AppLayoutClientProps
       <div className={`${contentMargin} min-h-screen flex flex-col transition-all duration-300 ease-in-out`}>
         <header className="bg-card shadow-subtle border-b border-border flex-shrink-0">
           <div className="px-6 py-4 flex items-center justify-between">
-            <div className="text-muted-foreground font-body">
-              HireShield - Decision Intelligence Platform
+            <div className="flex flex-col">
+              <h1 className="text-xl font-semibold text-foreground font-display">{pageInfo.title}</h1>
+              <p className="text-sm text-muted-foreground font-body">{pageInfo.subtitle}</p>
             </div>
-            {/* Mobile menu button (always visible when sidebar is collapsed) */}
-            <button
-              onClick={toggleSidebar}
-              className="lg:hidden p-2 rounded-lg hover:bg-muted transition-colors"
-              title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-            >
-              {sidebarCollapsed ? (
-                <Menu className="w-5 h-5 text-muted-foreground" />
-              ) : (
-                <X className="w-5 h-5 text-muted-foreground" />
-              )}
-            </button>
+            
+            <div className="flex items-center gap-4">
+              {/* Search Field */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <input
+                  type="text"
+                  placeholder="Search jobs and candidates..."
+                  value={searchQuery}
+                  onChange={(e) => handleSearchChange(e.target.value)}
+                  onFocus={() => setShowSearchDropdown(searchQuery.length >= 2)}
+                  onBlur={() => setTimeout(() => setShowSearchDropdown(false), 200)}
+                  className="w-64 pl-10 pr-4 py-2 text-sm bg-background border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent placeholder:text-muted-foreground"
+                />
+                
+                {/* Search Dropdown */}
+                {showSearchDropdown && (
+                  <div className="absolute top-full mt-2 w-full bg-background border border-border rounded-lg shadow-lg z-50 max-h-80 overflow-y-auto">
+                    {isSearching ? (
+                      <div className="p-4 text-center text-muted-foreground">
+                        <div className="animate-spin w-4 h-4 border-2 border-primary border-t-transparent rounded-full mx-auto mb-2"></div>
+                        Searching...
+                      </div>
+                    ) : searchResults.length === 0 ? (
+                      <div className="p-4 text-center text-muted-foreground">
+                        No results found
+                      </div>
+                    ) : (
+                      <div className="py-2">
+                        {searchResults.map((result, index) => (
+                          <button
+                            key={index}
+                            onClick={() => handleSearchResultClick(result)}
+                            className="w-full px-4 py-3 text-left hover:bg-muted transition-colors flex items-center gap-3"
+                          >
+                            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                              result.type === 'job' 
+                                ? 'bg-blue-100 text-blue-600' 
+                                : 'bg-green-100 text-green-600'
+                            }`}>
+                              {result.type === 'job' ? (
+                                <span className="text-sm">💼</span>
+                              ) : (
+                                <span className="text-sm">👥</span>
+                              )}
+                            </div>
+                            <div className="flex-1 text-left">
+                              <p className="font-medium text-foreground text-sm">{result.title}</p>
+                              <p className="text-xs text-muted-foreground">{result.description}</p>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Notification Bell */}
+              <NotificationBell 
+                notifications={notifications}
+                onNotificationClick={handleNotificationClick}
+                onMarkAllRead={handleMarkAllRead}
+              />
+            </div>
           </div>
         </header>
         
