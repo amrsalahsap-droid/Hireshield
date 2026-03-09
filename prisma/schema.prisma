@@ -80,6 +80,7 @@ model Job {
   org         Org          @relation(fields: [orgId], references: [id], onDelete: Cascade)
   interviews Interview[]
   evaluations Evaluation[]
+  skills     JobSkill[]
   
   @@index([orgId])
   @@index([jdAnalyzedAt])
@@ -202,4 +203,45 @@ model AuditLog {
   @@index([entityType, entityId])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+model Skill {
+  id                String   @id @default(cuid())
+  name              String
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  jobSkills         JobSkill[]
+  
+  @@unique([name])
+  @@map("skills")
+}
+
+model JobSkill {
+  id               String   @id @default(cuid())
+  jobId            String
+  skillId          String
+  experienceLevel  ExperienceLevel
+  requirementType  RequirementType
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  
+  job    Job    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  skill  Skill  @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  
+  @@unique([jobId, skillId])
+  @@index([jobId])
+  @@index([skillId])
+  @@map("job_skills")
+}
+
+enum ExperienceLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+  EXPERT
+}
+
+enum RequirementType {
+  REQUIRED
+  OPTIONAL
 }
