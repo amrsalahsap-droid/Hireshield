@@ -22,6 +22,8 @@ interface Job {
   interviewKitJson: any;
   interviewKitGeneratedAt: string | null;
   interviewKitPromptVersion: string | null;
+  interviewKitStatus: 'NOT_STARTED' | 'RUNNING' | 'DONE' | 'FAILED';
+  interviewKitLastError: string | null;
 }
 
 interface Interview {
@@ -66,6 +68,7 @@ export default function JobDetailsPage() {
   const [isCreatingEvaluation, setIsCreatingEvaluation] = useState(false);
   const [isAnalyzingJD, setIsAnalyzingJD] = useState(false);
   const [isGeneratingKit, setIsGeneratingKit] = useState(false);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [analysisRequestId, setAnalysisRequestId] = useState<string | null>(null);
   const [kitError, setKitError] = useState<string | null>(null);
@@ -268,6 +271,45 @@ export default function JobDetailsPage() {
     }
   };
 
+  // Update Job Status function
+  const updateJobStatus = async (newStatus: string) => {
+    if (!job || newStatus === job.status) return;
+    
+    setIsUpdatingStatus(true);
+    
+    try {
+      const response = await fetch(`/api/jobs/${job.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-org-id': 'cmm87bloy0000v9nvvzyt6aqn'
+        },
+        body: JSON.stringify({
+          status: newStatus
+        })
+      });
+      
+      if (response.ok) {
+        // Refresh job data to show the updated status
+        await fetchJob();
+      } else {
+        const errorData = await response.json();
+        console.error('Error updating job status:', errorData);
+        // Optionally show error message to user
+      }
+    } catch (error) {
+      console.error('Error updating job status:', error);
+      // Optionally show error message to user
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
+
+  // Helper function to check if job can receive candidates
+  const canReceiveCandidates = () => {
+    return job?.status === 'ACTIVE';
+  };
+
   // Refresh all data
   const refreshData = async () => {
     setLoading(true);
@@ -282,9 +324,32 @@ export default function JobDetailsPage() {
     }
   }, [params.id]);
 
+  // Check for analyze parameter and trigger JD analysis
+  useEffect(() => {
+    if (typeof window !== 'undefined' && job) {
+      const urlParams = new URLSearchParams(window.location.search);
+      const shouldAnalyze = urlParams.get('analyze') === 'true';
+      
+      if (shouldAnalyze && job.jdAnalysisStatus === 'NOT_STARTED' && !isAnalyzingJD) {
+        // Trigger JD analysis
+        analyzeJD();
+        
+        // Clean up the URL parameter
+        const newUrl = window.location.pathname;
+        window.history.replaceState({}, '', newUrl);
+      }
+    }
+  }, [job, isAnalyzingJD]);
+
   // Handle interview creation
   const handleCreateInterview = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Check if job can receive candidates
+    if (!canReceiveCandidates()) {
+      alert('Job must be Active to create interviews. Please change the job status to Active first.');
+      return;
+    }
     
     // Validate form
     const newErrors = {
@@ -362,6 +427,12 @@ export default function JobDetailsPage() {
   const handleCreateEvaluation = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Check if job can receive candidates
+    if (!canReceiveCandidates()) {
+      alert('Job must be Active to create evaluations. Please change the job status to Active first.');
+      return;
+    }
+    
     // Validate form
     const newErrors = {
       candidate: "",
@@ -422,6 +493,88 @@ export default function JobDetailsPage() {
     }
   };
 
+  const getJDAnalysisStatus = (status: string | null | undefined, hasExtraction: any) => {
+    // If we have extraction data, consider it done regardless of status
+    if (hasExtraction) {
+      return (
+        <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-safe/10 text-safe">
+          ✓ Completed
+        </span>
+      );
+    }
+
+    // Otherwise show the actual status
+    switch (status) {
+      case "RUNNING":
+        return (
+          <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-investigate/10 text-investigate">
+            <div className="animate-spin rounded-full h-3 w-3 border-b border-current mr-1"></div>
+            Running
+          </span>
+        );
+      case "FAILED":
+        return (
+          <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-destructive/10 text-destructive">
+            ⚠️ Failed
+          </span>
+        );
+      case "DONE":
+        return (
+          <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-safe/10 text-safe">
+            ✓ Completed
+          </span>
+        );
+      case "NOT_STARTED":
+      default:
+        return (
+          <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-muted/10 text-muted-foreground">
+            ○ Not Started
+          </span>
+        );
+    }
+  };
+
+  const getInterviewKitStatus = (status: string | null | undefined, hasKit: any) => {
+    // If we have kit data, consider it done regardless of status
+    if (hasKit) {
+      return (
+        <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-safe/10 text-safe">
+          ✓ Generated
+        </span>
+      );
+    }
+
+    // Otherwise show the actual status
+    switch (status) {
+      case "RUNNING":
+        return (
+          <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-investigate/10 text-investigate">
+            <div className="animate-spin rounded-full h-3 w-3 border-b border-current mr-1"></div>
+            Generating
+          </span>
+        );
+      case "FAILED":
+        return (
+          <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-destructive/10 text-destructive">
+            ⚠️ Failed
+          </span>
+        );
+      case "DONE":
+        return (
+          <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-safe/10 text-safe">
+            ✓ Generated
+          </span>
+        );
+      case "NOT_STARTED":
+      default:
+        return (
+          <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-muted/10 text-muted-foreground">
+            ○ Not Started
+          </span>
+        );
+    }
+  };
+
   // Loading state
   if (loading) {
     return <LoadingState message="Loading job details..." />;
@@ -468,32 +621,129 @@ export default function JobDetailsPage() {
             <div className="h-4 w-px bg-border"></div>
             <h1 className="text-2xl font-bold text-foreground font-display">{job.title}</h1>
           </div>
-          <span className={`inline-flex px-3 py-1 text-sm font-semibold rounded-full ${getStatusColor(job.status)}`}>
-            {job.status}
-          </span>
+          <div className="flex items-center space-x-3">
+            <span className={`inline-flex px-3 py-1 text-sm font-semibold rounded-full ${getStatusColor(job.status)}`}>
+              {job.status}
+            </span>
+            {/* JD Analysis Status */}
+            <div className="flex items-center space-x-2">
+              <span className="text-sm text-muted-foreground">JD Analysis:</span>
+              {getJDAnalysisStatus(job.jdAnalysisStatus, job.jdExtractionJson)}
+            </div>
+            {/* Interview Kit Status */}
+            <div className="flex items-center space-x-2">
+              <span className="text-sm text-muted-foreground">Interview Kit:</span>
+              {getInterviewKitStatus(job.interviewKitStatus, job.interviewKitJson)}
+            </div>
+          </div>
         </div>
         <p className="text-muted-foreground font-body">
           Manage job details and track candidate applications.
         </p>
       </div>
 
+      {/* Job Status Management */}
+      <div className="mb-8 bg-white shadow rounded-lg p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-medium text-foreground font-display">Job Status & Visibility</h3>
+          <span className={`inline-flex px-3 py-1 text-sm font-semibold rounded-full ${getStatusColor(job.status)}`}>
+            {job.status}
+          </span>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label className="block text-sm font-medium text-foreground font-body mb-2">
+              Change Job Status
+            </label>
+            <select
+              value={job.status}
+              onChange={(e) => updateJobStatus(e.target.value)}
+              className="w-full px-3 py-2 border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring bg-background text-foreground font-body"
+              disabled={isUpdatingStatus}
+            >
+              <option value="DRAFT">Draft - Not visible to candidates</option>
+              <option value="ACTIVE">Active - Accepting candidates</option>
+              <option value="ARCHIVED">Archived - No longer accepting candidates</option>
+            </select>
+            {isUpdatingStatus && (
+              <p className="mt-2 text-sm text-muted-foreground">Updating status...</p>
+            )}
+          </div>
+          
+          <div>
+            <h4 className="text-sm font-medium text-foreground font-body mb-2">Status Impact</h4>
+            <div className="text-sm text-muted-foreground">
+              {job.status === 'DRAFT' && (
+                <p>📝 Job is saved but not visible to candidates. You can still edit and prepare the job posting.</p>
+              )}
+              {job.status === 'ACTIVE' && (
+                <p>🚀 Job is published and accepting applications from candidates. Candidates can see and apply to this job.</p>
+              )}
+              {job.status === 'ARCHIVED' && (
+                <p>📦 Job is no longer accepting candidates but kept for records. Existing applications remain accessible.</p>
+              )}
+            </div>
+          </div>
+        </div>
+        
+        {/* Status-specific warnings */}
+        {job.status === 'DRAFT' && (
+          <div className="mt-4 bg-yellow-50 border border-yellow-200 rounded-md p-3">
+            <p className="text-sm text-yellow-800">
+              <strong>Note:</strong> This job will not appear in public job listings until you change the status to "Active".
+            </p>
+          </div>
+        )}
+        
+        {job.status === 'ARCHIVED' && (
+          <div className="mt-4 bg-gray-50 border border-gray-200 rounded-md p-3">
+            <p className="text-sm text-gray-700">
+              <strong>Note:</strong> This job is no longer accepting new applications. You can reactivate it by changing the status back to "Active".
+            </p>
+          </div>
+        )}
+      </div>
+
       {/* Action Buttons */}
       <div className="mb-8 flex flex-wrap gap-3">
         <Link
           href="/app/candidates"
-          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 transition-colors"
+          className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md transition-colors ${
+            canReceiveCandidates() 
+              ? 'text-white bg-green-600 hover:bg-green-700' 
+              : 'text-gray-400 bg-gray-300 cursor-not-allowed'
+          }`}
+          onClick={(e) => {
+            if (!canReceiveCandidates()) {
+              e.preventDefault();
+            }
+          }}
+          title={!canReceiveCandidates() ? "Job must be Active to add candidates" : ""}
         >
           👤 Add Candidate
         </Link>
         <button
           onClick={() => setShowInterviewModal(true)}
-          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 transition-colors"
+          disabled={!canReceiveCandidates()}
+          title={!canReceiveCandidates() ? "Job must be Active to create interviews" : ""}
+          className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md transition-colors ${
+            canReceiveCandidates() 
+              ? 'text-white bg-blue-600 hover:bg-blue-700' 
+              : 'text-gray-400 bg-gray-300 cursor-not-allowed'
+          }`}
         >
           🎤 Create Interview
         </button>
         <button
           onClick={() => setShowEvaluationModal(true)}
-          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 transition-colors"
+          disabled={!canReceiveCandidates()}
+          title={!canReceiveCandidates() ? "Job must be Active to create evaluations" : ""}
+          className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md transition-colors ${
+            canReceiveCandidates() 
+              ? 'text-white bg-purple-600 hover:bg-purple-700' 
+              : 'text-gray-400 bg-gray-300 cursor-not-allowed'
+          }`}
         >
           📊 Create Evaluation
         </button>
@@ -505,11 +755,11 @@ export default function JobDetailsPage() {
           {isAnalyzingJD ? (
             <>
               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-              {job?.jdExtractionJson ? 'Re-analyzing...' : 'Analyzing...'}
+              {job?.jdExtractionJson ? 'Re-analyzing...' : 'Running Analysis...'}
             </>
           ) : (
             <>
-              🔍 {job?.jdExtractionJson ? 'Re-analyze JD' : 'Analyze JD'}
+              🔍 {job?.jdExtractionJson ? 'Re-run JD Analysis' : 'Run JD Analysis'}
             </>
           )}
         </button>
@@ -616,7 +866,7 @@ export default function JobDetailsPage() {
                   disabled={isAnalyzingJD}
                   className="text-sm font-medium text-yellow-600 hover:text-yellow-800 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {isAnalyzingJD ? 'Analyzing...' : 'Analyze JD First'}
+                  {isAnalyzingJD ? 'Running Analysis...' : 'Run JD Analysis First'}
                 </button>
               </div>
             </div>
@@ -673,19 +923,41 @@ export default function JobDetailsPage() {
                   <div className="space-x-3">
                     <Link
                       href="/app/candidates"
-                      className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 transition-colors"
+                      className={`inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md transition-colors ${
+                        canReceiveCandidates() 
+                          ? 'text-white bg-green-600 hover:bg-green-700' 
+                          : 'text-gray-400 bg-gray-300 cursor-not-allowed'
+                      }`}
+                      onClick={(e) => {
+                        if (!canReceiveCandidates()) {
+                          e.preventDefault();
+                        }
+                      }}
+                      title={!canReceiveCandidates() ? "Job must be Active to add candidates" : ""}
                     >
                       Add Candidate
                     </Link>
                     <button
                       onClick={() => setShowInterviewModal(true)}
-                      className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 transition-colors"
+                      disabled={!canReceiveCandidates()}
+                      title={!canReceiveCandidates() ? "Job must be Active to create interviews" : ""}
+                      className={`inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md transition-colors ${
+                        canReceiveCandidates() 
+                          ? 'text-white bg-blue-600 hover:bg-blue-700' 
+                          : 'text-gray-400 bg-gray-300 cursor-not-allowed'
+                      }`}
                     >
                       Create Interview
                     </button>
                     <button
                       onClick={() => setShowEvaluationModal(true)}
-                      className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 transition-colors"
+                      disabled={!canReceiveCandidates()}
+                      title={!canReceiveCandidates() ? "Job must be Active to create evaluations" : ""}
+                      className={`inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md transition-colors ${
+                        canReceiveCandidates() 
+                          ? 'text-white bg-purple-600 hover:bg-purple-700' 
+                          : 'text-gray-400 bg-gray-300 cursor-not-allowed'
+                      }`}
                     >
                       Create Evaluation
                     </button>
