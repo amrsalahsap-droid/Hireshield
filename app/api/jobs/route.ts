@@ -9,18 +9,83 @@ export const GET = withOrgContext(async (request: NextRequest, orgId: string) =>
     // Parse query parameters for filtering
     const { searchParams } = new URL(request.url);
     const status = searchParams.get("status");
+    const search = searchParams.get("search");
+    const department = searchParams.get("department");
+    const hiringManager = searchParams.get("hiringManager");
+    const createdAfter = searchParams.get("createdAfter");
+    const createdBefore = searchParams.get("createdBefore");
+    const sortBy = searchParams.get("sortBy") || "createdAt";
+    const sortDirection = searchParams.get("sortDirection") || "desc";
     const limit = parseInt(searchParams.get("limit") || "20");
     const offset = parseInt(searchParams.get("offset") || "0");
 
     const where: any = { orgId };
+    
+    // Add status filter
     if (status) {
       where.status = status.toUpperCase();
+    }
+    
+    // Add search functionality for title, department, and hiring manager
+    if (search && search.trim()) {
+      const searchTerm = search.trim();
+      where.OR = [
+        { title: { contains: searchTerm, mode: 'insensitive' } },
+        { department: { contains: searchTerm, mode: 'insensitive' } },
+        { hiringManager: { contains: searchTerm, mode: 'insensitive' } }
+      ];
+    }
+    
+    // Add department filter (if not already in search OR)
+    if (department && department.trim()) {
+      const deptTerm = department.trim();
+      if (where.OR) {
+        // If we already have OR conditions from search, we need to combine them
+        where.AND = [
+          { OR: where.OR },
+          { department: { contains: deptTerm, mode: 'insensitive' } }
+        ];
+        delete where.OR;
+      } else {
+        where.department = { contains: deptTerm, mode: 'insensitive' };
+      }
+    }
+    
+    // Add hiring manager filter (if not already in search OR)
+    if (hiringManager && hiringManager.trim()) {
+      const managerTerm = hiringManager.trim();
+      if (where.OR || where.AND) {
+        // If we already have conditions, we need to combine them
+        const existingCondition = where.OR || where.AND;
+        where.AND = Array.isArray(existingCondition) ? existingCondition : [existingCondition];
+        where.AND.push({ hiringManager: { contains: managerTerm, mode: 'insensitive' } });
+        delete where.OR;
+      } else {
+        where.hiringManager = { contains: managerTerm, mode: 'insensitive' };
+      }
+    }
+    
+    // Add creation date filters
+    if (createdAfter) {
+      const afterDate = new Date(createdAfter);
+      if (!isNaN(afterDate.getTime())) {
+        where.createdAt = { ...where.createdAt, gte: afterDate };
+      }
+    }
+    
+    if (createdBefore) {
+      const beforeDate = new Date(createdBefore);
+      // Add one day to include the entire "before" date
+      beforeDate.setDate(beforeDate.getDate() + 1);
+      if (!isNaN(beforeDate.getTime())) {
+        where.createdAt = { ...where.createdAt, lt: beforeDate };
+      }
     }
 
     const [jobs, total] = await Promise.all([
       prisma.job.findMany({
         where,
-        orderBy: { createdAt: "desc" },
+        orderBy: { [sortBy]: sortDirection },
         take: Math.min(limit, 100), // Max 100 items
         skip: offset,
         include: {
@@ -28,14 +93,88 @@ export const GET = withOrgContext(async (request: NextRequest, orgId: string) =>
             include: {
               skill: true
             }
+          },
+          interviews: {
+            select: {
+              candidateId: true,
+              createdAt: true
+            }
+          },
+          evaluations: {
+            select: {
+              candidateId: true,
+              status: true,
+              completedAt: true,
+              riskLevel: true
+            }
           }
         }
       }),
       prisma.job.count({ where }),
     ]);
 
+    // Process jobs to add candidate counts and pipeline progress
+    const jobsWithPipelineData = jobs.map((job: any) => {
+      const uniqueCandidates = new Set((job.interviews || []).map((i: any) => i.candidateId));
+      const candidateCount = Array.from(uniqueCandidates).length;
+      
+      // Count interviews (unique candidates with interviews)
+      const interviewCandidates = new Set((job.interviews || []).map((i: any) => i.candidateId));
+      const interviewCount = Array.from(interviewCandidates).length;
+      
+      // Count decision pending (evaluations that are completed but not final decision)
+      const decisionPendingCandidates = new Set(
+        (job.evaluations || [])
+          .filter((e: any) => e.status === 'PENDING' && e.completedAt)
+          .map((e: any) => e.candidateId)
+      );
+      const decisionPendingCount = Array.from(decisionPendingCandidates).length;
+      
+      // Count high-risk candidates (evaluations with HIGH risk level)
+      const highRiskCandidates = new Set(
+        (job.evaluations || [])
+          .filter((e: any) => e.riskLevel === 'HIGH')
+          .map((e: any) => e.candidateId)
+      );
+      const highRiskCount = Array.from(highRiskCandidates).length;
+      
+      // Calculate hiring health based on various factors
+      let hiringHealth = null;
+      
+      // Only calculate health if we have some data
+      if (candidateCount > 0 || job.createdAt) {
+        const daysSinceCreated = Math.floor((new Date().getTime() - new Date(job.createdAt).getTime()) / (1000 * 60 * 60 * 24));
+        const riskRatio = candidateCount > 0 ? highRiskCount / candidateCount : 0;
+        const interviewRatio = candidateCount > 0 ? interviewCount / candidateCount : 0;
+        
+        // Health calculation logic
+        if (riskRatio > 0.5) {
+          hiringHealth = 'BLOCKED'; // Too many high-risk candidates
+        } else if (daysSinceCreated > 30 && interviewRatio < 0.3) {
+          hiringHealth = 'SLOW'; // Old job with low interview rate
+        } else if (daysSinceCreated > 60 && candidateCount < 3) {
+          hiringHealth = 'SLOW'; // Old job with very few candidates
+        } else if (interviewRatio > 0.7 && riskRatio < 0.2) {
+          hiringHealth = 'HEALTHY'; // Good interview rate, low risk
+        } else if (candidateCount >= 5 && interviewRatio >= 0.4 && riskRatio < 0.3) {
+          hiringHealth = 'HEALTHY'; // Decent activity and low risk
+        } else if (candidateCount > 0) {
+          hiringHealth = 'SLOW'; // Some activity but not great
+        }
+      }
+      
+      return {
+        ...job,
+        candidateCount,
+        interviewCount,
+        decisionPendingCount,
+        highRiskCount,
+        hiringHealth
+      };
+    });
+
     return NextResponse.json({ 
-      jobs,
+      jobs: jobsWithPipelineData,
       pagination: {
         total,
         limit,

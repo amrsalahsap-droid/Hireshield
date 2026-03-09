@@ -224,6 +224,35 @@
   .shadow-subtle {
     box-shadow: var(--shadow-subtle);
   }
+
+  /* Modal Animations */
+  .animate-fade-in {
+    animation: fadeIn 0.2s ease-out;
+  }
+  
+  .animate-scale-in {
+    animation: scaleIn 0.18s ease-out;
+  }
+  
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+  
+  @keyframes scaleIn {
+    from {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
 }
 
 /* Clerk auth: force button colors to match landing (accent/teal, not blue) */

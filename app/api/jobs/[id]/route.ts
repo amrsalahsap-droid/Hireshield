@@ -179,6 +179,221 @@ export const PATCH = withOrgContext(async (request: NextRequest, orgId: string, 
   }
 });
 
+// PUT /api/jobs/[id] - Update job (full update)
+export const PUT = withOrgContext(async (request: NextRequest, orgId: string, { params }: { params: { id: string } }) => {
+  try {
+    const { id } = params;
+    const body = await request.json();
+    const { 
+      title, 
+      rawJD, 
+      department, 
+      location, 
+      employmentType, 
+      seniorityLevel, 
+      hiringManager, 
+      numberOfOpenings, 
+      status, 
+      skills 
+    } = body;
+
+    if (!id) {
+      return NextResponse.json(
+        { error: "Job ID is required" },
+        { status: 400 }
+      );
+    }
+
+    // Check if job exists and belongs to the organization
+    const existingJob = await prisma.job.findFirst({
+      where: { id, orgId },
+    });
+
+    if (!existingJob) {
+      return NextResponse.json(
+        { error: "Job not found" },
+        { status: 404 }
+      );
+    }
+
+    // Validation for updates
+    const updateData: any = {
+      updatedAt: new Date(),
+    };
+
+    if (title !== undefined) {
+      if (typeof title !== "string" || title.trim().length === 0) {
+        return NextResponse.json(
+          { error: "Title must be a non-empty string" },
+          { status: 400 }
+        );
+      }
+      if (title.length > 200) {
+        return NextResponse.json(
+          { error: "Title must be less than 200 characters" },
+          { status: 400 }
+        );
+      }
+      updateData.title = title.trim();
+    }
+
+    if (rawJD !== undefined) {
+      if (typeof rawJD !== "string") {
+        return NextResponse.json(
+          { error: "rawJD must be a string" },
+          { status: 400 }
+        );
+      }
+      if (rawJD.trim().length === 0) {
+        return NextResponse.json(
+          { error: "Job description cannot be empty" },
+          { status: 400 }
+        );
+      }
+      if (rawJD.length > 10000) {
+        return NextResponse.json(
+          { error: "Job description must be less than 10,000 characters" },
+          { status: 400 }
+        );
+      }
+      updateData.rawJD = rawJD;
+    }
+
+    if (department !== undefined) {
+      if (department && typeof department === "string" && department.length > 100) {
+        return NextResponse.json(
+          { error: "Department must be less than 100 characters" },
+          { status: 400 }
+        );
+      }
+      updateData.department = department?.trim() || null;
+    }
+
+    if (location !== undefined) {
+      if (location && typeof location === "string" && location.length > 200) {
+        return NextResponse.json(
+          { error: "Location must be less than 200 characters" },
+          { status: 400 }
+        );
+      }
+      updateData.location = location?.trim() || null;
+    }
+
+    if (employmentType !== undefined) {
+      updateData.employmentType = employmentType || null;
+    }
+
+    if (seniorityLevel !== undefined) {
+      updateData.seniorityLevel = seniorityLevel || null;
+    }
+
+    if (hiringManager !== undefined) {
+      if (hiringManager && typeof hiringManager === "string" && hiringManager.length > 100) {
+        return NextResponse.json(
+          { error: "Hiring manager must be less than 100 characters" },
+          { status: 400 }
+        );
+      }
+      updateData.hiringManager = hiringManager?.trim() || null;
+    }
+
+    if (numberOfOpenings !== undefined) {
+      const openings = parseInt(numberOfOpenings);
+      if (isNaN(openings) || openings < 1 || openings > 100) {
+        return NextResponse.json(
+          { error: "Number of openings must be between 1 and 100" },
+          { status: 400 }
+        );
+      }
+      updateData.numberOfOpenings = openings;
+    }
+
+    if (status !== undefined) {
+      if (!["DRAFT", "ACTIVE", "ARCHIVED"].includes(status)) {
+        return NextResponse.json(
+          { error: "Status must be one of: DRAFT, ACTIVE, ARCHIVED" },
+          { status: 400 }
+        );
+      }
+      updateData.status = status;
+    }
+
+    // Ensure there's something to update
+    if (Object.keys(updateData).length <= 1) { // Only updatedAt
+      return NextResponse.json(
+        { error: "At least one field must be provided for update" },
+        { status: 400 }
+      );
+    }
+
+    const updatedJob = await prisma.job.update({
+      where: { id },
+      data: updateData,
+      include: {
+        skills: {
+          include: {
+            skill: true
+          }
+        }
+      }
+    });
+
+    // Handle skills update if provided
+    if (skills && Array.isArray(skills)) {
+      // Remove existing skill associations
+      await prisma.jobSkill.deleteMany({
+        where: { jobId: id }
+      });
+
+      // Add new skill associations
+      if (skills.length > 0) {
+        const skillData = skills.map((skillName: string) => ({
+          jobId: id,
+          skill: {
+            connect: {
+              name_orgId: {
+                name: skillName.trim(),
+                orgId
+              }
+            }
+          }
+        }));
+
+        await prisma.job.update({
+          where: { id },
+          data: {
+            skills: {
+              create: skillData
+            }
+          }
+        });
+      }
+
+      // Fetch the updated job with skills
+      const jobWithSkills = await prisma.job.findUnique({
+        where: { id },
+        include: {
+          skills: {
+            include: {
+              skill: true
+            }
+          }
+        }
+      });
+
+      return NextResponse.json(jobWithSkills);
+    }
+
+    return NextResponse.json(updatedJob);
+  } catch (error) {
+    console.error("Error updating job:", error);
+    return NextResponse.json(
+      { error: "Failed to update job" },
+      { status: 500 }
+    );
+  }
+});
+
 // DELETE /api/jobs/[id] - Archive job (soft delete)
 export const DELETE = withOrgContext(async (request: NextRequest, orgId: string, { params }: { params: { id: string } }) => {
   try {
@@ -217,587 +432,6 @@ export const DELETE = withOrgContext(async (request: NextRequest, orgId: string,
     console.error("Error archiving job:", error);
     return NextResponse.json(
       { error: "Failed to archive job" },
-      { status: 500 }
-    );
-  }
-});
-
-// POST /api/jobs/[id]/analyze-jd - Analyze job description with AI
-export const POST = withOrgContext(async (request: NextRequest, orgId: string, { params }: { params: { id: string } }) => {
-  try {
-    const { id } = params;
-
-    if (!id) {
-      return NextResponse.json(
-        { error: "Job ID is required" },
-        { status: 400 }
-      );
-    }
-
-    // Parse query parameters for force flag
-    const { searchParams } = new URL(request.url);
-    const force = searchParams.get('force') === '1';
-
-    // Check if job exists and belongs to the organization
-    const job = await prisma.job.findFirst({
-      where: { id, orgId },
-    });
-
-    if (!job) {
-      return NextResponse.json(
-        { error: "Job not found" },
-        { status: 404 }
-      );
-    }
-
-    // Input validation - check if JD exists and not too large
-    if (!job.rawJD || job.rawJD.trim().length === 0) {
-      return NextResponse.json(
-        { error: "Job description is missing or empty" },
-        { status: 400 }
-      );
-    }
-
-    if (job.rawJD.length > 10000) {
-      return NextResponse.json(
-        { error: "Job description is too large (max 10,000 characters)" },
-        { status: 413 }
-      );
-    }
-
-    // Generate request ID for tracking
-    const requestId = randomUUID();
-
-    // Get current user for audit logging
-    let actorUserId: string | null = null;
-    try {
-      const currentUser = await getCurrentUserOrThrow();
-      // Get the database user ID from clerk user ID
-      const dbUser = await prisma.user.findUnique({
-        where: { clerkUserId: currentUser.clerkUserId },
-        select: { id: true }
-      });
-      actorUserId = dbUser?.id || null;
-    } catch (authError) {
-      // Continue without audit logging if auth fails (development mode)
-      console.warn('Could not get user for audit logging:', authError);
-    }
-
-    // Log JD analysis request
-    if (actorUserId) {
-      await createAuditLog({
-        orgId,
-        actorUserId,
-        action: AUDIT_ACTIONS.JOB_JD_ANALYZE_REQUESTED,
-        entityType: 'JOB',
-        entityId: id,
-        metadata: { requestId },
-      });
-    }
-
-    try {
-      // Check for cached results (unless force flag is set)
-      if (!force && job.jdExtractionJson && job.jdAnalyzedAt) {
-        return NextResponse.json({
-          jdExtraction: job.jdExtractionJson,
-          requestId,
-          cached: true,
-          analyzedAt: job.jdAnalyzedAt,
-          promptVersion: job.jdPromptVersion,
-          meta: {
-            tokens: { input: 0, output: 0, total: 0 },
-            cost: { input: 0, output: 0, total: 0 },
-            latency: 0,
-            model: 'cached',
-          },
-        });
-      }
-
-      // Update job status to RUNNING
-      await prisma.job.update({
-        where: { id },
-        data: {
-          jdAnalysisStatus: 'RUNNING',
-          jdLastError: null,
-        },
-      });
-
-      // Build prompt using Phase 3 prompt builder
-      const prompt = jdAnalyzerV1.build({
-        jobTitle: job.title,
-        rawJD: job.rawJD,
-      });
-
-      // Call LLM with JDExtraction_v1 schema parsing
-      const result = await callLLMAndParseJSON({
-        promptId: jdAnalyzerV1.id,
-        system: prompt.system,
-        user: prompt.user,
-        schema: JDExtraction_v1,
-        requestId,
-        orgId,
-      });
-
-      // Increment usage counter (only when AI is actually called, not cached)
-      try {
-        await prisma.org.update({
-          where: { id: orgId },
-          data: {
-            jdAnalysisCount: {
-              increment: 1,
-            },
-          },
-        });
-      } catch (usageError) {
-        // Log usage tracking error but don't fail the main operation
-        console.error('Failed to increment usage counter:', usageError);
-      }
-
-      // Save extraction results to database
-      const updatedJob = await prisma.job.update({
-        where: { id },
-        data: {
-          jdExtractionJson: result.value,
-          jdAnalyzedAt: new Date(),
-          jdPromptVersion: jdAnalyzerV1.version,
-          jdAnalysisStatus: 'DONE',
-          jdLastError: null,
-      },
-      });
-
-      // Log successful completion
-      if (actorUserId) {
-        await createAuditLog({
-          orgId,
-          actorUserId,
-          action: AUDIT_ACTIONS.JOB_JD_ANALYZE_COMPLETED,
-          entityType: 'JOB',
-          entityId: id,
-          metadata: { requestId },
-        });
-      }
-
-      return NextResponse.json({
-        jdExtraction: result.value,
-        requestId,
-        cached: false,
-        analyzedAt: updatedJob.jdAnalyzedAt,
-        promptVersion: updatedJob.jdPromptVersion,
-        meta: result.meta,
-      });
-
-    } catch (error) {
-      console.error("Error analyzing job description:", error);
-      
-      // Update job status to FAILED with error details
-      try {
-        await prisma.job.update({
-          where: { id },
-          data: {
-            jdAnalysisStatus: 'FAILED',
-            jdLastError: error instanceof Error ? error.message : 'Unknown error',
-          },
-        });
-      } catch (updateError) {
-        console.error("Failed to update job error status:", updateError);
-      }
-
-      // Log analysis failure
-      if (actorUserId) {
-        await createAuditLog({
-          orgId,
-          actorUserId,
-          action: AUDIT_ACTIONS.JOB_JD_ANALYZE_FAILED,
-          entityType: 'JOB',
-          entityId: id,
-          metadata: { 
-            requestId,
-            error: error instanceof Error ? error.message : 'Unknown error',
-          },
-        });
-      }
-      
-      // Handle LLM-specific errors
-      if (error && typeof error === 'object' && 'code' in error) {
-        const llmError = error as any;
-        const statusCode = llmError.code === 'RATE_LIMIT' ? 429 : 
-                          llmError.code === 'TIMEOUT' ? 502 : 500;
-        
-        return NextResponse.json(
-          { 
-            error: "AI analysis failed",
-            details: llmError.message,
-            code: llmError.code,
-            requestId,
-          },
-          { status: statusCode }
-        );
-      }
-
-      return NextResponse.json(
-        { 
-          error: "Failed to analyze job description",
-          requestId,
-          details: error instanceof Error ? error.message : 'Unknown error',
-        },
-        { status: 500 }
-      );
-    }
-  } catch (error) {
-    console.error("Error in POST /api/jobs/[id]/analyze-jd:", error);
-    return NextResponse.json(
-      { error: "Failed to analyze job description" },
-      { status: 500 }
-    );
-  }
-});
-
-// PUT /api/jobs/[id]/generate-interview-kit - Generate interview kit from JD extraction
-export const PUT = withOrgContext(async (request: NextRequest, orgId: string, { params }: { params: { id: string } }) => {
-  try {
-    const { id } = params;
-    const { searchParams } = new URL(request.url);
-    const force = searchParams.get('force') === '1';
-
-    if (!id) {
-      return NextResponse.json(
-        { error: "Job ID is required" },
-        { status: 400 }
-      );
-    }
-
-    // Check if job exists and belongs to the organization
-    const job = await prisma.job.findFirst({
-      where: { id, orgId },
-    });
-
-    if (!job) {
-      return NextResponse.json(
-        { error: "Job not found" },
-        { status: 404 }
-      );
-    }
-
-    // Validate precondition: jdExtractionJson exists
-    if (!job.jdExtractionJson) {
-      return NextResponse.json(
-        { error: "Analyze JD first", message: "Job description must be analyzed before generating interview kit" },
-        { status: 409 }
-      );
-    }
-
-    // Check for cached results (unless force flag is set)
-    if (!force && job.interviewKitJson && job.interviewKitGeneratedAt) {
-      // Get current user for audit logging
-      let actorUserId: string | null = null;
-      try {
-        const currentUser = await getCurrentUserOrThrow();
-        // Get the database user ID from clerk user ID
-        const dbUser = await prisma.user.findUnique({
-          where: { clerkUserId: currentUser.clerkUserId },
-          select: { id: true }
-        });
-        actorUserId = dbUser?.id || null;
-      } catch (error) {
-        // Continue without audit logging if auth fails
-        console.warn("Failed to get current user for audit logging:", error);
-      }
-
-      // Log cached interview kit access
-      if (actorUserId) {
-        await createAuditLog({
-          orgId,
-          actorUserId,
-          action: AUDIT_ACTIONS.JOB_INTERVIEW_KIT_COMPLETED,
-          entityType: 'JOB',
-          entityId: id,
-          metadata: { 
-            requestId: undefined,
-            promptVersion: job.interviewKitPromptVersion,
-            cached: true,
-          },
-        });
-      }
-
-      // Get usage snapshot for cached response
-      const usageSnapshot = await getUsageSnapshot(orgId);
-
-      return NextResponse.json({
-        interviewKit: job.interviewKitJson,
-        requestId: null,
-        cached: true,
-        job: {
-          id: job.id,
-          title: job.title,
-          interviewKitGeneratedAt: job.interviewKitGeneratedAt,
-          interviewKitPromptVersion: job.interviewKitPromptVersion,
-        },
-        usage: usageSnapshot,
-      });
-    }
-
-    // Generate request ID for tracking
-    const requestId = randomUUID();
-
-    // Get current user for audit logging
-    let actorUserId: string | null = null;
-    try {
-      const currentUser = await getCurrentUserOrThrow();
-      // Get the database user ID from clerk user ID
-      const dbUser = await prisma.user.findUnique({
-        where: { clerkUserId: currentUser.clerkUserId },
-        select: { id: true }
-      });
-      actorUserId = dbUser?.id || null;
-    } catch (error) {
-      // Continue without audit logging if auth fails
-      console.warn("Failed to get current user for audit logging:", error);
-    }
-
-    // Update status to RUNNING
-    await prisma.job.update({
-      where: { id },
-      data: {
-        interviewKitStatus: 'RUNNING',
-        interviewKitLastError: null,
-      },
-    });
-
-    // Log interview kit generation request
-    if (actorUserId) {
-      await createAuditLog({
-        orgId,
-        actorUserId,
-        action: AUDIT_ACTIONS.JOB_INTERVIEW_KIT_REQUESTED,
-        entityType: 'JOB',
-        entityId: id,
-        metadata: { 
-          requestId,
-          force,
-        },
-      });
-    }
-
-    try {
-      // Extract and validate JD analysis data (defensive programming)
-      const jdExtraction = job.jdExtractionJson as any;
-      
-      // Validate JD extraction against schema before using it
-      const validationResult = JDExtraction_v1.safeParse(jdExtraction);
-      
-      if (!validationResult.success) {
-        console.error("JD extraction validation failed for job", id, {
-          error: validationResult.error,
-          jobId: id,
-          orgId,
-        });
-        
-        // Update job status to FAILED with corruption error
-        await prisma.job.update({
-          where: { id },
-          data: {
-            interviewKitStatus: 'FAILED',
-            interviewKitLastError: 'JD analysis is invalid; re-analyze JD.',
-          },
-        });
-
-        // Log interview kit generation failure
-        if (actorUserId) {
-          await createAuditLog({
-            orgId,
-            actorUserId,
-            action: AUDIT_ACTIONS.JOB_INTERVIEW_KIT_FAILED,
-            entityType: 'JOB',
-            entityId: id,
-            metadata: { 
-              requestId,
-              error: 'JD analysis is invalid; re-analyze JD.',
-              errorCode: 'DATA_CORRUPTION',
-            },
-          });
-        }
-        
-        return NextResponse.json(
-          { 
-            error: "JD analysis is invalid; re-analyze JD.",
-            code: 'DATA_CORRUPTION',
-            details: 'The stored job description analysis is corrupted or invalid. Please re-analyze the job description.',
-            requestId,
-          },
-          { status: 409 }
-        );
-      }
-      
-      // Enforce additional limits (defensive checks beyond schema)
-      const validatedData = validationResult.data;
-      
-      if (validatedData.requiredSkills.length > 20) {
-        console.error("Required skills exceeds limit", {
-          count: validatedData.requiredSkills.length,
-          jobId: id,
-          orgId,
-        });
-        
-        return NextResponse.json(
-          { 
-            error: "JD analysis is invalid; re-analyze JD.",
-            code: 'DATA_CORRUPTION',
-            details: 'Required skills count exceeds allowed limit.',
-            requestId,
-          },
-          { status: 409 }
-        );
-      }
-      
-      if (validatedData.keyResponsibilities.length > 15) {
-        console.error("Key responsibilities exceeds limit", {
-          count: validatedData.keyResponsibilities.length,
-          jobId: id,
-          orgId,
-        });
-        
-        return NextResponse.json(
-          { 
-            error: "JD analysis is invalid; re-analyze JD.",
-            code: 'DATA_CORRUPTION',
-            details: 'Key responsibilities count exceeds allowed limit.',
-            requestId,
-          },
-          { status: 409 }
-        );
-      }
-
-      // Build prompt from validated JD extraction
-      const prompt = interviewKitGeneratorV1.build({
-        jobTitle: validatedData.roleTitle || job.title,
-        seniorityLevel: validatedData.seniorityLevel || 'UNKNOWN',
-        requiredSkills: validatedData.requiredSkills || [],
-        preferredSkills: validatedData.preferredSkills || [],
-        keyResponsibilities: validatedData.keyResponsibilities || [],
-        rawJD: job.rawJD,
-      });
-
-      // Call LLM with InterviewKit_v1 schema parsing
-      const result = await callLLMAndParseJSON({
-        promptId: interviewKitGeneratorV1.id,
-        system: prompt.system,
-        user: prompt.user,
-        schema: InterviewKit_v1,
-        requestId,
-        orgId,
-      });
-
-      // Save interview kit to database
-      const updatedJob = await prisma.job.update({
-        where: { id },
-        data: {
-          interviewKitJson: result.value,
-          interviewKitGeneratedAt: new Date(),
-          interviewKitPromptVersion: interviewKitGeneratorV1.version,
-          interviewKitStatus: 'DONE',
-          interviewKitLastError: null,
-        },
-      });
-
-      // Log successful generation
-      if (actorUserId) {
-        await createAuditLog({
-          orgId,
-          actorUserId,
-          action: AUDIT_ACTIONS.JOB_INTERVIEW_KIT_COMPLETED,
-          entityType: 'JOB',
-          entityId: id,
-          metadata: { 
-            requestId,
-            promptVersion: interviewKitGeneratorV1.version,
-            force,
-          },
-        });
-      }
-
-      // Increment usage count for non-cached generation
-      const usageResult = await incrementInterviewKitUsage(orgId);
-      if (!usageResult.success) {
-        console.error('Failed to increment usage:', usageResult.error);
-        // Don't fail the request, but log the error
-      }
-
-      return NextResponse.json({
-        interviewKit: result.value,
-        requestId,
-        cached: false,
-        job: {
-          id: updatedJob.id,
-          title: updatedJob.title,
-          interviewKitGeneratedAt: updatedJob.interviewKitGeneratedAt,
-          interviewKitPromptVersion: updatedJob.interviewKitPromptVersion,
-        },
-        usage: usageResult.success ? usageResult.usage : undefined,
-        meta: result.meta,
-      });
-
-    } catch (error) {
-      console.error("Error generating interview kit:", error);
-      
-      // Update job status to FAILED with error details
-      try {
-        await prisma.job.update({
-          where: { id },
-          data: {
-            interviewKitStatus: 'FAILED',
-            interviewKitLastError: error instanceof Error ? error.message : 'Unknown error',
-          },
-        });
-      } catch (updateError) {
-        console.error("Failed to update job error status:", updateError);
-      }
-
-      // Log generation failure
-      if (actorUserId) {
-        await createAuditLog({
-          orgId,
-          actorUserId,
-          action: AUDIT_ACTIONS.JOB_INTERVIEW_KIT_FAILED,
-          entityType: 'JOB',
-          entityId: id,
-          metadata: { 
-            requestId,
-            promptVersion: interviewKitGeneratorV1.version,
-            error: error instanceof Error ? error.message : 'Unknown error',
-          },
-        });
-      }
-      
-      // Handle LLM-specific errors
-      if (error && typeof error === 'object' && 'code' in error) {
-        const llmError = error as any;
-        const statusCode = llmError.code === 'RATE_LIMIT' ? 429 : 
-                          llmError.code === 'TIMEOUT' ? 502 : 500;
-        
-        return NextResponse.json(
-          { 
-            error: "Interview kit generation failed",
-            details: llmError.message,
-            code: llmError.code,
-            requestId,
-          },
-          { status: statusCode }
-        );
-      }
-
-      return NextResponse.json(
-        { 
-          error: "Failed to generate interview kit",
-          requestId,
-          details: error instanceof Error ? error.message : 'Unknown error',
-        },
-        { status: 500 }
-      );
-    }
-  } catch (error) {
-    console.error("Error in PUT /api/jobs/[id]/generate-interview-kit:", error);
-    return NextResponse.json(
-      { error: "Failed to generate interview kit" },
       { status: 500 }
     );
   }
