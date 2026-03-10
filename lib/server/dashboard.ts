@@ -7,10 +7,12 @@ export type InterviewKitStatus = "NOT_STARTED" | "RUNNING" | "DONE" | "FAILED";
 export type DashboardJobRow = {
   id: string;
   title: string;
+  status: "DRAFT" | "ACTIVE" | "ARCHIVED";
   seniority: string;
   candidateCount: number;
   jdAnalysisStatus: JDAnalysisStatus;
   interviewKitStatus: InterviewKitStatus;
+  updatedAt: string;
   href: string;
 };
 
@@ -49,7 +51,7 @@ export type HighRiskAlertRow = {
 };
 
 export type UpcomingInterviewRow = {
-  interviewId: string;
+  id: string;
   candidateName: string;
   jobTitle: string;
   scheduledTime: string;
@@ -262,7 +264,7 @@ export async function getDashboardJobsSummary(orgId: string): Promise<DashboardS
     });
 
   const upcomingInterviews: UpcomingInterviewRow[] = upcomingInterviewsRaw.map((interview) => ({
-    interviewId: interview.id,
+    id: interview.id,
     candidateName: interview.candidate.fullName,
     jobTitle: interview.job.title,
     scheduledTime: interview.createdAt.toISOString(),
@@ -312,10 +314,12 @@ export async function getDashboardJobsSummary(orgId: string): Promise<DashboardS
   const recentJobsWithMeta: DashboardJobRow[] = recentJobs.map((job) => ({
     id: job.id,
     title: job.title,
+    status: job.status as "DRAFT" | "ACTIVE" | "ARCHIVED",
     seniority: "—", // Simplified - removed jdExtractionJson dependency
     candidateCount: candidateCountByJob.get(job.id)?.size ?? 0,
     jdAnalysisStatus: job.jdAnalysisStatus as JDAnalysisStatus,
     interviewKitStatus: job.interviewKitStatus as InterviewKitStatus,
+    updatedAt: job.updatedAt.toISOString(),
     href: `/app/jobs/${job.id}`,
   }));
 

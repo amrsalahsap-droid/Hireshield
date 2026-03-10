@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 
 interface DashboardSectionProps {
   children: React.ReactNode;
-  title?: string;
+  title?: React.ReactNode;
   description?: string;
   className?: string;
   actions?: React.ReactNode;

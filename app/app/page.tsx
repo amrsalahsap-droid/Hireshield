@@ -64,7 +64,7 @@ export default function AppPage() {
   const [activityData, setActivityData] = useState<ActivityFeedPage | null>(null);
   const [activityLoading, setActivityLoading] = useState(false);
   const [activityPage, setActivityPage] = useState(1);
-  const [activityPageSize] = useState<AllowedPageSize>(10);
+  const [activityPageSize, setActivityPageSize] = useState<AllowedPageSize>(10);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Modal states
@@ -152,7 +152,7 @@ export default function AppPage() {
           data: {
             metric: "Risk Rate",
             value: `${riskRate.toFixed(1)}%`,
-            threshold: `${highRiskThreshold}%`,
+            threshold: highRiskThreshold,
             actual: data.highRisk,
             trend: "up" as const
           },
@@ -175,7 +175,7 @@ export default function AppPage() {
           data: {
             metric: "Avg Risk Score",
             value: `${avgRiskScore.toFixed(1)}%`,
-            threshold: `${riskThreshold}%`,
+            threshold: riskThreshold,
             actual: data.total,
             trend: "neutral" as const
           },
@@ -205,7 +205,7 @@ export default function AppPage() {
         data: {
           metric: "Risk Level",
           value: "Low",
-          threshold: "< 25%",
+          threshold: 25,
           actual: lowRiskJobs[0][1].total,
           trend: "down" as const
         },
@@ -221,7 +221,7 @@ export default function AppPage() {
   }
 
   const dismissInsight = (insightId: string) => {
-    setDismissedInsights(prev => new Set([...prev, insightId]));
+    setDismissedInsights(prev => new Set(Array.from(prev).concat(insightId)));
   };
 
   // Generate AI insights for dashboard
@@ -334,7 +334,7 @@ export default function AppPage() {
             }),
             fetch(`/api/activity-dev?page=${activityPage}&pageSize=${activityPageSize}`, {
               headers: {
-                "x-org-id": "cmm87bloy0000v9nvvzyt6aqn",
+                "x-org-id": "cmmk1zo40000212ymhwgz0di8",
               },
             })
           ]);
@@ -405,7 +405,7 @@ export default function AppPage() {
           fetch(`/api/activity?page=${activityPage}&pageSize=${activityPageSize}`, {
             headers: {
               Authorization: `Bearer ${token}`,
-              "x-org-id": "cmm87bloy0000v9nvvzyt6aqn",
+              "x-org-id": "cmmk1zo40000212ymhwgz0di8",
             },
           })
         ]);
@@ -468,7 +468,7 @@ export default function AppPage() {
       try {
         const res = await fetch(`/api/activity-dev?page=${page}&pageSize=${pageSize}`, {
           headers: {
-            "x-org-id": "cmm87bloy0000v9nvvzyt6aqn",
+            "x-org-id": "cmmk1zo40000212ymhwgz0di8",
           },
         });
         if (res.ok) {
@@ -498,7 +498,7 @@ export default function AppPage() {
         }),
         fetch(`/api/activity-dev?page=${activityPage}&pageSize=${activityPageSize}`, {
           headers: {
-            "x-org-id": "cmm87bloy0000v9nvvzyt6aqn",
+            "x-org-id": "cmmk1zo40000212ymhwgz0di8",
           },
         })
       ]);
@@ -846,7 +846,7 @@ export default function AppPage() {
 
     // Determine trends (simple comparison with median)
     const medianEvaluationTime = evaluationTimes.sort((a, b) => a - b)[Math.floor(evaluationTimes.length / 2)];
-    const evaluationTrend = avgEvaluationTime < medianEvaluationTime * 1.1 ? "up" : avgEvaluationTime > medianEvaluationTime * 1.3 ? "down" : "neutral";
+    const evaluationTrend: "up" | "down" | "neutral" = avgEvaluationTime < medianEvaluationTime * 1.1 ? "up" : avgEvaluationTime > medianEvaluationTime * 1.3 ? "down" : "neutral";
 
     return [
       {
@@ -854,14 +854,14 @@ export default function AppPage() {
         value: formatTime(avgEvaluationTime),
         description: "From candidate creation to evaluation completion",
         icon: Timer,
-        trend: evaluationTrend as const
+        trend: evaluationTrend
       },
       {
         label: "Time to Decision",
         value: formatTime(avgDecisionTime),
         description: "Average time to complete evaluation process",
         icon: Calendar,
-        trend: evaluationTrend as const
+        trend: evaluationTrend
       }
     ];
   }
@@ -1221,7 +1221,7 @@ export default function AppPage() {
     
     // Generate mock candidate data based on recent evaluations
     const candidates = summary?.recentEvaluations.slice(0, 10).map((evaluation, index) => ({
-      id: evaluation.id,
+      id: evaluation.evaluationId,
       name: evaluation.candidateName,
       jobTitle: evaluation.jobTitle,
       riskLevel: evaluation.riskLevel as "HIGH" | "MEDIUM" | "LOW",
@@ -1290,8 +1290,8 @@ export default function AppPage() {
         : "All caught up",
       subtitle: pendingSubtitle,
       metricTrend: candidatesAwaitingEvaluation.length > 0 
-        ? { text: `+${Math.min(candidatesAwaitingEvaluation.length, 3)} this week`, direction: "up", color: "text-investigate" }
-        : { text: "No pending", direction: "neutral", color: "text-muted-foreground" },
+        ? { text: `+${Math.min(candidatesAwaitingEvaluation.length, 3)} this week`, direction: "up" as const, color: "text-investigate" }
+        : { text: "No pending", direction: "neutral" as const, color: "text-muted-foreground" },
       additionalInfo: candidatesAwaitingEvaluation.length > 0 
         ? `Oldest: ${candidatesAwaitingEvaluation.length > 1 ? '2 days ago' : 'Today'}`
         : "No pending items",
@@ -1309,8 +1309,8 @@ export default function AppPage() {
       subtitle: riskSubtitle,
       trend: trends.highRisk,
       metricTrend: highRiskAlerts.length > 0
-        ? { text: `${highRiskAlerts.length} flagged`, direction: "up", color: "text-risk" }
-        : { text: "All clear", direction: "neutral", color: "text-safe" },
+        ? { text: `${highRiskAlerts.length} flagged`, direction: "up" as const, color: "text-risk" }
+        : { text: "All clear", direction: "neutral" as const, color: "text-safe" },
       additionalInfo: highRiskAlerts.length > 0
         ? `Review needed: ${highRiskAlerts.length === 1 ? '1 candidate' : `${highRiskAlerts.length} candidates`}`
         : "All candidates cleared",
@@ -1327,8 +1327,8 @@ export default function AppPage() {
         : "No active positions",
       subtitle: activeSubtitle,
       metricTrend: activeCount > 0
-        ? { text: `${activeCount} positions`, direction: "up", color: "text-primary" }
-        : { text: "Create job", direction: "neutral", color: "text-muted-foreground" },
+        ? { text: `${activeCount} positions`, direction: "up" as const, color: "text-primary" }
+        : { text: "Create job", direction: "neutral" as const, color: "text-muted-foreground" },
       additionalInfo: activeCount > 0
         ? `${activeCount === 1 ? '1 position' : `${activeCount} positions`} available`
         : "No active openings",
@@ -1345,8 +1345,8 @@ export default function AppPage() {
         : "No drafts",
       subtitle: draftSubtitle,
       metricTrend: draftCount > 0
-        ? { text: `${draftCount} ready`, direction: "neutral", color: "text-warning" }
-        : { text: "No drafts", direction: "neutral", color: "text-muted-foreground" },
+        ? { text: `${draftCount} ready`, direction: "neutral" as const, color: "text-warning" }
+        : { text: "No drafts", direction: "neutral" as const, color: "text-muted-foreground" },
       additionalInfo: draftCount > 0
         ? `${draftCount === 1 ? '1 draft' : `${draftCount} drafts`} to publish`
         : "No draft positions",
@@ -1363,8 +1363,8 @@ export default function AppPage() {
         : "No archived jobs",
       subtitle: archivedSubtitle,
       metricTrend: archivedCount > 0
-        ? { text: `${archivedCount} completed`, direction: "down", color: "text-muted-foreground" }
-        : { text: "None", direction: "neutral", color: "text-muted-foreground" },
+        ? { text: `${archivedCount} completed`, direction: "down" as const, color: "text-muted-foreground" }
+        : { text: "None", direction: "neutral" as const, color: "text-muted-foreground" },
       additionalInfo: archivedCount > 0
         ? `${archivedCount === 1 ? '1 position' : `${archivedCount} positions`} closed`
         : "No completed positions",
@@ -1458,6 +1458,7 @@ export default function AppPage() {
             title="Key Metrics" 
             metrics={priorityMetrics.map(metric => ({
               ...metric,
+              value: metric.value.toString(),
               description: metricDescriptions[metric.title] || `${metric.title} metric information`
             }))}
           />
@@ -1598,7 +1599,7 @@ export default function AppPage() {
                 <tbody className="divide-y divide-border">
                   {candidatesAwaitingEvaluation.map((item: AwaitingEvaluationRow) => (
                     <tr 
-                      key={item.id}
+                      key={item.evaluationId}
                       className="hover:bg-muted/30 cursor-pointer transition-colors group"
                       onClick={() => router.push(item.href)}
                     >
@@ -1676,7 +1677,7 @@ export default function AppPage() {
                 <tbody className="divide-y divide-border">
                   {recentEvaluations.map((item: RecentEvaluationRow) => (
                     <tr 
-                      key={item.id}
+                      key={item.evaluationId}
                       className="hover:bg-muted/30 cursor-pointer transition-colors group"
                       onClick={() => router.push(item.href)}
                     >
@@ -1759,7 +1760,7 @@ export default function AppPage() {
                 
                 return (
                   <Link
-                    key={alert.id}
+                    key={alert.evaluationId}
                     href={alert.href}
                     className={`group relative rounded-lg border-l-4 ${style.border} ${style.bg} ${style.hover} p-4 transition-all duration-200 hover:shadow-md`}
                   >

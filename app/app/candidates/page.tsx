@@ -35,7 +35,7 @@ export default function CandidatesPage() {
       setError(null);
       const response = await fetch("/api/candidates", {
         headers: {
-          "x-org-id": "cmm87bloy0000v9nvvzyt6aqn" // Demo org ID
+          "x-org-id": "cmmk1zo40000212ymhwgz0di8" // Demo org ID
         }
       });
       
@@ -104,7 +104,7 @@ export default function CandidatesPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-org-id": "cmm87bloy0000v9nvvzyt6aqn" // Demo org ID
+          "x-org-id": "cmmk1zo40000212ymhwgz0di8" // Demo org ID
         },
         body: JSON.stringify({
           fullName: formData.fullName.trim(),

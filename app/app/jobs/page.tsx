@@ -6,6 +6,7 @@ import { ErrorState, EmptyState, LoadingState } from "@/components/ui/ErrorState
 import { Button } from "@/components/ui/button";
 import { GenerateJDButton } from "@/components/app/generate-jd-button";
 import { SkillsTagInput } from "@/components/app/skills-tag-input";
+import { Spinner } from "@/components/ui/spinner";
 
 interface Job {
   id: string;
@@ -14,6 +15,18 @@ interface Job {
   createdAt: string;
   updatedAt: string;
   rawJD: string;
+  department?: string;
+  location?: string;
+  employmentType?: string;
+  seniorityLevel?: string;
+  hiringManager?: string;
+  numberOfOpenings?: number;
+  skills?: Array<{
+    id: string;
+    name: string;
+    experienceLevel: "beginner" | "intermediate" | "advanced" | "expert";
+    requirementType: "required" | "optional";
+  }>;
   jdExtractionJson: any;
   jdAnalyzedAt: string | null;
   jdPromptVersion: string | null;
@@ -24,6 +37,12 @@ interface Job {
   interviewKitPromptVersion: string | null;
   interviewKitStatus: 'NOT_STARTED' | 'RUNNING' | 'DONE' | 'FAILED';
   interviewKitLastError: string | null;
+  // Computed properties added by API
+  candidateCount: number;
+  interviewCount: number;
+  decisionPendingCount: number;
+  highRiskCount: number;
+  hiringHealth: 'HEALTHY' | 'SLOW' | 'BLOCKED' | null;
 }
 
 interface JobTemplate {
@@ -112,14 +131,15 @@ export default function JobsPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [createdJob, setCreatedJob] = useState<any>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingJob, setEditingJob] = useState<any>(null);
-  const [dropdownOpen, setDropdownOpen] = useState<string | null>(null);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [jobToDelete, setJobToDelete] = useState<any>(null);
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [filters, setFilters] = useState({
     status: "",
@@ -131,22 +151,6 @@ export default function JobsPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [sortField, setSortField] = useState("createdAt");
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
-
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as Element;
-      // Check if click is outside any dropdown button
-      if (!target.closest('[data-dropdown-button]')) {
-        setDropdownOpen(null);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, [dropdownOpen]);
   const [formData, setFormData] = useState({
     title: "",
     rawJD: "",
@@ -164,6 +168,28 @@ export default function JobsPage() {
       requirementType: "required" | "optional";
     }>
   });
+  
+  // Reset form function
+  const resetForm = () => {
+    setFormData({
+      title: "",
+      rawJD: "",
+      department: "",
+      location: "",
+      employmentType: "",
+      seniorityLevel: "",
+      hiringManager: "",
+      numberOfOpenings: 1,
+      status: "DRAFT",
+      skills: [] as Array<{
+        id: string;
+        name: string;
+        experienceLevel: "beginner" | "intermediate" | "advanced" | "expert";
+        requirementType: "required" | "optional";
+      }>
+    });
+  };
+  
   const [errors, setErrors] = useState({
     title: "",
     rawJD: "",
@@ -177,6 +203,8 @@ export default function JobsPage() {
     skills: ""
   });
   const [isCreating, setIsCreating] = useState(false);
+  const [loadingRows, setLoadingRows] = useState<Set<string>>(new Set());
+  const [actionMessages, setActionMessages] = useState<Map<string, string>>(new Map());
 
   // Fetch jobs from API
   const fetchJobs = async () => {
@@ -212,7 +240,7 @@ export default function JobsPage() {
       
       const response = await fetch(`/api/jobs?${params.toString()}`, {
         headers: {
-          "x-org-id": "cmm87bloy0000v9nvvzyt6aqn" // Demo org ID
+          "x-org-id": "cmmk1zo40000212ymhwgz0di8" // Demo org ID
         }
       });
       
@@ -341,7 +369,7 @@ export default function JobsPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-org-id": "cmm87bloy0000v9nvvzyt6aqn" // Demo org ID
+          "x-org-id": "cmmk1zo40000212ymhwgz0di8" // Demo org ID
         },
         body: JSON.stringify({
           title: formData.title.trim(),
@@ -353,7 +381,7 @@ export default function JobsPage() {
           hiringManager: formData.hiringManager.trim(),
           numberOfOpenings: formData.numberOfOpenings,
           status: formData.status,
-          skills: formData.skills
+          skills: formData.skills.map(skill => skill.name)
         })
       });
 
@@ -461,12 +489,26 @@ export default function JobsPage() {
 
     setIsCreating(true);
     
+    console.log("Frontend: Editing job with ID:", editingJob.id);
+    console.log("Frontend: Form data being sent:", {
+      title: formData.title.trim(),
+      rawJD: formData.rawJD.trim(),
+      department: formData.department.trim(),
+      location: formData.location.trim(),
+      employmentType: formData.employmentType,
+      seniorityLevel: formData.seniorityLevel,
+      hiringManager: formData.hiringManager.trim(),
+      numberOfOpenings: formData.numberOfOpenings,
+      status: formData.status,
+      skills: formData.skills.map(skill => skill.name)
+    });
+    
     try {
       const response = await fetch(`/api/jobs/${editingJob.id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
-          "x-org-id": "cmm87bloy0000v9nvvzyt6aqn" // Demo org ID
+          "x-org-id": "cmmk1zo40000212ymhwgz0di8" // Demo org ID
         },
         body: JSON.stringify({
           title: formData.title.trim(),
@@ -478,7 +520,7 @@ export default function JobsPage() {
           hiringManager: formData.hiringManager.trim(),
           numberOfOpenings: formData.numberOfOpenings,
           status: formData.status,
-          skills: formData.skills
+          skills: formData.skills.map(skill => skill.name)
         })
       });
 
@@ -532,27 +574,38 @@ export default function JobsPage() {
 
   // Handle opening delete confirmation modal
   const openDeleteConfirm = (job: Job) => {
+    console.log("Opening delete confirmation for job:", job.title);
     setJobToDelete(job);
+    setDeleteConfirmation("");
     setShowDeleteModal(true);
+    console.log("Delete modal state set to true");
   };
 
   // Handle job deletion
   const handleDeleteJob = async () => {
     if (!jobToDelete) return;
 
+    // Add loading state
+    setLoadingRows(prev => new Set(prev).add(jobToDelete.id));
+    setActionMessages(prev => new Map(prev).set(jobToDelete.id, "Deleting..."));
+
     try {
       const response = await fetch(`/api/jobs/${jobToDelete.id}`, {
         method: "DELETE",
         headers: {
           "Content-Type": "application/json",
-          "x-org-id": "cmm87bloy0000v9nvvzyt6aqn" // Demo org ID
+          "x-org-id": "cmmk1zo40000212ymhwgz0di8" // Demo org ID
         }
       });
 
       if (response.ok) {
+        // Show success message
+        setSuccess("Job deleted successfully");
+        
         // Close delete modal and reset state
         setShowDeleteModal(false);
         setJobToDelete(null);
+        setDeleteConfirmation("");
         
         // Refresh jobs list
         await fetchJobs();
@@ -564,17 +617,79 @@ export default function JobsPage() {
     } catch (error) {
       console.error("Error deleting job:", error);
       setError("Unable to delete job. Please try again.");
+    } finally {
+      // Remove loading state
+      setLoadingRows(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(jobToDelete.id);
+        return newSet;
+      });
+      setActionMessages(prev => {
+        const newMap = new Map(prev);
+        newMap.delete(jobToDelete.id);
+        return newMap;
+      });
+    }
+  };
+
+  // Handle duplicate job
+  const handleDuplicateJob = async (job: any) => {
+    // Add loading state
+    setLoadingRows(prev => new Set(prev).add(job.id));
+    setActionMessages(prev => new Map(prev).set(job.id, "Duplicating..."));
+
+    try {
+      setError(null);
+      const response = await fetch(`/api/jobs/${job.id}/duplicate`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-org-id": "cmmk1zo40000212ymhwgz0di8" // Demo org ID
+        }
+      });
+
+      if (response.ok) {
+        const duplicatedJob = await response.json();
+        // Refresh jobs list
+        await fetchJobs();
+        // Show success message or navigate to the duplicated job
+        console.log("Job duplicated successfully:", duplicatedJob);
+        setSuccess("Job duplicated successfully");
+      } else {
+        const error = await response.json();
+        console.error("Error duplicating job:", error);
+        setError("Unable to duplicate job. Please try again.");
+      }
+    } catch (error) {
+      console.error("Error duplicating job:", error);
+      setError("Unable to duplicate job. Please try again.");
+    } finally {
+      // Remove loading state
+      setLoadingRows(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(job.id);
+        return newSet;
+      });
+      setActionMessages(prev => {
+        const newMap = new Map(prev);
+        newMap.delete(job.id);
+        return newMap;
+      });
     }
   };
 
   // Handle job activation
   const handleActivateJob = async (job: Job) => {
+    // Add loading state
+    setLoadingRows(prev => new Set(prev).add(job.id));
+    setActionMessages(prev => new Map(prev).set(job.id, "Activating..."));
+
     try {
       const response = await fetch(`/api/jobs/${job.id}`, {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
-          "x-org-id": "cmm87bloy0000v9nvvzyt6aqn" // Demo org ID
+          "x-org-id": "cmmk1zo40000212ymhwgz0di8" // Demo org ID
         },
         body: JSON.stringify({
           status: "ACTIVE"
@@ -582,6 +697,9 @@ export default function JobsPage() {
       });
 
       if (response.ok) {
+        // Show success message
+        setSuccess("Job activated successfully");
+        
         // Refresh jobs list
         await fetchJobs();
       } else {
@@ -592,7 +710,210 @@ export default function JobsPage() {
     } catch (error) {
       console.error("Error activating job:", error);
       setError("Unable to activate job. Please try again.");
+    } finally {
+      // Remove loading state
+      setLoadingRows(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(job.id);
+        return newSet;
+      });
+      setActionMessages(prev => {
+        const newMap = new Map(prev);
+        newMap.delete(job.id);
+        return newMap;
+      });
     }
+  };
+
+  // Handle job archiving
+  const handleArchiveJob = async (job: Job) => {
+    // Add loading state
+    setLoadingRows(prev => new Set(prev).add(job.id));
+    setActionMessages(prev => new Map(prev).set(job.id, "Archiving..."));
+
+    try {
+      const response = await fetch(`/api/jobs/${job.id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          "x-org-id": "cmmk1zo40000212ymhwgz0di8" // Demo org ID
+        },
+        body: JSON.stringify({
+          status: "ARCHIVED"
+        })
+      });
+
+      if (response.ok) {
+        // Show success message
+        setSuccess("Job archived successfully");
+        
+        // Refresh jobs list
+        await fetchJobs();
+      } else {
+        const error = await response.json();
+        console.error("Error archiving job:", error);
+        setError("Unable to archive job. Please try again.");
+      }
+    } catch (error) {
+      console.error("Error archiving job:", error);
+      setError("Unable to archive job. Please try again.");
+    } finally {
+      // Remove loading state
+      setLoadingRows(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(job.id);
+        return newSet;
+      });
+      setActionMessages(prev => {
+        const newMap = new Map(prev);
+        newMap.delete(job.id);
+        return newMap;
+      });
+    }
+  };
+
+  // JobRowActions Component
+  const JobRowActions = ({ job }: { job: Job }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const isLoading = loadingRows.has(job.id);
+    const actionMessage = actionMessages.get(job.id);
+
+    // Close dropdown when clicking outside
+    useEffect(() => {
+      const handleClickOutside = (event: MouseEvent) => {
+        const target = event.target as Element;
+        if (!target.closest('[data-dropdown-button]')) {
+          setIsOpen(false);
+        }
+      };
+
+      if (isOpen) {
+        document.addEventListener('mousedown', handleClickOutside);
+      }
+
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
+    }, [isOpen]);
+
+    const handleAction = (action: () => void) => {
+      if (!isLoading) {
+        action();
+        setIsOpen(false);
+      }
+    };
+
+    if (isLoading) {
+      return (
+        <div className="flex items-center justify-center w-8 h-8">
+          <Spinner size="sm" className="text-blue-600" />
+        </div>
+      );
+    }
+
+    return (
+      <div className="relative inline-block text-left group">
+        <button
+          type="button"
+          data-dropdown-button
+          className="opacity-0 group-hover:opacity-100 transition-opacity duration-200 inline-flex items-center justify-center w-8 h-8 rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsOpen(!isOpen);
+          }}
+          disabled={isLoading}
+        >
+          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+            <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
+          </svg>
+        </button>
+        
+        {/* Dropdown menu */}
+        <div 
+          className={`absolute right-0 z-50 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 ${isOpen ? 'block' : 'hidden'}`}
+          data-dropdown-button
+        >
+          <div className="py-1">
+            <Link
+              href={`/app/jobs/${job.id}`}
+              className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+              data-dropdown-button
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsOpen(false);
+              }}
+            >
+              View Job
+            </Link>
+            <button
+              type="button"
+              data-dropdown-button
+              className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleAction(() => openEditModal(job));
+              }}
+              disabled={isLoading}
+            >
+              Edit Job
+            </button>
+            <button
+              type="button"
+              data-dropdown-button
+              className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleAction(() => handleDuplicateJob(job));
+              }}
+              disabled={isLoading}
+            >
+              Duplicate Job
+            </button>
+            {job.status === "DRAFT" ? (
+              <button
+                type="button"
+                data-dropdown-button
+                className="block px-4 py-2 text-sm text-green-600 hover:bg-green-50 w-full text-left disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleAction(() => handleActivateJob(job));
+                }}
+                disabled={isLoading}
+              >
+                Activate Job
+              </button>
+            ) : (
+              <button
+                type="button"
+                data-dropdown-button
+                className="block px-4 py-2 text-sm text-orange-600 hover:bg-orange-50 w-full text-left disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleAction(() => handleArchiveJob(job));
+                }}
+                disabled={isLoading}
+              >
+                Archive Job
+              </button>
+            )}
+            {job.status === "DRAFT" && (
+              <button
+                type="button"
+                data-dropdown-button
+                className="block px-4 py-2 text-sm text-red-600 hover:bg-red-50 w-full text-left disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleAction(() => openDeleteConfirm(job));
+                }}
+                disabled={isLoading}
+              >
+                Delete Job
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
   };
 
   // Organize jobs by status
@@ -602,19 +923,19 @@ export default function JobsPage() {
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "ACTIVE": return "bg-safe/10 text-safe border-safe/20";
-      case "DRAFT": return "bg-warning/10 text-warning border-warning/20";
-      case "ARCHIVED": return "bg-muted/10 text-muted-foreground border-muted/20";
-      default: return "bg-muted/10 text-muted-foreground border-muted/20";
+      case "ACTIVE": return "bg-green-100 text-green-800 border-green-200";
+      case "DRAFT": return "bg-blue-100 text-blue-800 border-blue-200";
+      case "ARCHIVED": return "bg-gray-100 text-gray-800 border-gray-200";
+      default: return "bg-gray-100 text-gray-800 border-gray-200";
     }
   };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case "ACTIVE": return "✓";
-      case "DRAFT": return "○";
-      case "ARCHIVED": return "⊗";
-      default: return "○";
+      case "ACTIVE": return "●";
+      case "DRAFT": return "●";
+      case "ARCHIVED": return "●";
+      default: return "●";
     }
   };
 
@@ -642,7 +963,7 @@ export default function JobsPage() {
         <div className="bg-card shadow-card border border-border rounded-card overflow-visible">
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-border">
-              <thead className="bg-muted">
+              <thead className="bg-muted sticky top-0 z-10">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider font-body">
                     Job Title
@@ -719,19 +1040,36 @@ export default function JobsPage() {
                 </tr>
               </thead>
               <tbody className="bg-card divide-y divide-border">
-                {jobs.map((job) => (
+                {jobs.map((job) => {
+                  const isLoading = loadingRows.has(job.id);
+                  const actionMessage = actionMessages.get(job.id);
+                  
+                  return (
                   <tr 
                     key={job.id} 
-                    className="hover:bg-muted/50 transition-colors cursor-pointer group relative"
-                    onClick={() => window.location.href = `/app/jobs/${job.id}`}
+                    className={`hover:bg-[#F9FAFB] transition-colors cursor-pointer group relative ${isLoading ? 'opacity-75' : ''}`}
+                    onClick={() => !isLoading && (window.location.href = `/app/jobs/${job.id}`)}
                   >
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-card text-foreground font-body group-hover:text-primary transition-colors">{job.title}</div>
+                      <Link
+                        href={`/app/jobs/${job.id}`}
+                        className="text-card text-foreground font-body hover:text-primary transition-colors inline-block max-w-xs truncate"
+                        onClick={(e) => e.stopPropagation()}
+                        title={job.title}
+                      >
+                        {job.title}
+                      </Link>
+                      {isLoading && actionMessage && (
+                        <div className="flex items-center gap-2 mt-1 text-sm text-blue-600">
+                          <Spinner size="sm" />
+                          <span>{actionMessage}</span>
+                        </div>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex items-center gap-1 px-3 py-1 text-xs font-semibold rounded-full font-body border ${getStatusColor(job.status)}`}>
-                        <span className="text-xs">{getStatusIcon(job.status)}</span>
-                        {job.status}
+                      <span className={`inline-flex items-center gap-2 px-3 py-1 text-sm font-medium rounded-full font-body border ${getStatusColor(job.status)}`}>
+                        <span className="text-base leading-none">{getStatusIcon(job.status)}</span>
+                        {job.status.charAt(0) + job.status.slice(1).toLowerCase()}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -798,83 +1136,11 @@ export default function JobsPage() {
                       {new Date(job.createdAt).toLocaleDateString()}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-card font-medium relative">
-                      <div className="relative inline-block text-left">
-                        <button
-                          type="button"
-                          data-dropdown-button
-                          className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setDropdownOpen(dropdownOpen === job.id ? null : job.id);
-                          }}
-                        >
-                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                            <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
-                          </svg>
-                        </button>
-                        {/* Dropdown menu */}
-                        <div 
-                          className={`absolute right-0 z-50 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 ${dropdownOpen === job.id ? 'block' : 'hidden'}`}
-                          data-dropdown-button
-                        >
-                          <div className="py-1">
-                            <button
-                              type="button"
-                              data-dropdown-button
-                              className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setDropdownOpen(null); // Close dropdown immediately
-                                openEditModal(job);
-                              }}
-                            >
-                              Edit
-                            </button>
-                            <Link
-                              href={`/app/jobs/${job.id}`}
-                              className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
-                              data-dropdown-button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setDropdownOpen(null); // Close dropdown immediately
-                              }}
-                            >
-                              View
-                            </Link>
-                            {job.status === "DRAFT" && (
-                              <button
-                                type="button"
-                                data-dropdown-button
-                                className="block px-4 py-2 text-sm text-red-600 hover:bg-red-50 w-full text-left"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setDropdownOpen(null); // Close dropdown immediately
-                                  openDeleteConfirm(job);
-                                }}
-                              >
-                                Delete
-                              </button>
-                            )}
-                            {job.status === "DRAFT" && (
-                              <button
-                                type="button"
-                                data-dropdown-button
-                                className="block px-4 py-2 text-sm text-green-600 hover:bg-green-50 w-full text-left"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setDropdownOpen(null); // Close dropdown immediately
-                                  handleActivateJob(job);
-                                }}
-                              >
-                                Activate
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
+                      <JobRowActions job={job} />
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -896,9 +1162,301 @@ export default function JobsPage() {
     );
   }
 
+  // Success message (toast notification)
+  useEffect(() => {
+    if (success) {
+      const timer = setTimeout(() => {
+        setSuccess(null);
+      }, 3000); // Auto-dismiss after 3 seconds
+      
+      return () => clearTimeout(timer);
+    }
+  }, [success]);
+
+  return (
+    <>
+      {/* Success Toast */}
+      {success && (
+        <div className="fixed top-4 right-4 z-50 animate-fade-in">
+          <div className="bg-green-50 border border-green-200 rounded-md p-4 shadow-md">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <p className="text-sm font-medium text-green-800">{success}</p>
+              </div>
+              <div className="ml-auto pl-3">
+                <div className="-mx-1.5 -my-1.5">
+                  <button
+                    onClick={() => setSuccess(null)}
+                    className="inline-flex bg-green-50 rounded-md p-1.5 text-green-500 hover:bg-green-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-green-50 focus:ring-green-600"
+                  >
+                    <span className="sr-only">Dismiss</span>
+                    <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Main Content */}
+      <div className="space-y-8">
+        {jobs.length > 0 && (
+          <>
+            <JobsSection 
+              title="Active Jobs" 
+              jobs={activeJobs} 
+              icon="🟢"
+              emptyMessage="No active jobs. Publish a draft job to make it active."
+              status="ACTIVE"
+            />
+            
+            <JobsSection 
+              title="Draft Jobs" 
+              jobs={draftJobs} 
+              icon="📝"
+              emptyMessage="No draft jobs. Create a new job to get started."
+              status="DRAFT"
+            />
+            
+            <JobsSection 
+              title="Archived Jobs" 
+              jobs={archivedJobs} 
+              icon="📦"
+              emptyMessage="No archived jobs. Archived jobs will appear here."
+              status="ARCHIVED"
+            />
+          </>
+        )}
+      </div>
+    </>
+  );
+
+  // Skeleton Table Component
+  const SkeletonTable = () => (
+    <div className="space-y-8">
+      {/* Active Jobs Skeleton */}
+      <div className="bg-card shadow-card border border-border rounded-card overflow-visible">
+        <div className="p-6 border-b border-border">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-8 h-8 bg-muted rounded animate-pulse"></div>
+            <div className="h-6 w-32 bg-muted rounded animate-pulse"></div>
+            <div className="h-4 w-8 bg-muted rounded animate-pulse"></div>
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-border">
+            <thead className="bg-muted sticky top-0 z-10">
+              <tr>
+                <th className="px-6 py-3 text-left">
+                  <div className="w-4 h-4 bg-muted rounded animate-pulse"></div>
+                </th>
+                <th className="px-6 py-3 text-left">
+                  <div className="h-4 w-24 bg-muted rounded animate-pulse"></div>
+                </th>
+                <th className="px-6 py-3 text-left">
+                  <div className="h-4 w-20 bg-muted rounded animate-pulse"></div>
+                </th>
+                <th className="px-6 py-3 text-left">
+                  <div className="h-4 w-32 bg-muted rounded animate-pulse"></div>
+                </th>
+                <th className="px-6 py-3 text-left">
+                  <div className="h-4 w-28 bg-muted rounded animate-pulse"></div>
+                </th>
+                <th className="px-6 py-3 text-left">
+                  <div className="h-4 w-24 bg-muted rounded animate-pulse"></div>
+                </th>
+                <th className="relative px-6 py-3 text-left">
+                  <div className="h-4 w-20 bg-muted rounded animate-pulse"></div>
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-card divide-y divide-border">
+              {[...Array(3)].map((_, index) => (
+                <tr key={index} className="hover:bg-muted/50 transition-colors">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="w-4 h-4 bg-muted rounded animate-pulse"></div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="h-4 w-48 bg-muted rounded animate-pulse"></div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="h-6 w-20 bg-muted rounded-full animate-pulse"></div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="space-y-2">
+                      <div className="h-4 w-32 bg-muted rounded animate-pulse"></div>
+                      <div className="h-3 w-24 bg-muted rounded animate-pulse"></div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="h-4 w-28 bg-muted rounded animate-pulse"></div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="h-4 w-24 bg-muted rounded animate-pulse"></div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <div className="w-8 h-8 bg-muted rounded animate-pulse"></div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Draft Jobs Skeleton */}
+      <div className="bg-card shadow-card border border-border rounded-card overflow-visible">
+        <div className="p-6 border-b border-border">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-8 h-8 bg-muted rounded animate-pulse"></div>
+            <div className="h-6 w-32 bg-muted rounded animate-pulse"></div>
+            <div className="h-4 w-8 bg-muted rounded animate-pulse"></div>
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-border">
+            <thead className="bg-muted sticky top-0 z-10">
+              <tr>
+                <th className="px-6 py-3 text-left">
+                  <div className="w-4 h-4 bg-muted rounded animate-pulse"></div>
+                </th>
+                <th className="px-6 py-3 text-left">
+                  <div className="h-4 w-24 bg-muted rounded animate-pulse"></div>
+                </th>
+                <th className="px-6 py-3 text-left">
+                  <div className="h-4 w-20 bg-muted rounded animate-pulse"></div>
+                </th>
+                <th className="px-6 py-3 text-left">
+                  <div className="h-4 w-32 bg-muted rounded animate-pulse"></div>
+                </th>
+                <th className="px-6 py-3 text-left">
+                  <div className="h-4 w-28 bg-muted rounded animate-pulse"></div>
+                </th>
+                <th className="px-6 py-3 text-left">
+                  <div className="h-4 w-24 bg-muted rounded animate-pulse"></div>
+                </th>
+                <th className="relative px-6 py-3 text-left">
+                  <div className="h-4 w-20 bg-muted rounded animate-pulse"></div>
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-card divide-y divide-border">
+              {[...Array(2)].map((_, index) => (
+                <tr key={index} className="hover:bg-muted/50 transition-colors">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="w-4 h-4 bg-muted rounded animate-pulse"></div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="h-4 w-48 bg-muted rounded animate-pulse"></div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="h-6 w-20 bg-muted rounded-full animate-pulse"></div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="space-y-2">
+                      <div className="h-4 w-32 bg-muted rounded animate-pulse"></div>
+                      <div className="h-3 w-24 bg-muted rounded animate-pulse"></div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="h-4 w-28 bg-muted rounded animate-pulse"></div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="h-4 w-24 bg-muted rounded animate-pulse"></div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <div className="w-8 h-8 bg-muted rounded animate-pulse"></div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Archived Jobs Skeleton */}
+      <div className="bg-card shadow-card border border-border rounded-card overflow-visible">
+        <div className="p-6 border-b border-border">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-8 h-8 bg-muted rounded animate-pulse"></div>
+            <div className="h-6 w-32 bg-muted rounded animate-pulse"></div>
+            <div className="h-4 w-8 bg-muted rounded animate-pulse"></div>
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="min-w-full divide-y divide-border">
+            <thead className="bg-muted sticky top-0 z-10">
+              <tr>
+                <th className="px-6 py-3 text-left">
+                  <div className="w-4 h-4 bg-muted rounded animate-pulse"></div>
+                </th>
+                <th className="px-6 py-3 text-left">
+                  <div className="h-4 w-24 bg-muted rounded animate-pulse"></div>
+                </th>
+                <th className="px-6 py-3 text-left">
+                  <div className="h-4 w-20 bg-muted rounded animate-pulse"></div>
+                </th>
+                <th className="px-6 py-3 text-left">
+                  <div className="h-4 w-32 bg-muted rounded animate-pulse"></div>
+                </th>
+                <th className="px-6 py-3 text-left">
+                  <div className="h-4 w-28 bg-muted rounded animate-pulse"></div>
+                </th>
+                <th className="px-6 py-3 text-left">
+                  <div className="h-4 w-24 bg-muted rounded animate-pulse"></div>
+                </th>
+                <th className="relative px-6 py-3 text-left">
+                  <div className="h-4 w-20 bg-muted rounded animate-pulse"></div>
+                </th>
+              </tr>
+            </thead>
+            <tbody className="bg-card divide-y divide-border">
+              {[...Array(1)].map((_, index) => (
+                <tr key={index} className="hover:bg-muted/50 transition-colors">
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="w-4 h-4 bg-muted rounded animate-pulse"></div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="h-4 w-48 bg-muted rounded animate-pulse"></div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="h-6 w-20 bg-muted rounded-full animate-pulse"></div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="space-y-2">
+                      <div className="h-4 w-32 bg-muted rounded animate-pulse"></div>
+                      <div className="h-3 w-24 bg-muted rounded animate-pulse"></div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="h-4 w-28 bg-muted rounded animate-pulse"></div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <div className="h-4 w-24 bg-muted rounded animate-pulse"></div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <div className="w-8 h-8 bg-muted rounded animate-pulse"></div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+
   // Loading state
   if (loading) {
-    return <LoadingState message="Loading jobs..." />;
+    return <SkeletonTable />;
   }
 
   return (
@@ -943,6 +1501,14 @@ export default function JobsPage() {
                   <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
                 )}
               </button>
+              
+              {/* Create Job Button */}
+              <Button
+                onClick={() => setShowCreateModal(true)}
+                className="bg-blue-600 hover:bg-blue-700 text-white border-blue-600"
+              >
+                Create Job
+              </Button>
               
               {/* Filter Dropdown */}
               {showFilters && (
@@ -1056,34 +1622,6 @@ export default function JobsPage() {
       )}
 
       {/* Jobs Sections */}
-      {jobs.length > 0 && (
-        <>
-          <JobsSection 
-            title="Active Jobs" 
-            jobs={activeJobs} 
-            icon="🟢"
-            emptyMessage="No active jobs. Publish a draft job to make it active."
-            status="ACTIVE"
-          />
-          
-          <JobsSection 
-            title="Draft Jobs" 
-            jobs={draftJobs} 
-            icon="📝"
-            emptyMessage="No draft jobs. Create a new job to get started."
-            status="DRAFT"
-          />
-          
-          <JobsSection 
-            title="Archived Jobs" 
-            jobs={archivedJobs} 
-            icon="📦"
-            emptyMessage="No archived jobs. Archived jobs will appear here."
-            status="ARCHIVED"
-          />
-        </>
-      )}
-
       {/* Create Job Modal */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-foreground/50 overflow-y-auto h-full w-full z-50 flex items-start justify-center pt-20 pb-8 animate-fade-in">
@@ -1835,9 +2373,11 @@ export default function JobsPage() {
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
-      {showDeleteModal && jobToDelete && (
-        <div className="fixed inset-0 bg-foreground/50 overflow-y-auto h-full w-full z-50 flex items-center justify-center pt-20 pb-8 animate-fade-in">
+    {/* Delete Confirmation Modal */}
+    {showDeleteModal && jobToDelete && (
+      <>
+        {console.log("Rendering delete modal for job:", jobToDelete.title)}
+        <div className="fixed inset-0 bg-foreground/50 overflow-y-auto h-full w-full z-50 flex items-start justify-center pt-20 pb-8 animate-fade-in">
           <div className="relative p-6 w-full max-w-md shadow-card rounded-xl border border-border bg-card animate-scale-in">
             <div className="text-center">
               {/* Warning Icon */}
@@ -1851,9 +2391,24 @@ export default function JobsPage() {
               <h3 className="text-lg font-medium text-foreground font-display mb-2">
                 Delete Job
               </h3>
-              <p className="text-sm text-muted-foreground mb-6">
-                Are you sure you want to delete <strong>{jobToDelete.title}</strong>? This action cannot be undone.
+              <p className="text-sm text-muted-foreground mb-4">
+                This action cannot be undone.
               </p>
+              
+              {/* Confirmation Input */}
+              <div className="mb-6 text-left">
+                <label htmlFor="deleteConfirmation" className="block text-sm font-medium text-foreground mb-2">
+                  Type <strong>{jobToDelete.title}</strong> to confirm deletion:
+                </label>
+                <input
+                  id="deleteConfirmation"
+                  type="text"
+                  value={deleteConfirmation}
+                  onChange={(e) => setDeleteConfirmation(e.target.value)}
+                  placeholder={jobToDelete.title}
+                  className="w-full px-3 py-2 border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                />
+              </div>
               
               {/* Action Buttons */}
               <div className="flex gap-3">
@@ -1863,6 +2418,7 @@ export default function JobsPage() {
                   onClick={() => {
                     setShowDeleteModal(false);
                     setJobToDelete(null);
+                    setDeleteConfirmation("");
                   }}
                   className="flex-1"
                 >
@@ -1871,7 +2427,8 @@ export default function JobsPage() {
                 <Button
                   type="button"
                   onClick={handleDeleteJob}
-                  className="flex-1 bg-red-600 hover:bg-red-700 text-white border-red-600"
+                  disabled={deleteConfirmation !== jobToDelete.title}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white border-red-600 disabled:bg-gray-300 disabled:cursor-not-allowed"
                 >
                   Delete Job
                 </Button>
@@ -1879,7 +2436,8 @@ export default function JobsPage() {
             </div>
           </div>
         </div>
-      )}
+      </>
+    )}
     </div>
   );
 }

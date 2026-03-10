@@ -84,7 +84,7 @@ export default function JobDetailsPage() {
     try {
       const response = await fetch(`/api/jobs/${params.id}`, {
         headers: {
-          "x-org-id": "cmm87bloy0000v9nvvzyt6aqn" // Demo org ID
+          "x-org-id": "cmmk1zo40000212ymhwgz0di8" // Demo org ID
         }
       });
       
@@ -107,7 +107,7 @@ export default function JobDetailsPage() {
     try {
       const response = await fetch(`/api/interviews?jobId=${params.id}`, {
         headers: {
-          "x-org-id": "cmm87bloy0000v9nvvzyt6aqn"
+          "x-org-id": "cmmk1zo40000212ymhwgz0di8"
         }
       });
       
@@ -127,7 +127,7 @@ export default function JobDetailsPage() {
     try {
       const response = await fetch(`/api/evaluations?jobId=${params.id}`, {
         headers: {
-          "x-org-id": "cmm87bloy0000v9nvvzyt6aqn"
+          "x-org-id": "cmmk1zo40000212ymhwgz0di8"
         }
       });
       
@@ -147,7 +147,7 @@ export default function JobDetailsPage() {
     try {
       const response = await fetch("/api/candidates", {
         headers: {
-          "x-org-id": "cmm87bloy0000v9nvvzyt6aqn"
+          "x-org-id": "cmmk1zo40000212ymhwgz0di8"
         }
       });
       
@@ -175,7 +175,7 @@ export default function JobDetailsPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-org-id': 'cmm87bloy0000v9nvvzyt6aqn'
+          'x-org-id': 'cmmk1zo40000212ymhwgz0di8'
         }
       });
       
@@ -210,7 +210,7 @@ export default function JobDetailsPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-org-id': 'cmm87bloy0000v9nvvzyt6aqn'
+          'x-org-id': 'cmmk1zo40000212ymhwgz0di8'
         }
       });
       
@@ -249,7 +249,7 @@ export default function JobDetailsPage() {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'x-org-id': 'cmm87bloy0000v9nvvzyt6aqn'
+          'x-org-id': 'cmmk1zo40000212ymhwgz0di8'
         }
       });
       
@@ -282,7 +282,7 @@ export default function JobDetailsPage() {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          'x-org-id': 'cmm87bloy0000v9nvvzyt6aqn'
+          'x-org-id': 'cmmk1zo40000212ymhwgz0di8'
         },
         body: JSON.stringify({
           status: newStatus
@@ -381,7 +381,7 @@ export default function JobDetailsPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-org-id": "cmm87bloy0000v9nvvzyt6aqn"
+          "x-org-id": "cmmk1zo40000212ymhwgz0di8"
         },
         body: JSON.stringify({
           jobId: params.id,
@@ -457,7 +457,7 @@ export default function JobDetailsPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-org-id": "cmm87bloy0000v9nvvzyt6aqn"
+          "x-org-id": "cmmk1zo40000212ymhwgz0di8"
         },
         body: JSON.stringify({
           jobId: params.id,
@@ -1195,6 +1195,43 @@ export default function JobDetailsPage() {
           </div>
         </div>
       </div>
+
+      {/* JD Analysis Reminder Banner */}
+      {job.jdAnalysisStatus === 'NOT_STARTED' && !job.jdExtractionJson && (
+        <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-blue-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <p className="text-sm font-medium text-blue-800">
+                  Run JD Analysis to generate interview questions and evaluation criteria.
+                </p>
+              </div>
+            </div>
+            <div className="ml-4 flex-shrink-0">
+              <button
+                type="button"
+                className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-blue-700 bg-blue-100 hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                onClick={analyzeJD}
+                disabled={isAnalyzingJD}
+              >
+                {isAnalyzingJD ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b border-blue-700 mr-2"></div>
+                    Analyzing...
+                  </>
+                ) : (
+                  'Run Analysis'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Create Interview Modal */}
       {showInterviewModal && (

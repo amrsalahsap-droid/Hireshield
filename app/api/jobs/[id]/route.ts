@@ -8,6 +8,7 @@ import { JDExtraction_v1 } from "@/lib/schemas/jd-extraction";
 import { InterviewKit_v1 } from "@/lib/schemas/interview-kit";
 import { randomUUID } from "crypto";
 import { createAuditLog, AUDIT_ACTIONS } from "@/lib/audit";
+import { ExperienceLevel, RequirementType } from "@prisma/client";
 import { getCurrentUserOrThrow } from "@/lib/server/auth";
 import { incrementInterviewKitUsage, getUsageSnapshot } from "@/lib/usage";
 
@@ -205,11 +206,32 @@ export const PUT = withOrgContext(async (request: NextRequest, orgId: string, { 
     }
 
     // Check if job exists and belongs to the organization
+    console.log("PUT: Looking for job with ID:", id, "and orgId:", orgId);
+    
+    // First check if job exists at all (without org filter)
+    const jobExists = await prisma.job.findUnique({
+      where: { id },
+    });
+    
+    console.log("PUT: Job exists (no org filter):", jobExists);
+    
+    if (!jobExists) {
+      console.log("PUT: Job doesn't exist at all - ID:", id);
+      return NextResponse.json(
+        { error: "Job not found" },
+        { status: 404 }
+      );
+    }
+    
+    // Then check if it belongs to the organization
     const existingJob = await prisma.job.findFirst({
       where: { id, orgId },
     });
 
+    console.log("PUT: Found job with org filter:", existingJob);
+
     if (!existingJob) {
+      console.log("PUT: Job exists but belongs to different org - ID:", id, "orgId:", orgId);
       return NextResponse.json(
         { error: "Job not found" },
         { status: 404 }
@@ -351,12 +373,11 @@ export const PUT = withOrgContext(async (request: NextRequest, orgId: string, { 
           jobId: id,
           skill: {
             connect: {
-              name_orgId: {
-                name: skillName.trim(),
-                orgId
-              }
+              name: skillName.trim()
             }
-          }
+          },
+          experienceLevel: ExperienceLevel.INTERMEDIATE,
+          requirementType: RequirementType.REQUIRED
         }));
 
         await prisma.job.update({
@@ -418,20 +439,26 @@ export const DELETE = withOrgContext(async (request: NextRequest, orgId: string,
       );
     }
 
-    // Soft delete by archiving
-    const archivedJob = await prisma.job.update({
+    // Only allow deletion of draft jobs
+    if (existingJob.status !== "DRAFT") {
+      return NextResponse.json(
+        { error: "Only draft jobs can be deleted" },
+        { status: 400 }
+      );
+    }
+
+    // Actually delete the draft job (hard delete)
+    await prisma.job.delete({
       where: { id },
-      data: { status: "ARCHIVED" },
     });
 
     return NextResponse.json({ 
-      message: "Job archived successfully",
-      job: archivedJob 
+      message: "Job deleted successfully"
     });
   } catch (error) {
-    console.error("Error archiving job:", error);
+    console.error("Error deleting job:", error);
     return NextResponse.json(
-      { error: "Failed to archive job" },
+      { error: "Failed to delete job" },
       { status: 500 }
     );
   }
