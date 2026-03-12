@@ -152,7 +152,7 @@ export default function JobsPage() {
       setError(null);
       const response = await fetch("/api/jobs", {
         headers: {
-          "x-org-id": "cmm87bloy0000v9nvvzyt6aqn" // Demo org ID
+          "Content-Type": "application/json"
         }
       });
       
@@ -268,8 +268,7 @@ export default function JobsPage() {
       const response = await fetch("/api/jobs", {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
-          "x-org-id": "cmm87bloy0000v9nvvzyt6aqn" // Demo org ID
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({
           title: formData.title.trim(),
