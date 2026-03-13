@@ -171,7 +171,7 @@ export default function JobDetailsPage() {
     setAnalysisRequestId(null);
     
     try {
-      const response = await fetch(`/api/jobs/${job.id}/analyze-jd`, {
+      const response = await fetch(`/api/jobs/${job.id}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -184,13 +184,24 @@ export default function JobDetailsPage() {
         // Refresh job data to show the analysis results
         await fetchJob();
       } else {
-        const errorData = await response.json();
+        // Handle non-JSON responses properly
+        const contentType = response.headers.get('content-type');
+        let errorData;
+        
+        if (contentType && contentType.includes('application/json')) {
+          errorData = await response.json();
+        } else {
+          // Handle HTML error pages or non-JSON responses
+          throw new Error(`JD Analysis endpoint was not found (Status: ${response.status})`);
+        }
+        
         setAnalysisError(errorData.error || 'Failed to analyze job description');
         setAnalysisRequestId(errorData.requestId || null);
       }
     } catch (error) {
       console.error("Error analyzing JD:", error);
-      setAnalysisError('Network error occurred while analyzing job description');
+      const errorMessage = error instanceof Error ? error.message : 'Network error occurred while analyzing job description';
+      setAnalysisError(errorMessage);
       setAnalysisRequestId(null);
     } finally {
       setIsAnalyzingJD(false);
@@ -206,7 +217,7 @@ export default function JobDetailsPage() {
     setAnalysisRequestId(null);
     
     try {
-      const response = await fetch(`/api/jobs/${job.id}/analyze-jd?force=1`, {
+      const response = await fetch(`/api/jobs/${job.id}?force=1`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -219,13 +230,24 @@ export default function JobDetailsPage() {
         // Refresh job data to show the new analysis results
         await fetchJob();
       } else {
-        const errorData = await response.json();
+        // Handle non-JSON responses properly
+        const contentType = response.headers.get('content-type');
+        let errorData;
+        
+        if (contentType && contentType.includes('application/json')) {
+          errorData = await response.json();
+        } else {
+          // Handle HTML error pages or non-JSON responses
+          throw new Error(`JD Analysis endpoint was not found (Status: ${response.status})`);
+        }
+        
         setAnalysisError(errorData.error || 'Failed to re-analyze job description');
         setAnalysisRequestId(errorData.requestId || null);
       }
     } catch (error) {
       console.error("Error re-analyzing JD:", error);
-      setAnalysisError('Network error occurred while re-analyzing job description');
+      const errorMessage = error instanceof Error ? error.message : 'Network error occurred while re-analyzing job description';
+      setAnalysisError(errorMessage);
       setAnalysisRequestId(null);
     } finally {
       setIsAnalyzingJD(false);
