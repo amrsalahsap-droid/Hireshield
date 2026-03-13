@@ -3,13 +3,14 @@ import { withOrgContext } from "@/lib/server/org-context";
 import { prisma } from "@/lib/prisma";
 import { jdAnalyzerV1 } from "@/lib/prompts/jd_analyzer_v1";
 import { interviewKitGeneratorV1 } from "@/lib/prompts/interview_kit_v1";
-import { callLLMAndParseJSON } from "@/lib/server/ai/call";
+import { aiService } from "@/lib/ai/service"; // 🏗️ AI Architecture: Use ONLY aiService - NO direct provider calls
 import { JDExtraction_v1 } from "@/lib/schemas/jd-extraction";
-import { InterviewKit_v1 } from "@/lib/schemas/interview-kit";
 import { randomUUID } from "crypto";
 import { createAuditLog, AUDIT_ACTIONS } from "@/lib/audit";
 import { getCurrentUserOrThrow } from "@/lib/server/auth";
 import { incrementInterviewKitUsage, getUsageSnapshot } from "@/lib/usage";
+import { handleAIRouteError } from "@/lib/server/ai-error-mapping";
+import { createRouteLogContext, logRouteAIStart, logRouteAISuccess, logRouteAIError, logRoutePersistenceIssue } from "@/lib/server/route-ai-logging";
 
 // GET /api/jobs/[id] - Get job details or JD analysis status
 export const GET = withOrgContext(async (request: NextRequest, orgId: string, { params }: { params: { id: string } }) => {
@@ -268,6 +269,14 @@ export const POST = withOrgContext(async (request: NextRequest, orgId: string, {
     // Generate request ID for tracking
     const requestId = randomUUID();
 
+    // Create route logging context
+    const logContext = createRouteLogContext(
+      'POST /api/jobs/[id]/analyze-jd',
+      'analyzeJD',
+      requestId,
+      orgId
+    );
+
     // Get current user for audit logging
     let actorUserId: string | null = null;
     try {
@@ -322,20 +331,17 @@ export const POST = withOrgContext(async (request: NextRequest, orgId: string, {
         },
       });
 
-      // Build prompt using Phase 3 prompt builder
-      const prompt = jdAnalyzerV1.build({
+      // Call AI service with centralized error handling and logging
+      logRouteAIStart(logContext, {
         jobTitle: job.title,
         rawJD: job.rawJD,
       });
 
-      // Call LLM with JDExtraction_v1 schema parsing
-      const result = await callLLMAndParseJSON({
-        promptId: jdAnalyzerV1.id,
-        system: prompt.system,
-        user: prompt.user,
-        schema: JDExtraction_v1,
+      const result = await aiService.analyzeJD({
+        jobTitle: job.title,
+        rawJD: job.rawJD,
         requestId,
-        orgId,
+        orgId
       });
 
       // Increment usage counter (only when AI is actually called, not cached)
@@ -357,13 +363,16 @@ export const POST = withOrgContext(async (request: NextRequest, orgId: string, {
       const updatedJob = await prisma.job.update({
         where: { id },
         data: {
-          jdExtractionJson: result.value,
+          jdExtractionJson: result as any, // Type assertion for Prisma JSON field
           jdAnalyzedAt: new Date(),
           jdPromptVersion: jdAnalyzerV1.version,
           jdAnalysisStatus: 'DONE',
           jdLastError: null,
       },
       });
+
+      // Log AI operation success
+      logRouteAISuccess(logContext, result, true);
 
       // Log successful completion
       if (actorUserId) {
@@ -378,16 +387,19 @@ export const POST = withOrgContext(async (request: NextRequest, orgId: string, {
       }
 
       return NextResponse.json({
-        jdExtraction: result.value,
+        jdExtraction: result,
         requestId,
         cached: false,
         analyzedAt: updatedJob.jdAnalyzedAt,
         promptVersion: updatedJob.jdPromptVersion,
-        meta: result.meta,
+        meta: undefined, // AI service doesn't provide meta for analyzeJD
       });
 
     } catch (error) {
       console.error("Error analyzing job description:", error);
+      
+      // Log AI operation error
+      logRouteAIError(logContext, error, false);
       
       // Update job status to FAILED with error details
       try {
@@ -400,6 +412,7 @@ export const POST = withOrgContext(async (request: NextRequest, orgId: string, {
         });
       } catch (updateError) {
         console.error("Failed to update job error status:", updateError);
+        logRoutePersistenceIssue(logContext, 'status', updateError);
       }
 
       // Log analysis failure
@@ -417,31 +430,8 @@ export const POST = withOrgContext(async (request: NextRequest, orgId: string, {
         });
       }
       
-      // Handle LLM-specific errors
-      if (error && typeof error === 'object' && 'code' in error) {
-        const llmError = error as any;
-        const statusCode = llmError.code === 'RATE_LIMIT' ? 429 : 
-                          llmError.code === 'TIMEOUT' ? 502 : 500;
-        
-        return NextResponse.json(
-          { 
-            error: "AI analysis failed",
-            details: llmError.message,
-            code: llmError.code,
-            requestId,
-          },
-          { status: statusCode }
-        );
-      }
-
-      return NextResponse.json(
-        { 
-          error: "Failed to analyze job description",
-          requestId,
-          details: error instanceof Error ? error.message : 'Unknown error',
-        },
-        { status: 500 }
-      );
+      // Use standardized AI error mapping
+      return handleAIRouteError(error, 'jd-analysis', requestId);
     }
   } catch (error) {
     console.error("Error in POST /api/jobs/[id]/analyze-jd:", error);
@@ -667,31 +657,22 @@ export const PUT = withOrgContext(async (request: NextRequest, orgId: string, { 
         );
       }
 
-      // Build prompt from validated JD extraction
-      const prompt = interviewKitGeneratorV1.build({
+      // Call AI service with centralized error handling and logging
+      const result = await aiService.generateInterviewKit({
         jobTitle: validatedData.roleTitle || job.title,
-        seniorityLevel: validatedData.seniorityLevel || 'UNKNOWN',
-        requiredSkills: validatedData.requiredSkills || [],
-        preferredSkills: validatedData.preferredSkills || [],
-        keyResponsibilities: validatedData.keyResponsibilities || [],
         rawJD: job.rawJD,
-      });
-
-      // Call LLM with InterviewKit_v1 schema parsing
-      const result = await callLLMAndParseJSON({
-        promptId: interviewKitGeneratorV1.id,
-        system: prompt.system,
-        user: prompt.user,
-        schema: InterviewKit_v1,
+        extractedSkills: validatedData.requiredSkills || [],
+        seniorityLevel: validatedData.seniorityLevel,
+        experienceLevel: validatedData.experienceLevel,
         requestId,
-        orgId,
+        orgId
       });
 
       // Save interview kit to database
       const updatedJob = await prisma.job.update({
         where: { id },
         data: {
-          interviewKitJson: result.value,
+          interviewKitJson: result as any, // Type assertion for Prisma JSON field
           interviewKitGeneratedAt: new Date(),
           interviewKitPromptVersion: interviewKitGeneratorV1.version,
           interviewKitStatus: 'DONE',
@@ -723,7 +704,7 @@ export const PUT = withOrgContext(async (request: NextRequest, orgId: string, { 
       }
 
       return NextResponse.json({
-        interviewKit: result.value,
+        interviewKit: result,
         requestId,
         cached: false,
         job: {
@@ -733,7 +714,7 @@ export const PUT = withOrgContext(async (request: NextRequest, orgId: string, { 
           interviewKitPromptVersion: updatedJob.interviewKitPromptVersion,
         },
         usage: usageResult.success ? usageResult.usage : undefined,
-        meta: result.meta,
+        meta: undefined, // AI service doesn't provide meta for generateInterviewKit
       });
 
     } catch (error) {
@@ -768,37 +749,11 @@ export const PUT = withOrgContext(async (request: NextRequest, orgId: string, { 
         });
       }
       
-      // Handle LLM-specific errors
-      if (error && typeof error === 'object' && 'code' in error) {
-        const llmError = error as any;
-        const statusCode = llmError.code === 'RATE_LIMIT' ? 429 : 
-                          llmError.code === 'TIMEOUT' ? 502 : 500;
-        
-        return NextResponse.json(
-          { 
-            error: "Interview kit generation failed",
-            details: llmError.message,
-            code: llmError.code,
-            requestId,
-          },
-          { status: statusCode }
-        );
-      }
-
-      return NextResponse.json(
-        { 
-          error: "Failed to generate interview kit",
-          requestId,
-          details: error instanceof Error ? error.message : 'Unknown error',
-        },
-        { status: 500 }
-      );
+      // Use standardized AI error mapping
+      return handleAIRouteError(error, 'interview-kit', requestId);
     }
   } catch (error) {
     console.error("Error in PUT /api/jobs/[id]/generate-interview-kit:", error);
-    return NextResponse.json(
-      { error: "Failed to generate interview kit" },
-      { status: 500 }
-    );
+    return handleAIRouteError(error, 'interview-kit', requestId);
   }
 });

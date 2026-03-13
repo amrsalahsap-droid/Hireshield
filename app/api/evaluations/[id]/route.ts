@@ -3,11 +3,12 @@ import { withOrgContext } from "@/lib/server/org-context";
 import { getAuthUserFromRequest } from "@/lib/server/auth-request";
 import { prisma } from "@/lib/prisma";
 import { createAuditLog, AUDIT_ACTIONS } from "@/lib/audit";
-import { CandidateSignals_v1 } from "@/lib/schemas/candidate-signals";
 import { FinalScore_v1 } from "@/lib/schemas/final-score";
 import { candidateSignalsExtractorV1 } from "@/lib/prompts/candidate_signals_v1";
-import { callLLMAndParseJSON } from "@/lib/server/ai/call";
+import { aiService } from "@/lib/ai/service"; // 🏗️ AI Architecture: Use ONLY aiService - NO direct provider calls
 import { randomUUID } from "crypto";
+import { handleAIRouteError } from "@/lib/server/ai-error-mapping";
+import { createRouteLogContext, logRouteAIStart, logRouteAISuccess, logRouteAIError, logRoutePersistenceIssue } from "@/lib/server/route-ai-logging";
 
 // GET /api/evaluations/[id] - Get evaluation details
 export const GET = withOrgContext(async (request: NextRequest, orgId: string, { params }: { params: { id: string } }) => {
@@ -287,6 +288,14 @@ export const POST = withOrgContext(async (request: NextRequest, orgId: string, {
     // Generate request ID for tracking
     const requestId = randomUUID();
 
+    // Create route logging context
+    const logContext = createRouteLogContext(
+      'POST /api/evaluations/[id]/generate-signals',
+      'generateCandidateSignals',
+      requestId,
+      orgId
+    );
+
     // Extract job context from JD analysis (if available)
     let jobContext = '';
     let requiredSkills: string[] = [];
@@ -301,35 +310,44 @@ export const POST = withOrgContext(async (request: NextRequest, orgId: string, {
       jobContext = `Role: ${evaluation.job.title} (JD not analyzed)`;
     }
 
-    // Build prompt candidate_signals_v1 with role/skills + CV/transcript
-    const prompt = candidateSignalsExtractorV1.build({
-      roleTitle: evaluation.job.title,
-      requiredSkills,
-      keyResponsibilities,
-      cvText: evaluation.candidate.rawCVText,
-      transcriptText: transcriptText || undefined,
-      jobContext,
-      maxStrengths: 8,
-      maxGaps: 8,
-      maxRiskFlags: 10,
-      maxInconsistencies: 10,
+    // Call AI service with centralized error handling and logging
+    logRouteAIStart(logContext, {
+      candidateProfile: {
+        fullName: evaluation.candidate.fullName,
+        rawCVText: evaluation.candidate.rawCVText,
+      },
+      jobRequirements: {
+        title: evaluation.job.title,
+        description: evaluation.job.rawJD,
+        requiredSkills: requiredSkills,
+        experienceLevel: (evaluation.job.jdExtractionJson as any)?.experienceLevel || 'UNKNOWN',
+        seniorityLevel: (evaluation.job.jdExtractionJson as any)?.seniorityLevel || 'UNKNOWN',
+      },
     });
 
-    // Call LLM → validate CandidateSignals_v1
-    const result = await callLLMAndParseJSON({
-      promptId: candidateSignalsExtractorV1.id,
-      system: prompt.system,
-      user: prompt.user,
-      schema: CandidateSignals_v1,
+    const result = await aiService.generateCandidateSignals({
+      candidateProfile: {
+        fullName: evaluation.candidate.fullName,
+        rawCVText: evaluation.candidate.rawCVText,
+      },
+      jobRequirements: {
+        title: evaluation.job.title,
+        description: evaluation.job.rawJD,
+        requiredSkills: requiredSkills,
+        experienceLevel: (evaluation.job.jdExtractionJson as any)?.experienceLevel || 'UNKNOWN',
+        seniorityLevel: (evaluation.job.jdExtractionJson as any)?.seniorityLevel || 'UNKNOWN',
+      },
+      skills: [], // Skills will be extracted from CV by the AI service
+      education: [], // Education will be extracted from CV by the AI service
       requestId,
-      orgId,
+      orgId
     });
 
     // Store in Evaluation signals fields
     const updatedEvaluation = await prisma.evaluation.update({
       where: { id },
       data: {
-        signalsJson: result.value,
+        signalsJson: result as any, // Type assertion for Prisma JSON field
         signalsPromptVersion: candidateSignalsExtractorV1.version,
         signalsGeneratedAt: new Date(),
         rawModelOutputSnippet: transcriptText ? 
@@ -352,38 +370,28 @@ export const POST = withOrgContext(async (request: NextRequest, orgId: string, {
       },
     });
 
+    // Log AI operation success
+    logRouteAISuccess(logContext, result, true);
+
     return NextResponse.json({
-      signals: result.value,
+      signals: result,
       requestId,
       evaluation: {
         id: updatedEvaluation.id,
         signalsGeneratedAt: updatedEvaluation.signalsGeneratedAt,
         signalsPromptVersion: updatedEvaluation.signalsPromptVersion,
       },
-      meta: result.meta,
+      meta: undefined, // AI service doesn't provide meta for generateCandidateSignals
       warnings: jdWarning ? [jdWarning] : undefined,
     });
 
   } catch (error) {
     console.error("Error generating candidate signals:", error);
     
-    // Handle LLM-specific errors
-    if (error && typeof error === 'object' && 'code' in error) {
-      const llmError = error as any;
-      return NextResponse.json(
-        { 
-          error: "Candidate signals generation failed",
-          details: llmError.message,
-          code: llmError.code,
-          requestId: llmError.requestId,
-        },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json(
-      { error: "Failed to generate candidate signals" },
-      { status: 500 }
-    );
+    // Log AI operation error
+    logRouteAIError(logContext, error, false);
+    
+    // Use standardized AI error mapping
+    return handleAIRouteError(error, 'candidate-signals', requestId);
   }
 });
