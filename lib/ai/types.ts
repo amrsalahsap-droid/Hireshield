@@ -3,6 +3,9 @@
  * Shared types and interfaces for all AI-powered features
  */
 
+import { z } from 'zod';
+import { EvidenceSchema_v1, CONSTRAINTS } from './base';
+
 // Base input/output types for AI operations
 export interface BaseAIInput {
   requestId?: string;
@@ -13,7 +16,7 @@ export interface BaseAIResult {
   requestId?: string;
   success: boolean;
   data?: any;
-  error?: AIError;
+  error?: any;
   meta?: AIMeta;
 }
 
@@ -47,6 +50,39 @@ export interface AnalyzeJDResult {
   keyResponsibilities: string[];
   qualifications: string[];
   preferredQualifications?: string[];
+  // Quality analysis fields
+  ambiguities?: Array<{
+    issue: string;
+    suggestedClarification: string;
+    evidence?: {
+      content: string;
+      source: string;
+    };
+  }>;
+  unrealisticExpectations?: Array<{
+    issue: string;
+    whyUnrealistic: string;
+    evidence?: {
+      content: string;
+      source: string;
+    };
+  }>;
+  missingCriteria?: Array<{
+    missing: string;
+    suggestedCriteria: string;
+  }>;
+  // Development-only diagnostic metadata
+  __devDiagnostics?: {
+    activeProvider: string;
+    matchedScenario?: string;
+    usedGenericFallback: boolean;
+    roleTitleExtractionSuccess: boolean;
+    extractionMethod: 'scenario' | 'generic-fallback' | 'role-extraction' | 'weak-extraction';
+    genericFallbackReason?: string;
+    keywordMatchCount?: number;
+    processingTimeMs?: number;
+    confidence?: 'high' | 'medium' | 'low';
+  };
 }
 
 // Interview Kit types
