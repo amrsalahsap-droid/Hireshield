@@ -39,6 +39,7 @@ export interface AnalyzeJDInput extends BaseAIInput {
 export interface AnalyzeJDResult {
   roleTitle?: string;
   requiredSkills: string[];
+  preferredSkills?: string[];
   seniorityLevel: string;
   department?: string;
   estimatedSalary?: {

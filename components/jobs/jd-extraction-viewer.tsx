@@ -28,6 +28,66 @@ export const JDExtractionViewer: React.FC<JDExtractionViewerProps> = ({
     return text.substring(0, maxLength) + '...';
   };
 
+  // Quality assessment helper functions
+  const getQualityScore = (extraction: any): number => {
+    let score = 100;
+    
+    // Deduct points for missing key elements
+    if (!extraction.requiredSkills || extraction.requiredSkills.length === 0) score -= 30;
+    if (!extraction.keyResponsibilities || extraction.keyResponsibilities.length === 0) score -= 25;
+    if (!extraction.seniorityLevel || extraction.seniorityLevel === 'Mid-level') score -= 10;
+    if (!extraction.experienceLevel) score -= 10;
+    
+    // Deduct points for quality issues
+    if (extraction.ambiguities && extraction.ambiguities.length > 0) score -= extraction.ambiguities.length * 5;
+    if (extraction.unrealisticExpectations && extraction.unrealisticExpectations.length > 0) score -= extraction.unrealisticExpectations.length * 10;
+    if (extraction.missingCriteria && extraction.missingCriteria.length > 0) score -= extraction.missingCriteria.length * 8;
+    
+    return Math.max(0, score);
+  };
+
+  const hasQualityIssues = (extraction: any): boolean => {
+    return (
+      (extraction.ambiguities && extraction.ambiguities.length > 0) ||
+      (extraction.unrealisticExpectations && extraction.unrealisticExpectations.length > 0) ||
+      (extraction.missingCriteria && extraction.missingCriteria.length > 0) ||
+      !extraction.requiredSkills ||
+      extraction.requiredSkills.length === 0 ||
+      !extraction.keyResponsibilities ||
+      extraction.keyResponsibilities.length === 0
+    );
+  };
+
+  const getImprovementSuggestions = (extraction: any): string[] => {
+    const suggestions: string[] = [];
+    
+    if (!extraction.requiredSkills || extraction.requiredSkills.length === 0) {
+      suggestions.push('Add specific required skills and qualifications');
+    }
+    
+    if (!extraction.keyResponsibilities || extraction.keyResponsibilities.length === 0) {
+      suggestions.push('Include clear day-to-day responsibilities');
+    }
+    
+    if (extraction.ambiguities && extraction.ambiguities.length > 0) {
+      suggestions.push('Clarify ambiguous requirements and responsibilities');
+    }
+    
+    if (extraction.unrealisticExpectations && extraction.unrealisticExpectations.length > 0) {
+      suggestions.push('Review and adjust unrealistic experience or qualification requirements');
+    }
+    
+    if (extraction.missingCriteria && extraction.missingCriteria.length > 0) {
+      suggestions.push('Add missing important criteria like work environment, reporting structure, or success metrics');
+    }
+    
+    if (!extraction.seniorityLevel || extraction.seniorityLevel === 'Mid-level') {
+      suggestions.push('Specify the exact seniority level for better candidate matching');
+    }
+    
+    return suggestions;
+  };
+
   const generateAnalysisSummary = () => {
     const summary = [];
     
@@ -391,6 +451,63 @@ export const JDExtractionViewer: React.FC<JDExtractionViewerProps> = ({
                 <p className="text-sm text-gray-500 italic">None detected</p>
               )}
             </div>
+          </div>
+        </div>
+
+        {/* Quality Indicator & Improvement Suggestions */}
+        <div className="border-t border-gray-200 pt-6">
+          <div className="bg-gray-50 rounded-lg p-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-medium text-gray-900">JD Quality Assessment</h3>
+              <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                getQualityScore(extraction) >= 80 ? 'bg-green-100 text-green-800' :
+                getQualityScore(extraction) >= 60 ? 'bg-yellow-100 text-yellow-800' :
+                'bg-red-100 text-red-800'
+              }`}>
+                {getQualityScore(extraction) >= 80 ? 'High Quality' :
+                 getQualityScore(extraction) >= 60 ? 'Good Quality' :
+                 'Needs Improvement'}
+              </div>
+            </div>
+            
+            {hasQualityIssues(extraction) && (
+              <div className="space-y-3">
+                <p className="text-sm text-gray-600">
+                  This job description has some areas that could be improved for better candidate attraction and clarity:
+                </p>
+                <div className="bg-white rounded-md p-3 border border-gray-200">
+                  <h4 className="text-sm font-medium text-gray-900 mb-2">Recommended Actions:</h4>
+                  <ul className="text-sm text-gray-600 space-y-1">
+                    {getImprovementSuggestions(extraction).map((suggestion, index) => (
+                      <li key={index} className="flex items-start">
+                        <span className="text-indigo-500 mr-2">•</span>
+                        {suggestion}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <button
+                  onClick={() => window.open('https://docs.google.com/document/d/1Jd-template', '_blank')}
+                  className="inline-flex items-center px-3 py-1.5 border border-indigo-300 shadow-sm text-xs font-medium rounded-md text-indigo-700 bg-indigo-50 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+                >
+                  <svg className="w-3 h-3 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  View Improvement Guide
+                </button>
+              </div>
+            )}
+            
+            {!hasQualityIssues(extraction) && (
+              <div className="text-sm text-green-700">
+                <div className="flex items-center">
+                  <svg className="w-4 h-4 mr-2 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                  This job description looks comprehensive and well-structured!
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
