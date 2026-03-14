@@ -152,6 +152,7 @@ ${input.rawJD}
 Please return a JSON object with the following structure:
 {
   "requiredSkills": ["skill1", "skill2", ...],
+  "preferredSkills": ["preferred skill 1", "preferred skill 2", ...],
   "seniorityLevel": "Junior|Mid-level|Senior|Lead|Principal",
   "department": "Engineering|Sales|Marketing|... (optional)",
   "estimatedSalary": {
@@ -162,10 +163,48 @@ Please return a JSON object with the following structure:
   "experienceLevel": "X-Y years",
   "keyResponsibilities": ["responsibility1", "responsibility2", ...],
   "qualifications": ["qualification1", "qualification2", ...],
-  "preferredQualifications": ["preferred1", "preferred2", ...]
+  "ambiguities": [
+    {
+      "issue": "Specific ambiguity identified",
+      "suggestedClarification": "How to clarify this"
+    }
+  ],
+  "unrealisticExpectations": [
+    {
+      "issue": "Unrealistic requirement",
+      "whyUnrealistic": "Why this is unrealistic"
+    }
+  ],
+  "missingCriteria": [
+    {
+      "missing": "Important missing element",
+      "suggestedCriteria": "What should be included"
+    }
+  ]
 }
 
-Focus on technical skills, experience requirements, and qualifications. Be realistic about salary ranges based on the role level and market.
+Focus on technical skills, experience requirements, and qualifications. Be realistic about salary ranges based on role level and market.
+
+QUALITY ANALYSIS REQUIREMENTS:
+1. AMBIGUITIES: Look for unclear requirements, vague responsibilities, missing specifics
+2. UNREALISTIC EXPECTATIONS: Identify unreasonable requirements or experience levels
+3. MISSING CRITERIA: Identify important elements missing for this role type
+
+For business roles (HR, Product, Finance, Sales), consider these common missing criteria:
+- Work environment (remote/hybrid/office)
+- Industry/domain context
+- Ownership scope and decision-making authority
+- Reporting line and team structure
+- Success metrics and KPIs
+- Tooling/system context
+- Travel requirements
+- Budget authority
+
+Distinguish between:
+- Required skills: Must-have skills for the role
+- Preferred skills: Nice-to-have skills that would make a candidate stronger
+
+Be conservative but helpful in quality analysis. Only identify issues that genuinely need clarification.
     `.trim();
   }
 
@@ -272,6 +311,22 @@ Be objective and realistic in your assessment. Consider both strengths and poten
     try {
       const parsed = JSON.parse(response);
       
+      // Development logging to debug preferred skills issue
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔍 OpenRouter Raw Response:', {
+          rawPreferredQualifications: parsed.preferredQualifications,
+          rawPreferredSkills: parsed.preferredSkills,
+          hasPreferredQualifications: !!(parsed.preferredQualifications && parsed.preferredQualifications.length > 0),
+          hasPreferredSkills: !!(parsed.preferredSkills && parsed.preferredSkills.length > 0),
+          rawAmbiguities: parsed.ambiguities,
+          rawUnrealisticExpectations: parsed.unrealisticExpectations,
+          rawMissingCriteria: parsed.missingCriteria,
+          hasAmbiguities: !!(parsed.ambiguities && parsed.ambiguities.length > 0),
+          hasUnrealisticExpectations: !!(parsed.unrealisticExpectations && parsed.unrealisticExpectations.length > 0),
+          hasMissingCriteria: !!(parsed.missingCriteria && parsed.missingCriteria.length > 0)
+        });
+      }
+      
       // Validate required fields
       if (!parsed.requiredSkills || !Array.isArray(parsed.requiredSkills)) {
         throw createAIError(
@@ -283,13 +338,18 @@ Be objective and realistic in your assessment. Consider both strengths and poten
 
       return {
         requiredSkills: parsed.requiredSkills || [],
+        preferredSkills: parsed.preferredQualifications || parsed.preferredSkills || [],
         seniorityLevel: parsed.seniorityLevel || 'Mid-level',
         department: parsed.department,
         estimatedSalary: parsed.estimatedSalary,
         experienceLevel: parsed.experienceLevel || '3-5 years',
         keyResponsibilities: parsed.keyResponsibilities || [],
         qualifications: parsed.qualifications || [],
-        preferredQualifications: parsed.preferredQualifications || []
+        preferredQualifications: parsed.preferredQualifications || [],
+        // Quality analysis fields
+        ambiguities: parsed.ambiguities || [],
+        unrealisticExpectations: parsed.unrealisticExpectations || [],
+        missingCriteria: parsed.missingCriteria || []
       };
     } catch (error: any) {
       throw createAIError(
