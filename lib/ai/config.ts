@@ -11,7 +11,7 @@ const aiConfigSchema = z.object({
   LLM_PROVIDER: z.enum(['mock', 'openrouter', 'groq', 'openai']).default('mock'),
   
   // Mock provider settings
-  MOCK_AI_SCENARIO: z.enum(['frontend', 'backend', 'sales', 'generic']).optional(),
+  MOCK_AI_SCENARIO: z.enum(['frontend', 'backend', 'sales', 'data', 'product', 'marketing', 'hr', 'engineering-manager', 'qa', 'generic']).optional(),
   MOCK_AI_FAILURE_MODE: z.enum(['none', 'timeout', 'invalid_output', 'rate_limit']).default('none'),
   
   // OpenRouter settings
