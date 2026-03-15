@@ -18,6 +18,8 @@ export const JDExtractionViewer: React.FC<JDExtractionViewerProps> = ({
   onEditJob
 }) => {
   const [copySuccess, setCopySuccess] = useState(false);
+  const [showAllIssues, setShowAllIssues] = useState(false);
+  const [showRawAnalysis, setShowRawAnalysis] = useState(false);
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -44,6 +46,110 @@ export const JDExtractionViewer: React.FC<JDExtractionViewerProps> = ({
     if (extraction.missingCriteria && extraction.missingCriteria.length > 0) score -= extraction.missingCriteria.length * 8;
     
     return Math.max(0, score);
+  };
+
+  const getQualityLabel = (score: number): string => {
+    if (score >= 90) return 'Excellent';
+    if (score >= 80) return 'Good';
+    if (score >= 60) return 'Needs Improvement';
+    return 'Poor';
+  };
+
+  const getQualityColor = (score: number): string => {
+    if (score >= 80) return 'bg-green-100 text-green-800 border-green-200';
+    if (score >= 60) return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+    return 'bg-red-100 text-red-800 border-red-200';
+  };
+
+  const getScoreBarColor = (score: number): string => {
+    if (score >= 80) return 'bg-green-500';
+    if (score >= 60) return 'bg-yellow-500';
+    return 'bg-red-500';
+  };
+
+  const getScoreBreakdown = (extraction: any) => {
+    // Calculate individual category scores based on existing logic
+    let clarityScore = 100;
+    let completenessScore = 100;
+    let skillsScore = 100;
+    let responsibilityScore = 100;
+
+    // Clarity: affected by ambiguities
+    if (extraction.ambiguities && extraction.ambiguities.length > 0) {
+      clarityScore -= extraction.ambiguities.length * 10;
+    }
+
+    // Completeness: affected by missing criteria
+    if (extraction.missingCriteria && extraction.missingCriteria.length > 0) {
+      completenessScore -= extraction.missingCriteria.length * 15;
+    }
+
+    // Skills Definition: affected by missing required skills
+    if (!extraction.requiredSkills || extraction.requiredSkills.length === 0) {
+      skillsScore -= 60; // Major penalty
+    } else if (extraction.requiredSkills.length < 3) {
+      skillsScore -= 20; // Minor penalty for few skills
+    }
+
+    // Responsibility Detail: affected by missing key responsibilities
+    if (!extraction.keyResponsibilities || extraction.keyResponsibilities.length === 0) {
+      responsibilityScore -= 50; // Major penalty
+    } else if (extraction.keyResponsibilities.length < 3) {
+      responsibilityScore -= 15; // Minor penalty for few responsibilities
+    }
+
+    return {
+      clarity: Math.max(0, clarityScore),
+      completeness: Math.max(0, completenessScore),
+      skills: Math.max(0, skillsScore),
+      responsibility: Math.max(0, responsibilityScore)
+    };
+  };
+
+  const getTopIssues = (extraction: any, limit: number = 3) => {
+    const issues: Array<{
+      type: 'ambiguity' | 'unrealistic' | 'missing';
+      title: string;
+      priority: number;
+    }> = [];
+
+    // Add ambiguities (high priority)
+    if (extraction.ambiguities) {
+      extraction.ambiguities.forEach((ambiguity: any, index: number) => {
+        issues.push({
+          type: 'ambiguity',
+          title: ambiguity.issue || 'Ambiguity detected',
+          priority: 1 // High priority
+        });
+      });
+    }
+
+    // Add missing criteria (medium priority)
+    if (extraction.missingCriteria) {
+      extraction.missingCriteria.forEach((criteria: any, index: number) => {
+        issues.push({
+          type: 'missing',
+          title: criteria.missing || 'Missing criteria',
+          priority: 2 // Medium priority
+        });
+      });
+    }
+
+    // Add unrealistic expectations (low priority)
+    if (extraction.unrealisticExpectations) {
+      extraction.unrealisticExpectations.forEach((expectation: any, index: number) => {
+        issues.push({
+          type: 'unrealistic',
+          title: expectation.issue || 'Unrealistic expectation',
+          priority: 3 // Lower priority
+        });
+      });
+    }
+
+    // Sort by priority and return top issues
+    return issues
+      .sort((a, b) => a.priority - b.priority)
+      .slice(0, limit);
   };
 
   const hasQualityIssues = (extraction: any): boolean => {
@@ -86,6 +192,83 @@ export const JDExtractionViewer: React.FC<JDExtractionViewerProps> = ({
     }
     
     return suggestions;
+  };
+
+  const getRecruiterSummary = (extraction: any): string => {
+    const score = getQualityScore(extraction);
+    const roleTitle = extraction.roleTitle || 'This role';
+    const seniority = extraction.seniorityLevel || 'unspecified seniority';
+    const skillsCount = extraction.requiredSkills?.length || 0;
+    
+    if (score >= 80) {
+      return `${roleTitle} (${seniority}) is well-structured with ${skillsCount} key skills and clear responsibilities. This JD should attract qualified candidates effectively.`;
+    } else if (score >= 60) {
+      return `${roleTitle} (${seniority}) has good foundation but needs improvements in clarity and completeness. Address the flagged issues to enhance candidate attraction.`;
+    } else {
+      return `${roleTitle} (${seniority}) needs significant improvements. Multiple issues detected that may confuse candidates or limit your applicant pool.`;
+    }
+  };
+
+  const getRecommendedAction = (extraction: any): string => {
+    const score = getQualityScore(extraction);
+    const hasAmbiguities = extraction.ambiguities?.length > 0;
+    const hasMissingCriteria = extraction.missingCriteria?.length > 0;
+    
+    if (score < 60) {
+      return 'Improve Job Description';
+    } else if (hasAmbiguities || hasMissingCriteria) {
+      return 'Refine Job Description';
+    } else {
+      return 'Generate Interview Kit';
+    }
+  };
+
+  // Unified issues helper
+  const getUnifiedIssues = (extraction: any) => {
+    const issues: Array<{
+      type: 'ambiguity' | 'unrealistic' | 'missing';
+      title: string;
+      description: string;
+      suggestion: string;
+    }> = [];
+
+    // Add ambiguities
+    if (extraction.ambiguities) {
+      extraction.ambiguities.forEach((ambiguity: any) => {
+        issues.push({
+          type: 'ambiguity',
+          title: ambiguity.issue || 'Ambiguity detected',
+          description: ambiguity.suggestedClarification || 'Not specified',
+          suggestion: 'Clarify this requirement for better candidate understanding'
+        });
+      });
+    }
+
+    // Add unrealistic expectations
+    if (extraction.unrealisticExpectations) {
+      extraction.unrealisticExpectations.forEach((expectation: any) => {
+        issues.push({
+          type: 'unrealistic',
+          title: expectation.issue || 'Unrealistic expectation',
+          description: expectation.whyUnrealistic || 'Not specified',
+          suggestion: 'Adjust this requirement to be more realistic for the role'
+        });
+      });
+    }
+
+    // Add missing criteria
+    if (extraction.missingCriteria) {
+      extraction.missingCriteria.forEach((criteria: any) => {
+        issues.push({
+          type: 'missing',
+          title: criteria.missing || 'Missing criteria',
+          description: criteria.suggestedCriteria || 'Not specified',
+          suggestion: 'Add this information to complete the job description'
+        });
+      });
+    }
+
+    return issues;
   };
 
   const generateAnalysisSummary = () => {
@@ -259,298 +442,373 @@ export const JDExtractionViewer: React.FC<JDExtractionViewerProps> = ({
     );
   };
 
-  const AmbiguityCard: React.FC<{ ambiguity: any }> = ({ ambiguity }) => {
-    return (
-      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-        <h4 className="text-sm font-medium text-yellow-800 mb-2">
-          {ambiguity.issue || 'Ambiguity detected'}
-        </h4>
-        <p className="text-sm text-yellow-700 mb-2">
-          <strong>Suggested clarification:</strong> {ambiguity.suggestedClarification || 'Not specified'}
-        </p>
-        {ambiguity.evidence && <EvidenceQuote evidence={ambiguity.evidence} />}
-      </div>
-    );
-  };
-
-  const UnrealisticExpectationCard: React.FC<{ expectation: any }> = ({ expectation }) => {
-    return (
-      <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
-        <h4 className="text-sm font-medium text-orange-800 mb-2">
-          {expectation.issue || 'Unrealistic expectation'}
-        </h4>
-        <p className="text-sm text-orange-700 mb-2">
-          <strong>Why unrealistic:</strong> {expectation.whyUnrealistic || 'Not specified'}
-        </p>
-        {expectation.evidence && <EvidenceQuote evidence={expectation.evidence} />}
-      </div>
-    );
-  };
-
-  const MissingCriteriaItem: React.FC<{ criteria: any }> = ({ criteria }) => {
-    return (
-      <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-        <h4 className="text-sm font-medium text-red-800 mb-2">
-          {criteria.missing || 'Missing criteria'}
-        </h4>
-        <p className="text-sm text-red-700">
-          <strong>Suggested criteria:</strong> {criteria.suggestedCriteria || 'Not specified'}
-        </p>
-        {criteria.evidence && <EvidenceQuote evidence={criteria.evidence} />}
-      </div>
-    );
-  };
+  const score = getQualityScore(extraction);
+  const qualityLabel = getQualityLabel(score);
+  const qualityColor = getQualityColor(score);
+  const scoreBreakdown = getScoreBreakdown(extraction);
+  const topIssues = getTopIssues(extraction, 3);
+  const allIssues = getUnifiedIssues(extraction);
+  const displayedIssues = showAllIssues ? allIssues : allIssues.slice(0, 3);
 
   return (
     <div className="bg-white shadow rounded-lg">
-      {/* Header */}
-      <div className="px-6 py-4 border-b border-gray-200">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-medium text-gray-900">JD Analysis Results</h2>
-          <div className="flex items-center space-x-4 text-sm text-gray-500">
-            {analyzedAt && (
-              <span>Analyzed: {new Date(analyzedAt).toLocaleDateString()}</span>
-            )}
-            {promptVersion && (
-              <span>Version: {promptVersion}</span>
-            )}
+      {/* 1. Top Summary Section */}
+      <div className="px-6 py-6 border-b border-gray-200">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-xl font-semibold text-gray-900">JD Analysis Results</h2>
+            <div className="flex items-center space-x-4 text-sm text-gray-500 mt-1">
+              {analyzedAt && (
+                <span>Analyzed: {new Date(analyzedAt).toLocaleDateString()}</span>
+              )}
+              {promptVersion && (
+                <span>Version: {promptVersion}</span>
+              )}
+            </div>
           </div>
+          <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${qualityColor}`}>
+            {score}/100 - {qualityLabel}
+          </div>
+        </div>
+        
+        <div className="bg-gray-50 rounded-lg p-4">
+          <p className="text-sm text-gray-700 leading-relaxed">
+            {getRecruiterSummary(extraction)}
+          </p>
+        </div>
+        
+        <div className="mt-4">
+          <button
+            onClick={handleEditJob}
+            className="inline-flex items-center px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+          >
+            {getRecommendedAction(extraction)}
+          </button>
         </div>
       </div>
 
-      <div className="px-6 py-4 space-y-6">
-        {/* Role Header */}
-        <div className="bg-gray-50 rounded-lg p-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <h3 className="text-sm font-medium text-gray-900 mb-1">Role Title</h3>
-              <p className="text-lg font-semibold text-gray-800">
-                {extraction.roleTitle || 'Not identified'}
-              </p>
-            </div>
-            <div>
-              <h3 className="text-sm font-medium text-gray-900 mb-1">Seniority Level</h3>
-              <p className="text-lg font-semibold text-gray-800">
-                {extraction.seniorityLevel || 'Unknown'}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Skills Sections */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <h3 className="text-sm font-medium text-gray-900 mb-3">
-              Required Skills ({extraction.requiredSkills?.length || 0})
-            </h3>
-            {extraction.requiredSkills && extraction.requiredSkills.length > 0 ? (
-              <div className="flex flex-wrap gap-2">
-                {extraction.requiredSkills.map((skill: string, index: number) => (
-                  <span
-                    key={index}
-                    className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
-                  >
-                    {skill}
-                  </span>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-gray-500 italic">None detected</p>
-            )}
-          </div>
-
-          <div>
-            <h3 className="text-sm font-medium text-gray-900 mb-3">
-              Preferred Skills ({extraction.preferredSkills?.length || 0})
-            </h3>
-            {extraction.preferredSkills && extraction.preferredSkills.length > 0 ? (
-              <div className="flex flex-wrap gap-2">
-                {extraction.preferredSkills.map((skill: string, index: number) => (
-                  <span
-                    key={index}
-                    className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800"
-                  >
-                    {skill}
-                  </span>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-gray-500 italic">None detected</p>
-            )}
-          </div>
-        </div>
-
-        {/* Key Responsibilities */}
+      <div className="px-6 py-6 space-y-8">
+        {/* 2. Role Profile Section */}
         <div>
-          <h3 className="text-sm font-medium text-gray-900 mb-3">
-            Key Responsibilities ({extraction.keyResponsibilities?.length || 0})
-          </h3>
-          {extraction.keyResponsibilities && extraction.keyResponsibilities.length > 0 ? (
-            <ul className="space-y-2">
-              {extraction.keyResponsibilities.map((responsibility: string, index: number) => (
-                <li key={index} className="text-sm text-gray-700 flex items-start">
-                  <span className="text-indigo-500 mr-2 mt-1">•</span>
-                  <span className="break-words">{responsibility}</span>
-                </li>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Role Profile</h3>
+          <div className="bg-gray-50 rounded-lg p-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <h4 className="text-sm font-medium text-gray-900 mb-2">Role Information</h4>
+                <div className="space-y-2">
+                  <div>
+                    <span className="text-sm text-gray-600">Role Title:</span>
+                    <p className="text-sm font-medium text-gray-900">{extraction.roleTitle || 'Not identified'}</p>
+                  </div>
+                  <div>
+                    <span className="text-sm text-gray-600">Seniority Level:</span>
+                    <p className="text-sm font-medium text-gray-900">{extraction.seniorityLevel || 'Not specified'}</p>
+                  </div>
+                  <div>
+                    <span className="text-sm text-gray-600">Department:</span>
+                    <p className="text-sm font-medium text-gray-900">{extraction.department || 'Not specified'}</p>
+                  </div>
+                  <div>
+                    <span className="text-sm text-gray-600">Experience Level:</span>
+                    <p className="text-sm font-medium text-gray-900">{extraction.experienceLevel || 'Not specified'}</p>
+                  </div>
+                </div>
+              </div>
+              
+              <div>
+                <h4 className="text-sm font-medium text-gray-900 mb-2">Compensation</h4>
+                {extraction.estimatedSalary ? (
+                  <div>
+                    <span className="text-sm text-gray-600">Estimated Salary:</span>
+                    <p className="text-sm font-medium text-gray-900">
+                      {extraction.estimatedSalary.currency} {extraction.estimatedSalary.min.toLocaleString()} - {extraction.estimatedSalary.max.toLocaleString()}
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500">Not specified</p>
+                )}
+              </div>
+            </div>
+
+            <div className="mt-6">
+              <h4 className="text-sm font-medium text-gray-900 mb-3">Required Skills ({extraction.requiredSkills?.length || 0})</h4>
+              {extraction.requiredSkills && extraction.requiredSkills.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {extraction.requiredSkills.map((skill: string, index: number) => (
+                    <span
+                      key={index}
+                      className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                    >
+                      {skill}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500 italic">None detected</p>
+              )}
+            </div>
+
+            <div className="mt-6">
+              <h4 className="text-sm font-medium text-gray-900 mb-3">Preferred Skills ({extraction.preferredSkills?.length || 0})</h4>
+              {extraction.preferredSkills && extraction.preferredSkills.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {extraction.preferredSkills.map((skill: string, index: number) => (
+                    <span
+                      key={index}
+                      className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800"
+                    >
+                      {skill}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500 italic">None detected</p>
+              )}
+            </div>
+
+            <div className="mt-6">
+              <h4 className="text-sm font-medium text-gray-900 mb-3">Key Responsibilities ({extraction.keyResponsibilities?.length || 0})</h4>
+              {extraction.keyResponsibilities && extraction.keyResponsibilities.length > 0 ? (
+                <ul className="space-y-2">
+                  {extraction.keyResponsibilities.map((responsibility: string, index: number) => (
+                    <li key={index} className="text-sm text-gray-700 flex items-start">
+                      <span className="text-indigo-500 mr-2 mt-1">•</span>
+                      <span className="break-words">{responsibility}</span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="text-sm text-gray-500 italic">None detected</p>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* 3. Issues Detected Section */}
+        {allIssues.length > 0 && (
+          <div id="issues-detected-section">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Issues Detected ({allIssues.length})</h3>
+            <div className="space-y-3">
+              {displayedIssues.map((issue, index) => (
+                <div key={index} className="bg-white border border-gray-200 rounded-lg p-4">
+                  <div className="flex items-start justify-between mb-2">
+                    <h4 className="text-sm font-medium text-gray-900">{issue.title}</h4>
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                      issue.type === 'ambiguity' ? 'bg-yellow-100 text-yellow-800' :
+                      issue.type === 'unrealistic' ? 'bg-orange-100 text-orange-800' :
+                      'bg-red-100 text-red-800'
+                    }`}>
+                      {issue.type.charAt(0).toUpperCase() + issue.type.slice(1)}
+                    </span>
+                  </div>
+                  <p className="text-sm text-gray-700 mb-2">{issue.description}</p>
+                  <p className="text-sm text-gray-600 italic">{issue.suggestion}</p>
+                </div>
               ))}
-            </ul>
-          ) : (
-            <p className="text-sm text-gray-500 italic">None detected</p>
-          )}
-        </div>
+              
+              {allIssues.length > 3 && (
+                <button
+                  onClick={() => setShowAllIssues(!showAllIssues)}
+                  className="text-sm text-indigo-600 hover:text-indigo-800 font-medium"
+                >
+                  {showAllIssues ? 'Show less' : `Show ${allIssues.length - 3} more issues`}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
 
-        {/* Quality Analysis */}
+        {/* 4. Quality Assessment Section */}
         <div>
-          <h3 className="text-sm font-medium text-gray-900 mb-4">Quality Analysis</h3>
-          
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Ambiguities */}
-            <div>
-              <h4 className="text-sm font-medium text-gray-700 mb-3">
-                Ambiguities ({extraction.ambiguities?.length || 0})
-              </h4>
-              {extraction.ambiguities && extraction.ambiguities.length > 0 ? (
-                <div className="space-y-3">
-                  {extraction.ambiguities.map((ambiguity: any, index: number) => (
-                    <AmbiguityCard key={index} ambiguity={ambiguity} />
-                  ))}
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Quality Assessment</h3>
+          <div className={`border rounded-lg p-6 ${qualityColor}`}>
+            {/* Score Display */}
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <div className="flex items-baseline">
+                  <span className="text-3xl font-bold text-gray-900">{score}</span>
+                  <span className="text-lg text-gray-600 ml-2">/ 100</span>
                 </div>
-              ) : (
-                <p className="text-sm text-gray-500 italic">None detected</p>
-              )}
+                <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${qualityColor} mt-2`}>
+                  {qualityLabel}
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="text-sm text-gray-700 mb-2">Recommended Next Action:</p>
+                <button
+                  onClick={handleEditJob}
+                  className="inline-flex items-center px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+                >
+                  {score >= 80 ? 'Ready for Interview Kit' : 'Improve Job Description'}
+                </button>
+              </div>
             </div>
 
-            {/* Unrealistic Expectations */}
-            <div>
-              <h4 className="text-sm font-medium text-gray-700 mb-3">
-                Unrealistic Expectations ({extraction.unrealisticExpectations?.length || 0})
-              </h4>
-              {extraction.unrealisticExpectations && extraction.unrealisticExpectations.length > 0 ? (
+            {/* Score Breakdown */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+              <div>
+                <h4 className="text-sm font-medium text-gray-900 mb-3">Score Breakdown</h4>
                 <div className="space-y-3">
-                  {extraction.unrealisticExpectations.map((expectation: any, index: number) => (
-                    <UnrealisticExpectationCard key={index} expectation={expectation} />
-                  ))}
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-sm text-gray-700">Clarity</span>
+                      <span className="text-sm font-medium text-gray-900">{scoreBreakdown.clarity}%</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div 
+                        className={`h-2 rounded-full transition-all duration-300 ${getScoreBarColor(scoreBreakdown.clarity)}`}
+                        style={{ width: `${scoreBreakdown.clarity}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-sm text-gray-700">Completeness</span>
+                      <span className="text-sm font-medium text-gray-900">{scoreBreakdown.completeness}%</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div 
+                        className={`h-2 rounded-full transition-all duration-300 ${getScoreBarColor(scoreBreakdown.completeness)}`}
+                        style={{ width: `${scoreBreakdown.completeness}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-sm text-gray-700">Skills Definition</span>
+                      <span className="text-sm font-medium text-gray-900">{scoreBreakdown.skills}%</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div 
+                        className={`h-2 rounded-full transition-all duration-300 ${getScoreBarColor(scoreBreakdown.skills)}`}
+                        style={{ width: `${scoreBreakdown.skills}%` }}
+                      ></div>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-sm text-gray-700">Responsibility Detail</span>
+                      <span className="text-sm font-medium text-gray-900">{scoreBreakdown.responsibility}%</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div 
+                        className={`h-2 rounded-full transition-all duration-300 ${getScoreBarColor(scoreBreakdown.responsibility)}`}
+                        style={{ width: `${scoreBreakdown.responsibility}%` }}
+                      ></div>
+                    </div>
+                  </div>
                 </div>
-              ) : (
-                <p className="text-sm text-gray-500 italic">None detected</p>
-              )}
-            </div>
+              </div>
 
-            {/* Missing Criteria */}
-            <div>
-              <h4 className="text-sm font-medium text-gray-700 mb-3">
-                Missing Criteria ({extraction.missingCriteria?.length || 0})
-              </h4>
-              {extraction.missingCriteria && extraction.missingCriteria.length > 0 ? (
-                <div className="space-y-3">
-                  {extraction.missingCriteria.map((criteria: any, index: number) => (
-                    <MissingCriteriaItem key={index} criteria={criteria} />
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-gray-500 italic">None detected</p>
-              )}
+              {/* Top Issues */}
+              <div>
+                <h4 className="text-sm font-medium text-gray-900 mb-3">Top Issues Detected</h4>
+                {topIssues.length > 0 ? (
+                  <div className="space-y-2">
+                    {topIssues.map((issue, index) => (
+                      <div key={index} className="flex items-start space-x-3 p-3 bg-white bg-opacity-50 rounded-md">
+                        <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${
+                          issue.type === 'ambiguity' ? 'bg-yellow-500' :
+                          issue.type === 'unrealistic' ? 'bg-orange-500' :
+                          'bg-red-500'
+                        }`}></div>
+                        <div className="flex-1">
+                          <p className="text-sm text-gray-800">{issue.title}</p>
+                          <p className="text-xs text-gray-600 mt-1 capitalize">{issue.type}</p>
+                        </div>
+                      </div>
+                    ))}
+                    {allIssues.length > 3 && (
+                      <button
+                        onClick={() => {
+                          const issuesSection = document.getElementById('issues-detected-section');
+                          if (issuesSection) {
+                            issuesSection.scrollIntoView({ behavior: 'smooth' });
+                          }
+                        }}
+                        className="text-sm text-indigo-600 hover:text-indigo-800 font-medium mt-2"
+                      >
+                        View all {allIssues.length} issues →
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-center py-4">
+                    <svg className="w-8 h-8 mx-auto text-green-500 mb-2" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                    <p className="text-sm text-green-800">No critical issues detected</p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Quality Indicator & Improvement Suggestions */}
-        <div className="border-t border-gray-200 pt-6">
-          <div className="bg-gray-50 rounded-lg p-4">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-medium text-gray-900">JD Quality Assessment</h3>
-              <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                getQualityScore(extraction) >= 80 ? 'bg-green-100 text-green-800' :
-                getQualityScore(extraction) >= 60 ? 'bg-yellow-100 text-yellow-800' :
-                'bg-red-100 text-red-800'
-              }`}>
-                {getQualityScore(extraction) >= 80 ? 'High Quality' :
-                 getQualityScore(extraction) >= 60 ? 'Good Quality' :
-                 'Needs Improvement'}
-              </div>
-            </div>
-            
-            {hasQualityIssues(extraction) && (
-              <div className="space-y-3">
-                <p className="text-sm text-gray-600">
-                  This job description has some areas that could be improved for better candidate attraction and clarity:
-                </p>
-                <div className="bg-white rounded-md p-3 border border-gray-200">
-                  <h4 className="text-sm font-medium text-gray-900 mb-2">Recommended Actions:</h4>
-                  <ul className="text-sm text-gray-600 space-y-1">
+        {/* 5. Improvement Guidance Section */}
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Improvement Guidance</h3>
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+            {hasQualityIssues(extraction) ? (
+              <div className="space-y-4">
+                <div>
+                  <h4 className="text-sm font-medium text-blue-900 mb-2">Recommended Actions:</h4>
+                  <ul className="text-sm text-blue-800 space-y-2">
                     {getImprovementSuggestions(extraction).map((suggestion, index) => (
                       <li key={index} className="flex items-start">
-                        <span className="text-indigo-500 mr-2">•</span>
+                        <span className="text-blue-600 mr-2">•</span>
                         {suggestion}
                       </li>
                     ))}
                   </ul>
                 </div>
-                <button
-                  onClick={() => window.open('https://docs.google.com/document/d/1Jd-template', '_blank')}
-                  className="inline-flex items-center px-3 py-1.5 border border-indigo-300 shadow-sm text-xs font-medium rounded-md text-indigo-700 bg-indigo-50 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
-                >
-                  <svg className="w-3 h-3 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  View Improvement Guide
-                </button>
+                
+                <div>
+                  <h4 className="text-sm font-medium text-blue-900 mb-2">Recruiter Tips:</h4>
+                  <ul className="text-sm text-blue-800 space-y-2">
+                    <li className="flex items-start">
+                      <span className="text-blue-600 mr-2">•</span>
+                      Clear, specific requirements attract more qualified candidates
+                    </li>
+                    <li className="flex items-start">
+                      <span className="text-blue-600 mr-2">•</span>
+                      Avoid jargon that might confuse potential applicants
+                    </li>
+                    <li className="flex items-start">
+                      <span className="text-blue-600 mr-2">•</span>
+                      Include success metrics to help candidates understand expectations
+                    </li>
+                  </ul>
+                </div>
               </div>
-            )}
-            
-            {!hasQualityIssues(extraction) && (
-              <div className="text-sm text-green-700">
+            ) : (
+              <div className="text-sm text-blue-800">
                 <div className="flex items-center">
-                  <svg className="w-4 h-4 mr-2 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                  <svg className="w-5 h-5 mr-2 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                   </svg>
                   This job description looks comprehensive and well-structured!
                 </div>
+                <p className="mt-2">You're ready to start attracting qualified candidates for this role.</p>
               </div>
             )}
           </div>
         </div>
 
-        {/* Action Buttons */}
+        {/* 5. Action Bar */}
         <div className="border-t border-gray-200 pt-6">
-          <div className="flex flex-wrap gap-3 justify-between items-center">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
             <div className="flex flex-wrap gap-3">
-              {/* Re-run Analysis */}
-              <button
-                onClick={handleReRunAnalysis}
-                className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
-              >
-                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                Re-run Analysis
-              </button>
-
-              {/* Edit Job */}
               <button
                 onClick={handleEditJob}
-                className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+                className="inline-flex items-center px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
               >
                 <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                 </svg>
-                Edit Job
+                Improve Job Description
               </button>
 
-              {/* Copy Analysis */}
-              <button
-                onClick={handleCopyAnalysis}
-                className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
-              >
-                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                </svg>
-                {copySuccess ? 'Copied!' : 'Copy Analysis'}
-              </button>
-            </div>
-
-            {/* Generate Interview Kit */}
-            <div className="relative group">
               <button
                 onClick={handleGenerateInterviewKit}
                 disabled
@@ -562,12 +820,38 @@ export const JDExtractionViewer: React.FC<JDExtractionViewerProps> = ({
                 </svg>
                 Generate Interview Kit
               </button>
-              
-              {/* Tooltip */}
-              <div className="absolute bottom-full right-0 mb-2 px-3 py-2 text-sm text-gray-600 bg-gray-800 rounded-md shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
-                Interview Kit generation will be enabled next.
-                <div className="absolute top-full right-4 -mt-1 w-2 h-2 bg-gray-800 transform rotate-45"></div>
-              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              <button
+                onClick={handleEditJob}
+                className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+              >
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+                Edit Job
+              </button>
+
+              <button
+                onClick={handleReRunAnalysis}
+                className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+              >
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Re-run Analysis
+              </button>
+
+              <button
+                onClick={handleCopyAnalysis}
+                className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
+              >
+                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+                {copySuccess ? 'Copied!' : 'Copy Analysis'}
+              </button>
             </div>
           </div>
 
@@ -580,6 +864,47 @@ export const JDExtractionViewer: React.FC<JDExtractionViewerProps> = ({
             </div>
           )}
         </div>
+      </div>
+
+      {/* 6. Right Rail - Compact Metadata */}
+      <div className="border-t border-gray-200 bg-gray-50 px-6 py-4">
+        <div className="flex items-center justify-between mb-4">
+          <h4 className="text-sm font-medium text-gray-900">Analysis Status</h4>
+          <button
+            onClick={() => setShowRawAnalysis(!showRawAnalysis)}
+            className="text-xs text-gray-500 hover:text-gray-700"
+          >
+            {showRawAnalysis ? 'Hide' : 'Show'} Raw Analysis
+          </button>
+        </div>
+        
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+          <div>
+            <span className="text-gray-600">Status:</span>
+            <p className="font-medium text-gray-900">Complete</p>
+          </div>
+          <div>
+            <span className="text-gray-600">Analyzed:</span>
+            <p className="font-medium text-gray-900">{analyzedAt ? new Date(analyzedAt).toLocaleDateString() : 'N/A'}</p>
+          </div>
+          <div>
+            <span className="text-gray-600">Issues:</span>
+            <p className="font-medium text-gray-900">{allIssues.length}</p>
+          </div>
+          <div>
+            <span className="text-gray-600">Quality:</span>
+            <p className="font-medium text-gray-900">{score}/100</p>
+          </div>
+        </div>
+
+        {showRawAnalysis && (
+          <div className="mt-4 p-3 bg-white border border-gray-200 rounded-md">
+            <h5 className="text-xs font-medium text-gray-700 mb-2">Raw Analysis JSON (Development)</h5>
+            <pre className="text-xs text-gray-600 overflow-x-auto whitespace-pre-wrap">
+              {JSON.stringify(extraction, null, 2)}
+            </pre>
+          </div>
+        )}
       </div>
     </div>
   );
