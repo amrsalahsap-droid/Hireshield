@@ -2,18 +2,24 @@ import React, { useState } from 'react';
 
 interface JDExtractionViewerProps {
   extraction: any;
+  job?: any; // For role title fallback
   analyzedAt?: string | null;
   promptVersion?: string | null;
   jobId?: string | null;
+  analysisStatus?: string; // Analysis status from backend
+  jobUpdatedAt?: string | null; // Job description last updated timestamp
   onReRunAnalysis?: () => void;
   onEditJob?: () => void;
 }
 
 export const JDExtractionViewer: React.FC<JDExtractionViewerProps> = ({
   extraction,
+  job,
   analyzedAt,
   promptVersion,
   jobId,
+  analysisStatus,
+  jobUpdatedAt,
   onReRunAnalysis,
   onEditJob
 }) => {
@@ -28,6 +34,308 @@ export const JDExtractionViewer: React.FC<JDExtractionViewerProps> = ({
   const truncateText = (text: string, maxLength: number = 150) => {
     if (text.length <= maxLength) return text;
     return text.substring(0, maxLength) + '...';
+  };
+
+  // Freshness state helper functions
+  const getFreshnessState = () => {
+    if (!analyzedAt || !jobUpdatedAt) return 'unknown';
+    
+    const analysisTime = new Date(analyzedAt).getTime();
+    const jobUpdateTime = new Date(jobUpdatedAt).getTime();
+    
+    if (jobUpdateTime > analysisTime) return 'outdated';
+    return 'fresh';
+  };
+
+  const getAnalysisStatusDisplay = () => {
+    if (!analysisStatus) return 'UNKNOWN';
+    
+    switch (analysisStatus.toUpperCase()) {
+      case 'NOT_STARTED': return 'Not Started';
+      case 'RUNNING': return 'Running';
+      case 'DONE': return 'Completed';
+      case 'FAILED': return 'Failed';
+      default: return analysisStatus;
+    }
+  };
+
+  const getFreshnessColor = () => {
+    const state = getFreshnessState();
+    switch (state) {
+      case 'fresh': return 'green';
+      case 'outdated': return 'amber';
+      case 'unknown': return 'gray';
+      default: return 'gray';
+    }
+  };
+
+  const getFreshnessIcon = () => {
+    const state = getFreshnessState();
+    switch (state) {
+      case 'fresh':
+        return (
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        );
+      case 'outdated':
+        return (
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.314 16.5c-.77.833.192 2.5 1.732 2.5z" />
+          </svg>
+        );
+      default:
+        return (
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        );
+    }
+  };
+
+  const formatDate = (dateString: string | null) => {
+    if (!dateString) return 'Unknown';
+    return new Date(dateString).toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  // Role title helper with fallback
+  const getRoleTitle = () => {
+    if (extraction.roleTitle) return extraction.roleTitle;
+    if (job?.title) return job.title;
+    return 'Role Title Not Available';
+  };
+
+  const getRoleTitleSource = () => {
+    if (extraction.roleTitle) return 'extracted';
+    if (job?.title) return 'job';
+    return 'none';
+  };
+
+  // Improvement guidance helper functions
+  const getHighestPriorityFix = (extraction: any): string => {
+    const suggestions = getImprovementSuggestions(extraction);
+    
+    // Prioritize missing required skills or responsibilities as highest priority
+    if (!extraction.requiredSkills || extraction.requiredSkills.length === 0) {
+      return 'Add specific required skills and qualifications - this is the most critical missing element for candidate attraction.';
+    }
+    
+    if (!extraction.keyResponsibilities || extraction.keyResponsibilities.length === 0) {
+      return 'Include clear day-to-day responsibilities - candidates need to understand what they will actually do.';
+    }
+    
+    if (extraction.ambiguities && extraction.ambiguities.length > 0) {
+      return 'Clarify ambiguous requirements and responsibilities - unclear descriptions confuse qualified candidates.';
+    }
+    
+    return suggestions[0] || 'Review and enhance job description clarity and completeness.';
+  };
+
+  const getImmediateFixes = (extraction: any): string[] => {
+    const suggestions = getImprovementSuggestions(extraction);
+    const immediateFixes: string[] = [];
+    
+    // Add critical fixes first
+    if (!extraction.requiredSkills || extraction.requiredSkills.length === 0) {
+      immediateFixes.push('Add specific required skills and qualifications');
+    }
+    
+    if (!extraction.keyResponsibilities || extraction.keyResponsibilities.length === 0) {
+      immediateFixes.push('Include clear day-to-day responsibilities');
+    }
+    
+    if (extraction.ambiguities && extraction.ambiguities.length > 0) {
+      immediateFixes.push('Clarify ambiguous requirements and responsibilities');
+    }
+    
+    if (extraction.unrealisticExpectations && extraction.unrealisticExpectations.length > 0) {
+      immediateFixes.push('Review and adjust unrealistic experience or qualification requirements');
+    }
+    
+    // Add other critical fixes (limit to 4 total)
+    const otherFixes = suggestions.filter(s => !immediateFixes.includes(s)).slice(0, 4 - immediateFixes.length);
+    return [...immediateFixes, ...otherFixes];
+  };
+
+  const getBestPracticeRecommendations = (extraction: any): string[] => {
+    const recommendations: string[] = [];
+    
+    // Add best practice tips
+    if (!extraction.seniorityLevel || extraction.seniorityLevel === 'Mid-level') {
+      recommendations.push('Specify exact seniority level for better candidate matching');
+    }
+    
+    if (extraction.missingCriteria && extraction.missingCriteria.length > 0) {
+      recommendations.push('Add missing important criteria like work environment, reporting structure, or success metrics');
+    }
+    
+    // Always include general best practices
+    recommendations.push('Clear, specific requirements attract more qualified candidates');
+    recommendations.push('Avoid jargon that might confuse potential applicants');
+    recommendations.push('Include success metrics to help candidates understand expectations');
+    
+    return recommendations.slice(0, 4); // Limit to 4 recommendations
+  };
+
+  // Enhanced features helper functions
+  const getRoleSummary = () => {
+    const score = getQualityScore(extraction);
+    const roleTitle = getRoleTitle();
+    const seniority = extraction.seniorityLevel || 'unspecified';
+    const skillsCount = extraction.requiredSkills?.length || 0;
+    const responsibilitiesCount = extraction.keyResponsibilities?.length || 0;
+    
+    // Quality assessment
+    let qualityDescription = '';
+    if (score >= 80) {
+      qualityDescription = 'well-structured and comprehensive';
+    } else if (score >= 60) {
+      qualityDescription = 'adequately detailed with room for improvement';
+    } else {
+      qualityDescription = 'needs significant enhancement to attract qualified candidates';
+    }
+    
+    // Build summary
+    const summary = `This ${seniority.toLowerCase()} ${roleTitle} position is ${qualityDescription}. `;
+    
+    if (skillsCount > 0 && responsibilitiesCount > 0) {
+      return summary + `The role requires ${skillsCount} key skills and involves ${responsibilitiesCount} main responsibility areas.`;
+    } else if (skillsCount > 0) {
+      return summary + `The role specifies ${skillsCount} required skills but needs clearer responsibility definitions.`;
+    } else if (responsibilitiesCount > 0) {
+      return summary + `The role outlines ${responsibilitiesCount} responsibility areas but lacks specific skill requirements.`;
+    } else {
+      return summary + 'Consider adding specific skills and responsibilities to improve candidate attraction.';
+    }
+  };
+
+  const getCandidateMatchPrediction = () => {
+    const score = getQualityScore(extraction);
+    const skillsCount = extraction.requiredSkills?.length || 0;
+    const responsibilitiesCount = extraction.keyResponsibilities?.length || 0;
+    const hasAmbiguities = extraction.ambiguities && extraction.ambiguities.length > 0;
+    const hasUnrealistic = extraction.unrealisticExpectations && extraction.unrealisticExpectations.length > 0;
+    
+    // Calculate match potential based on clarity and completeness
+    let matchScore = 0;
+    
+    // Base score from quality
+    matchScore += (score / 100) * 40; // 40% weight
+    
+    // Skills clarity (20% weight)
+    if (skillsCount >= 5) matchScore += 20;
+    else if (skillsCount >= 3) matchScore += 15;
+    else if (skillsCount >= 1) matchScore += 10;
+    
+    // Responsibility clarity (20% weight)
+    if (responsibilitiesCount >= 4) matchScore += 20;
+    else if (responsibilitiesCount >= 2) matchScore += 15;
+    else if (responsibilitiesCount >= 1) matchScore += 10;
+    
+    // Penalty for issues (20% weight)
+    if (hasAmbiguities) matchScore -= 10;
+    if (hasUnrealistic) matchScore -= 10;
+    
+    // Determine level
+    if (matchScore >= 75) return { level: 'High', color: 'green', description: 'Clear requirements will attract well-qualified candidates' };
+    if (matchScore >= 50) return { level: 'Medium', color: 'amber', description: 'Some clarification needed to improve candidate quality' };
+    return { level: 'Low', color: 'red', description: 'Significant improvements needed to attract suitable candidates' };
+  };
+
+  const getHiringRisks = () => {
+    const risks: Array<{
+      type: string;
+      severity: 'High' | 'Medium' | 'Low';
+      description: string;
+      mitigation: string;
+    }> = [];
+    
+    // Seniority mismatch risk
+    if (extraction.seniorityLevel === 'Mid-level' && (!extraction.experienceLevel || extraction.experienceLevel.includes('0'))) {
+      risks.push({
+        type: 'Seniority Mismatch',
+        severity: 'High',
+        description: 'Role specifies mid-level but lacks clear experience requirements',
+        mitigation: 'Define specific years of experience and seniority expectations'
+      });
+    }
+    
+    // Technology ambiguity risk
+    if (extraction.ambiguities && extraction.ambiguities.length > 0) {
+      const techAmbiguities = extraction.ambiguities.filter((amb: any) => 
+        amb.issue?.toLowerCase().includes('technology') || 
+        amb.issue?.toLowerCase().includes('skill') || 
+        amb.issue?.toLowerCase().includes('tool')
+      );
+      
+      if (techAmbiguities.length > 0) {
+        risks.push({
+          type: 'Technology Ambiguity',
+          severity: 'Medium',
+          description: 'Unclear technology or skill requirements may confuse candidates',
+          mitigation: 'Specify exact technologies, tools, and skill levels required'
+        });
+      }
+    }
+    
+    // Vague responsibility scope risk
+    if (!extraction.keyResponsibilities || extraction.keyResponsibilities.length < 2) {
+      risks.push({
+        type: 'Vague Responsibility Scope',
+        severity: 'High',
+        description: 'Insufficient detail about day-to-day responsibilities',
+        mitigation: 'Add specific, actionable responsibility descriptions'
+      });
+    }
+    
+    // Unrealistic expectations risk
+    if (extraction.unrealisticExpectations && extraction.unrealisticExpectations.length > 0) {
+      risks.push({
+        type: 'Unrealistic Expectations',
+        severity: 'Medium',
+        description: 'Requirements may be too demanding for the role level',
+        mitigation: 'Review and adjust expectations to match market standards'
+      });
+    }
+    
+    // Missing critical skills risk
+    if (!extraction.requiredSkills || extraction.requiredSkills.length === 0) {
+      risks.push({
+        type: 'Missing Critical Skills',
+        severity: 'High',
+        description: 'No required skills specified may attract unqualified candidates',
+        mitigation: 'Define essential technical and soft skills for the role'
+      });
+    }
+    
+    return risks.slice(0, 4); // Limit to top 4 risks
+  };
+
+  // CTA logic helper functions
+  const getPrimaryAction = () => {
+    const score = getQualityScore(extraction);
+    return score >= 80 ? 'generate-interview-kit' : 'improve-job-description';
+  };
+
+  const getInterviewKitDisabled = () => {
+    const score = getQualityScore(extraction);
+    return score < 80 || !extraction.requiredSkills || extraction.requiredSkills.length === 0;
+  };
+
+  const getInterviewKitTooltip = () => {
+    const score = getQualityScore(extraction);
+    if (score < 80) {
+      return 'Interview Kit available once job description quality is improved';
+    }
+    if (!extraction.requiredSkills || extraction.requiredSkills.length === 0) {
+      return 'Interview Kit available once required skills are added';
+    }
+    return 'Interview Kit generation coming soon';
   };
 
   // Quality assessment helper functions
@@ -454,6 +762,83 @@ export const JDExtractionViewer: React.FC<JDExtractionViewerProps> = ({
     <div className="bg-white shadow rounded-lg">
       {/* 1. Top Summary Section */}
       <div className="px-6 py-6 border-b border-gray-200">
+        {/* Freshness Indicator */}
+        <div className={`mb-4 p-3 rounded-lg border ${
+          getFreshnessState() === 'outdated' 
+            ? 'bg-amber-50 border-amber-200' 
+            : getFreshnessState() === 'fresh' 
+            ? 'bg-green-50 border-green-200'
+            : 'bg-gray-50 border-gray-200'
+        }`}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className={`inline-flex items-center ${
+                getFreshnessState() === 'outdated' 
+                  ? 'text-amber-600' 
+                  : getFreshnessState() === 'fresh' 
+                  ? 'text-green-600'
+                  : 'text-gray-600'
+              }`}>
+                {getFreshnessIcon()}
+              </div>
+              <div>
+                <div className="flex items-center space-x-2">
+                  <span className={`text-sm font-medium ${
+                    getFreshnessState() === 'outdated' 
+                      ? 'text-amber-900' 
+                      : getFreshnessState() === 'fresh' 
+                      ? 'text-green-900'
+                      : 'text-gray-900'
+                  }`}>
+                    {getFreshnessState() === 'outdated' ? 'Outdated' : 
+                     getFreshnessState() === 'fresh' ? 'Fresh' : 'Unknown'}
+                  </span>
+                  <span className={`text-xs px-2 py-1 rounded-full ${
+                    getAnalysisStatusDisplay() === 'Running' 
+                      ? 'bg-blue-100 text-blue-800'
+                      : getAnalysisStatusDisplay() === 'Failed'
+                      ? 'bg-red-100 text-red-800'
+                      : getAnalysisStatusDisplay() === 'Completed'
+                      ? 'bg-green-100 text-green-800'
+                      : 'bg-gray-100 text-gray-800'
+                  }`}>
+                    {getAnalysisStatusDisplay()}
+                  </span>
+                </div>
+                <div className="flex items-center space-x-4 text-xs text-gray-600 mt-1">
+                  <span>Analysis: {formatDate(analyzedAt)}</span>
+                  <span>Job: {formatDate(jobUpdatedAt)}</span>
+                </div>
+              </div>
+            </div>
+            
+            {getFreshnessState() === 'outdated' && (
+              <button
+                onClick={handleReRunAnalysis}
+                className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-amber-700 bg-amber-100 hover:bg-amber-200 rounded-md transition-colors"
+              >
+                <svg className="w-3 h-3 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Re-run Analysis
+              </button>
+            )}
+          </div>
+          
+          {getFreshnessState() === 'outdated' && (
+            <div className="mt-2 text-xs text-amber-800 bg-amber-100 rounded-md p-2">
+              <div className="flex items-start">
+                <svg className="w-3 h-3 mr-1.5 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.314 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+                <span>
+                  The job description changed after the last analysis. Re-run analysis to refresh results.
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2 className="text-xl font-semibold text-gray-900">JD Analysis Results</h2>
@@ -468,6 +853,23 @@ export const JDExtractionViewer: React.FC<JDExtractionViewerProps> = ({
           </div>
           <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${qualityColor}`}>
             {score}/100 - {qualityLabel}
+          </div>
+        </div>
+        
+        {/* Role Summary */}
+        <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4 mb-4">
+          <div className="flex items-start space-x-3">
+            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center mt-0.5">
+              <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </div>
+            <div className="flex-1">
+              <h4 className="text-sm font-semibold text-indigo-900 mb-2">Role Summary</h4>
+              <p className="text-sm text-indigo-800 leading-relaxed">
+                {getRoleSummary()}
+              </p>
+            </div>
           </div>
         </div>
         
@@ -490,101 +892,276 @@ export const JDExtractionViewer: React.FC<JDExtractionViewerProps> = ({
       <div className="px-6 py-6 space-y-8">
         {/* 2. Role Profile Section */}
         <div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Role Profile</h3>
-          <div className="bg-gray-50 rounded-lg p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <h4 className="text-sm font-medium text-gray-900 mb-2">Role Information</h4>
-                <div className="space-y-2">
-                  <div>
-                    <span className="text-sm text-gray-600">Role Title:</span>
-                    <p className="text-sm font-medium text-gray-900">{extraction.roleTitle || 'Not identified'}</p>
-                  </div>
-                  <div>
-                    <span className="text-sm text-gray-600">Seniority Level:</span>
-                    <p className="text-sm font-medium text-gray-900">{extraction.seniorityLevel || 'Not specified'}</p>
-                  </div>
-                  <div>
-                    <span className="text-sm text-gray-600">Department:</span>
-                    <p className="text-sm font-medium text-gray-900">{extraction.department || 'Not specified'}</p>
-                  </div>
-                  <div>
-                    <span className="text-sm text-gray-600">Experience Level:</span>
-                    <p className="text-sm font-medium text-gray-900">{extraction.experienceLevel || 'Not specified'}</p>
-                  </div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-6">Role Profile</h3>
+          
+          {/* Core Role Identity - Visually Strong */}
+          <div className="bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-200 rounded-xl p-6 mb-6">
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                <div className="flex items-center space-x-3 mb-3">
+                  <h2 className="text-2xl font-bold text-gray-900">{getRoleTitle()}</h2>
+                  {getRoleTitleSource() === 'job' && (
+                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800 border border-amber-200">
+                      From Job Title
+                    </span>
+                  )}
+                </div>
+                <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
+                  {extraction.seniorityLevel && (
+                    <div className="flex items-center">
+                      <svg className="w-4 h-4 mr-1.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      {extraction.seniorityLevel}
+                    </div>
+                  )}
+                  {extraction.department && (
+                    <div className="flex items-center">
+                      <svg className="w-4 h-4 mr-1.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                      </svg>
+                      {extraction.department}
+                    </div>
+                  )}
+                  {extraction.experienceLevel && (
+                    <div className="flex items-center">
+                      <svg className="w-4 h-4 mr-1.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      {extraction.experienceLevel}
+                    </div>
+                  )}
                 </div>
               </div>
               
-              <div>
-                <h4 className="text-sm font-medium text-gray-900 mb-2">Compensation</h4>
-                {extraction.estimatedSalary ? (
-                  <div>
-                    <span className="text-sm text-gray-600">Estimated Salary:</span>
-                    <p className="text-sm font-medium text-gray-900">
-                      {extraction.estimatedSalary.currency} {extraction.estimatedSalary.min.toLocaleString()} - {extraction.estimatedSalary.max.toLocaleString()}
-                    </p>
+              {extraction.estimatedSalary && (
+                <div className="text-right">
+                  <div className="text-sm text-gray-600 mb-1">Estimated Salary</div>
+                  <div className="text-lg font-semibold text-gray-900">
+                    {extraction.estimatedSalary.currency} {extraction.estimatedSalary.min.toLocaleString()} - {extraction.estimatedSalary.max.toLocaleString()}
                   </div>
-                ) : (
-                  <p className="text-sm text-gray-500">Not specified</p>
-                )}
-              </div>
+                </div>
+              )}
             </div>
+          </div>
 
-            <div className="mt-6">
-              <h4 className="text-sm font-medium text-gray-900 mb-3">Required Skills ({extraction.requiredSkills?.length || 0})</h4>
+          {/* Skills Section - Grouped */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            <div className="bg-white border border-gray-200 rounded-lg p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="text-sm font-semibold text-gray-900">Required Skills</h4>
+                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                  {extraction.requiredSkills?.length || 0}
+                </span>
+              </div>
               {extraction.requiredSkills && extraction.requiredSkills.length > 0 ? (
                 <div className="flex flex-wrap gap-2">
                   {extraction.requiredSkills.map((skill: string, index: number) => (
                     <span
                       key={index}
-                      className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
+                      className="inline-flex items-center px-3 py-1.5 rounded-md text-sm font-medium bg-blue-50 text-blue-800 border border-blue-200"
                     >
                       {skill}
                     </span>
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-gray-500 italic">None detected</p>
+                <div className="text-center py-4">
+                  <svg className="w-8 h-8 mx-auto text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                  </svg>
+                  <p className="text-sm text-gray-500">No required skills detected</p>
+                </div>
               )}
             </div>
 
-            <div className="mt-6">
-              <h4 className="text-sm font-medium text-gray-900 mb-3">Preferred Skills ({extraction.preferredSkills?.length || 0})</h4>
+            <div className="bg-white border border-gray-200 rounded-lg p-5">
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="text-sm font-semibold text-gray-900">Preferred Skills</h4>
+                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                  {extraction.preferredSkills?.length || 0}
+                </span>
+              </div>
               {extraction.preferredSkills && extraction.preferredSkills.length > 0 ? (
                 <div className="flex flex-wrap gap-2">
                   {extraction.preferredSkills.map((skill: string, index: number) => (
                     <span
                       key={index}
-                      className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800"
+                      className="inline-flex items-center px-3 py-1.5 rounded-md text-sm font-medium bg-green-50 text-green-800 border border-green-200"
                     >
                       {skill}
                     </span>
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-gray-500 italic">None detected</p>
-              )}
-            </div>
-
-            <div className="mt-6">
-              <h4 className="text-sm font-medium text-gray-900 mb-3">Key Responsibilities ({extraction.keyResponsibilities?.length || 0})</h4>
-              {extraction.keyResponsibilities && extraction.keyResponsibilities.length > 0 ? (
-                <ul className="space-y-2">
-                  {extraction.keyResponsibilities.map((responsibility: string, index: number) => (
-                    <li key={index} className="text-sm text-gray-700 flex items-start">
-                      <span className="text-indigo-500 mr-2 mt-1">•</span>
-                      <span className="break-words">{responsibility}</span>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-sm text-gray-500 italic">None detected</p>
+                <div className="text-center py-4">
+                  <svg className="w-8 h-8 mx-auto text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                  </svg>
+                  <p className="text-sm text-gray-500">No preferred skills detected</p>
+                </div>
               )}
             </div>
           </div>
+
+          {/* Key Responsibilities - Improved Readability */}
+          <div className="bg-white border border-gray-200 rounded-lg p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h4 className="text-sm font-semibold text-gray-900">Key Responsibilities</h4>
+              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                {extraction.keyResponsibilities?.length || 0}
+              </span>
+            </div>
+            {extraction.keyResponsibilities && extraction.keyResponsibilities.length > 0 ? (
+              <ul className="space-y-4">
+                {extraction.keyResponsibilities.map((responsibility: string, index: number) => (
+                  <li key={index} className="flex items-start space-x-3">
+                    <div className="flex-shrink-0 w-6 h-6 rounded-full bg-purple-100 flex items-center justify-center mt-0.5">
+                      <span className="text-purple-600 text-sm font-medium">{index + 1}</span>
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm text-gray-700 leading-relaxed">{responsibility}</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="text-center py-4">
+                <svg className="w-8 h-8 mx-auto text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
+                <p className="text-sm text-gray-500">No key responsibilities detected</p>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* 3. Issues Detected Section */}
+        {/* 3. Candidate Match Prediction */}
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Candidate Match Prediction</h3>
+          <div className={`bg-white border rounded-lg p-5 ${
+            getCandidateMatchPrediction().color === 'green' ? 'border-green-200' :
+            getCandidateMatchPrediction().color === 'amber' ? 'border-amber-200' : 'border-red-200'
+          }`}>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center space-x-3">
+                <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                  getCandidateMatchPrediction().color === 'green' ? 'bg-green-100' :
+                  getCandidateMatchPrediction().color === 'amber' ? 'bg-amber-100' : 'bg-red-100'
+                }`}>
+                  <div className={`text-lg font-bold ${
+                    getCandidateMatchPrediction().color === 'green' ? 'text-green-600' :
+                    getCandidateMatchPrediction().color === 'amber' ? 'text-amber-600' : 'text-red-600'
+                  }`}>
+                    {getCandidateMatchPrediction().level.charAt(0)}
+                  </div>
+                </div>
+                <div>
+                  <div className={`text-2xl font-bold ${
+                    getCandidateMatchPrediction().color === 'green' ? 'text-green-900' :
+                    getCandidateMatchPrediction().color === 'amber' ? 'text-amber-900' : 'text-red-900'
+                  }`}>
+                    {getCandidateMatchPrediction().level}
+                  </div>
+                  <div className={`text-sm ${
+                    getCandidateMatchPrediction().color === 'green' ? 'text-green-700' :
+                    getCandidateMatchPrediction().color === 'amber' ? 'text-amber-700' : 'text-red-700'
+                  }`}>
+                    Match Potential
+                  </div>
+                </div>
+              </div>
+              <div className={`px-3 py-1 rounded-full text-xs font-medium ${
+                getCandidateMatchPrediction().color === 'green' ? 'bg-green-100 text-green-800' :
+                getCandidateMatchPrediction().color === 'amber' ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-800'
+              }`}>
+                {getCandidateMatchPrediction().level === 'High' ? 'Well-qualified candidates' :
+                 getCandidateMatchPrediction().level === 'Medium' ? 'Some qualified candidates' : 'Limited qualified candidates'}
+              </div>
+            </div>
+            <p className={`text-sm leading-relaxed ${
+              getCandidateMatchPrediction().color === 'green' ? 'text-green-800' :
+              getCandidateMatchPrediction().color === 'amber' ? 'text-amber-800' : 'text-red-800'
+            }`}>
+              {getCandidateMatchPrediction().description}
+            </p>
+          </div>
+        </div>
+
+        {/* 4. Hiring Risks Detection */}
+        <div>
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Hiring Risks Detection</h3>
+          {getHiringRisks().length > 0 ? (
+            <div className="space-y-3">
+              {getHiringRisks().map((risk, index) => (
+                <div key={index} className={`bg-white border rounded-lg p-4 ${
+                  risk.severity === 'High' ? 'border-red-200' :
+                  risk.severity === 'Medium' ? 'border-amber-200' : 'border-gray-200'
+                }`}>
+                  <div className="flex items-start space-x-3">
+                    <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center mt-0.5 ${
+                      risk.severity === 'High' ? 'bg-red-100' :
+                      risk.severity === 'Medium' ? 'bg-amber-100' : 'bg-gray-100'
+                    }`}>
+                      <span className={`text-xs font-bold ${
+                        risk.severity === 'High' ? 'text-red-600' :
+                        risk.severity === 'Medium' ? 'text-amber-600' : 'text-gray-600'
+                      }`}>
+                        {risk.severity.charAt(0)}
+                      </span>
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-2 mb-2">
+                        <h4 className={`text-sm font-semibold ${
+                          risk.severity === 'High' ? 'text-red-900' :
+                          risk.severity === 'Medium' ? 'text-amber-900' : 'text-gray-900'
+                        }`}>
+                          {risk.type}
+                        </h4>
+                        <span className={`text-xs px-2 py-1 rounded-full font-medium ${
+                          risk.severity === 'High' ? 'bg-red-100 text-red-800' :
+                          risk.severity === 'Medium' ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-800'
+                        }`}>
+                          {risk.severity} Risk
+                        </span>
+                      </div>
+                      <p className={`text-sm leading-relaxed mb-2 ${
+                        risk.severity === 'High' ? 'text-red-800' :
+                        risk.severity === 'Medium' ? 'text-amber-800' : 'text-gray-800'
+                      }`}>
+                        {risk.description}
+                      </p>
+                      <div className={`text-xs p-2 rounded-md ${
+                        risk.severity === 'High' ? 'bg-red-50 text-red-700' :
+                        risk.severity === 'Medium' ? 'bg-amber-50 text-amber-700' : 'bg-gray-50 text-gray-700'
+                      }`}>
+                        <strong>Mitigation:</strong> {risk.mitigation}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-5">
+              <div className="flex items-center space-x-3">
+                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
+                  <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                </div>
+                <div>
+                  <h4 className="text-sm font-semibold text-green-900 mb-1">No Significant Hiring Risks Detected</h4>
+                  <p className="text-sm text-green-800">
+                    This job description appears to have clear requirements and reasonable expectations.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 5. Issues Detected Section */}
         {allIssues.length > 0 && (
           <div id="issues-detected-section">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Issues Detected ({allIssues.length})</h3>
@@ -747,81 +1324,134 @@ export const JDExtractionViewer: React.FC<JDExtractionViewerProps> = ({
 
         {/* 5. Improvement Guidance Section */}
         <div>
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Improvement Guidance</h3>
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
-            {hasQualityIssues(extraction) ? (
-              <div className="space-y-4">
-                <div>
-                  <h4 className="text-sm font-medium text-blue-900 mb-2">Recommended Actions:</h4>
-                  <ul className="text-sm text-blue-800 space-y-2">
-                    {getImprovementSuggestions(extraction).map((suggestion, index) => (
-                      <li key={index} className="flex items-start">
-                        <span className="text-blue-600 mr-2">•</span>
-                        {suggestion}
-                      </li>
-                    ))}
-                  </ul>
+          <h3 className="text-lg font-semibold text-gray-900 mb-6">Improvement Guidance</h3>
+          
+          {hasQualityIssues(extraction) ? (
+            <div className="space-y-6">
+              {/* Highest Priority Fix */}
+              <div className="bg-red-50 border border-red-200 rounded-lg p-5">
+                <div className="flex items-center space-x-3 mb-3">
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-red-100 flex items-center justify-center">
+                    <svg className="w-4 h-4 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.314 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-semibold text-red-900">Highest Priority Fix</h4>
+                    <p className="text-xs text-red-700 mt-1">Address this immediately to improve candidate attraction</p>
+                  </div>
                 </div>
-                
-                <div>
-                  <h4 className="text-sm font-medium text-blue-900 mb-2">Recruiter Tips:</h4>
-                  <ul className="text-sm text-blue-800 space-y-2">
-                    <li className="flex items-start">
-                      <span className="text-blue-600 mr-2">•</span>
-                      Clear, specific requirements attract more qualified candidates
-                    </li>
-                    <li className="flex items-start">
-                      <span className="text-blue-600 mr-2">•</span>
-                      Avoid jargon that might confuse potential applicants
-                    </li>
-                    <li className="flex items-start">
-                      <span className="text-blue-600 mr-2">•</span>
-                      Include success metrics to help candidates understand expectations
-                    </li>
-                  </ul>
+                <div className="bg-white rounded-md p-4 border border-red-100">
+                  <p className="text-sm font-medium text-red-800 leading-relaxed">
+                    {getHighestPriorityFix(extraction)}
+                  </p>
                 </div>
               </div>
-            ) : (
-              <div className="text-sm text-blue-800">
-                <div className="flex items-center">
-                  <svg className="w-5 h-5 mr-2 text-blue-600" fill="currentColor" viewBox="0 0 20 20">
+
+              {/* Immediate Fixes */}
+              <div className="bg-orange-50 border border-orange-200 rounded-lg p-5">
+                <div className="flex items-center space-x-3 mb-4">
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center">
+                    <svg className="w-4 h-4 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-semibold text-orange-900">Fix Now</h4>
+                    <p className="text-xs text-orange-700 mt-1">Critical issues that may confuse candidates</p>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  {getImmediateFixes(extraction).map((fix, index) => (
+                    <div key={index} className="flex items-start space-x-3 bg-white rounded-md p-3 border border-orange-100">
+                      <div className="flex-shrink-0 w-5 h-5 rounded-full bg-orange-100 flex items-center justify-center mt-0.5">
+                        <span className="text-orange-600 text-xs font-medium">{index + 1}</span>
+                      </div>
+                      <p className="text-sm text-orange-800 leading-relaxed">{fix}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Best-Practice Recommendations */}
+              <div className="bg-green-50 border border-green-200 rounded-lg p-5">
+                <div className="flex items-center space-x-3 mb-4">
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-green-100 flex items-center justify-center">
+                    <svg className="w-4 h-4 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-semibold text-green-900">Improve Next</h4>
+                    <p className="text-xs text-green-700 mt-1">Best practices to enhance job description quality</p>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  {getBestPracticeRecommendations(extraction).map((recommendation, index) => (
+                    <div key={index} className="flex items-start space-x-3 bg-white rounded-md p-3 border border-green-100">
+                      <div className="flex-shrink-0 w-5 h-5 rounded-full bg-green-100 flex items-center justify-center mt-0.5">
+                        <span className="text-green-600 text-xs font-medium">{index + 1}</span>
+                      </div>
+                      <p className="text-sm text-green-800 leading-relaxed">{recommendation}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="bg-green-50 border border-green-200 rounded-lg p-6">
+              <div className="flex items-center space-x-3">
+                <div className="flex-shrink-0 w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
+                  <svg className="w-6 h-6 text-green-600" fill="currentColor" viewBox="0 0 20 20">
                     <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                   </svg>
-                  This job description looks comprehensive and well-structured!
                 </div>
-                <p className="mt-2">You're ready to start attracting qualified candidates for this role.</p>
+                <div>
+                  <h4 className="text-lg font-semibold text-green-900 mb-2">Excellent Job Description</h4>
+                  <p className="text-sm text-green-800 leading-relaxed">
+                    This job description is comprehensive and well-structured! You're ready to start attracting qualified candidates for this role.
+                  </p>
+                </div>
               </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
 
         {/* 5. Action Bar */}
         <div className="border-t border-gray-200 pt-6">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            {/* Primary Actions */}
             <div className="flex flex-wrap gap-3">
-              <button
-                onClick={handleEditJob}
-                className="inline-flex items-center px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors"
-              >
-                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                </svg>
-                Improve Job Description
-              </button>
-
-              <button
-                onClick={handleGenerateInterviewKit}
-                disabled
-                className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-400 bg-gray-100 cursor-not-allowed transition-colors"
-                title="Interview Kit generation will be enabled next."
-              >
-                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                Generate Interview Kit
-              </button>
+              {getPrimaryAction() === 'improve-job-description' ? (
+                <button
+                  onClick={handleEditJob}
+                  className="inline-flex items-center px-6 py-3 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all transform hover:scale-105 shadow-lg"
+                >
+                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                  Improve Job Description
+                </button>
+              ) : (
+                <button
+                  onClick={handleGenerateInterviewKit}
+                  disabled={getInterviewKitDisabled()}
+                  className={`inline-flex items-center px-6 py-3 text-sm font-semibold rounded-lg transition-all transform hover:scale-105 shadow-lg ${
+                    getInterviewKitDisabled()
+                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      : 'bg-green-600 text-white hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500'
+                  }`}
+                  title={getInterviewKitTooltip()}
+                >
+                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                  </svg>
+                  Generate Interview Kit
+                </button>
+              )}
             </div>
 
+            {/* Secondary Actions */}
             <div className="flex flex-wrap gap-3">
               <button
                 onClick={handleEditJob}
