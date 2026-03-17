@@ -200,6 +200,21 @@ export const aiService = {
   },
 
   /**
+   * Generate targeted improvement for specific JD issue
+   */
+  async generateTargetedImprovement(input: any): Promise<any> {
+    return executeAIOperation(
+      async () => {
+        const provider = await getProvider();
+        return await provider.generateTargetedImprovement(input);
+      },
+      'generateTargetedImprovement',
+      input.requestId,
+      input.orgId
+    );
+  },
+
+  /**
    * Get current provider information
    */
   getProviderInfo() {

@@ -107,13 +107,19 @@ export const JDExtractionViewer: React.FC<JDExtractionViewerProps> = ({
   const getRoleTitle = () => {
     if (extraction.roleTitle) return extraction.roleTitle;
     if (job?.title) return job.title;
-    return 'Role Title Not Available';
+    return null; // Return null instead of string for better handling
   };
 
   const getRoleTitleSource = () => {
     if (extraction.roleTitle) return 'extracted';
     if (job?.title) return 'job';
     return 'none';
+  };
+
+  const getRoleTitleDisplay = () => {
+    const title = getRoleTitle();
+    if (title) return title;
+    return 'Role Title Unavailable'; // Softer message
   };
 
   // Improvement guidance helper functions
@@ -460,6 +466,126 @@ export const JDExtractionViewer: React.FC<JDExtractionViewerProps> = ({
       .slice(0, limit);
   };
 
+  const getSuggestedFix = (issue: { type: string; title: string }): string => {
+    const title = issue.title.toLowerCase();
+    const type = issue.type;
+
+    // Missing criteria fixes
+    if (type === 'missing') {
+      if (title.includes('salary') || title.includes('compensation')) {
+        return "Include an estimated salary range to improve candidate targeting.";
+      }
+      if (title.includes('skills') || title.includes('technologies')) {
+        return "Add a 'Technologies & Tools' section specifying the stack used in this role.";
+      }
+      if (title.includes('experience') || title.includes('seniority')) {
+        return "Specify the expected years of experience and seniority level clearly.";
+      }
+      if (title.includes('responsibilities') || title.includes('duties')) {
+        return "List key responsibilities and day-to-day tasks in bullet points.";
+      }
+      if (title.includes('qualifications') || title.includes('education')) {
+        return "Clearly state required qualifications, education, and certifications.";
+      }
+      if (title.includes('industry') || title.includes('domain')) {
+        return "Specify the industry or domain to provide context for the role.";
+      }
+      if (title.includes('location') || title.includes('remote') || title.includes('work environment')) {
+        return "Clarify whether the role is remote, hybrid, or on-site with location details.";
+      }
+      if (title.includes('benefits') || title.includes('perks')) {
+        return "Include information about benefits, perks, and company culture.";
+      }
+      if (title.includes('team') || title.includes('structure')) {
+        return "Describe the team structure, reporting lines, and team size.";
+      }
+    }
+
+    // Ambiguity fixes
+    if (type === 'ambiguity') {
+      if (title.includes('placeholder') || title.includes('nonsensical')) {
+        return "Replace placeholder text with detailed, specific job information.";
+      }
+      if (title.includes('vague') || title.includes('unclear')) {
+        return "Provide specific details and examples to clarify the ambiguous statements.";
+      }
+      if (title.includes('contradictory') || title.includes('conflicting')) {
+        return "Review and resolve any contradictory requirements or statements.";
+      }
+    }
+
+    // Unrealistic expectation fixes
+    if (type === 'unrealistic') {
+      if (title.includes('years') || title.includes('experience')) {
+        return "Adjust experience requirements to be realistic for the role level.";
+      }
+      if (title.includes('skills') || title.includes('technologies')) {
+        return "Balance the required skills to avoid asking for impossible combinations.";
+      }
+      if (title.includes('salary') || title.includes('compensation')) {
+        return "Ensure compensation expectations align with market rates for the role.";
+      }
+    }
+
+    // Generic fallbacks
+    if (type === 'missing') {
+      return "Add the missing information to provide a complete job description.";
+    }
+    if (type === 'ambiguity') {
+      return "Clarify the ambiguous statements with specific details and examples.";
+    }
+    if (type === 'unrealistic') {
+      return "Adjust the requirements to be more realistic and achievable.";
+    }
+
+    return "Review and improve this section of the job description.";
+  };
+
+  const handleGenerateSuggestion = async (issue: { type: string; title: string }) => {
+    if (!jobId) {
+      console.error('No job ID available for generating suggestion');
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/jobs/${jobId}/improve-section`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-org-id': 'cmm87bloy0000v9nvvzyt6aqn' // Demo org ID
+        },
+        body: JSON.stringify({
+          jobId,
+          issueType: issue.type,
+          issueDescription: issue.title,
+          rawJD: extraction?.rawJD || ''
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Generated suggestion:', data.suggestion);
+        
+        // TODO: This could open a modal with the suggestion
+        // For now, you could alert the suggestion or navigate to edit with pre-filled content
+        alert(`Suggestion generated: ${data.suggestion}`);
+      } else {
+        const errorData = await response.json();
+        console.error('Failed to generate suggestion:', errorData.error);
+        alert(`Failed to generate suggestion: ${errorData.error || 'Unknown error'}`);
+      }
+    } catch (error) {
+      console.error('Error generating suggestion:', error);
+      alert('Network error occurred while generating suggestion');
+    }
+  };
+
+  const handleIgnoreIssue = (issue: { type: string; title: string }) => {
+    // For now, just log the action - this could update state to hide ignored issues
+    console.log('Ignore issue:', issue);
+    // TODO: This could add the issue to an ignored list
+  };
+
   const hasQualityIssues = (extraction: any): boolean => {
     return (
       (extraction.ambiguities && extraction.ambiguities.length > 0) ||
@@ -699,8 +825,10 @@ export const JDExtractionViewer: React.FC<JDExtractionViewerProps> = ({
     if (onEditJob) {
       onEditJob();
     } else {
-      // Fallback behavior if no handler provided
-      window.location.href = '/jobs';
+      // Safe fallback: no-op instead of broken navigation
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('JDExtractionViewer: onEditJob handler not provided. Button disabled.');
+      }
     }
   };
 
@@ -899,10 +1027,19 @@ export const JDExtractionViewer: React.FC<JDExtractionViewerProps> = ({
             <div className="flex items-start justify-between">
               <div className="flex-1">
                 <div className="flex items-center space-x-3 mb-3">
-                  <h2 className="text-2xl font-bold text-gray-900">{getRoleTitle()}</h2>
+                  {getRoleTitle() ? (
+                    <h2 className="text-2xl font-bold text-gray-900">{getRoleTitle()}</h2>
+                  ) : (
+                    <div className="flex items-center space-x-2">
+                      <h2 className="text-2xl font-bold text-gray-400">Role Title Unavailable</h2>
+                      <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200">
+                        No title data
+                      </span>
+                    </div>
+                  )}
                   {getRoleTitleSource() === 'job' && (
                     <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-800 border border-amber-200">
-                      From Job Title
+                      Using job title fallback
                     </span>
                   )}
                 </div>
@@ -934,7 +1071,7 @@ export const JDExtractionViewer: React.FC<JDExtractionViewerProps> = ({
                 </div>
               </div>
               
-              {extraction.estimatedSalary && (
+              {extraction.estimatedSalary && extraction.estimatedSalary.min && extraction.estimatedSalary.max && (
                 <div className="text-right">
                   <div className="text-sm text-gray-600 mb-1">Estimated Salary</div>
                   <div className="text-lg font-semibold text-gray-900">
@@ -1281,17 +1418,47 @@ export const JDExtractionViewer: React.FC<JDExtractionViewerProps> = ({
               <div>
                 <h4 className="text-sm font-medium text-gray-900 mb-3">Top Issues Detected</h4>
                 {topIssues.length > 0 ? (
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     {topIssues.map((issue, index) => (
-                      <div key={index} className="flex items-start space-x-3 p-3 bg-white bg-opacity-50 rounded-md">
-                        <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${
-                          issue.type === 'ambiguity' ? 'bg-yellow-500' :
-                          issue.type === 'unrealistic' ? 'bg-orange-500' :
-                          'bg-red-500'
-                        }`}></div>
-                        <div className="flex-1">
-                          <p className="text-sm text-gray-800">{issue.title}</p>
-                          <p className="text-xs text-gray-600 mt-1 capitalize">{issue.type}</p>
+                      <div key={index} className="p-4 bg-white bg-opacity-50 rounded-md border border-gray-200">
+                        <div className="flex items-start space-x-3">
+                          <div className={`w-2 h-2 rounded-full mt-1.5 flex-shrink-0 ${
+                            issue.type === 'ambiguity' ? 'bg-yellow-500' :
+                            issue.type === 'unrealistic' ? 'bg-orange-500' :
+                            'bg-red-500'
+                          }`}></div>
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-gray-900">{issue.title}</p>
+                            <p className="text-xs text-gray-600 mt-1 capitalize">{issue.type}</p>
+                            
+                            {/* Suggested Fix Section */}
+                            <div className="mt-3 p-3 bg-blue-50 rounded-md border border-blue-200">
+                              <p className="text-xs font-medium text-blue-900 mb-1">Suggested Fix</p>
+                              <p className="text-xs text-blue-800">{getSuggestedFix(issue)}</p>
+                            </div>
+                            
+                            {/* Action Buttons */}
+                            <div className="mt-3 flex space-x-2">
+                              <button
+                                onClick={() => handleGenerateSuggestion(issue)}
+                                className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                              >
+                                <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                </svg>
+                                Generate Suggestion
+                              </button>
+                              <button
+                                onClick={() => handleIgnoreIssue(issue)}
+                                className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                              >
+                                <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                                Ignore
+                              </button>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     ))}

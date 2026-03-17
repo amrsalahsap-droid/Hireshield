@@ -177,12 +177,28 @@ export interface CandidateSignalsResult {
   reasoning: string;
 }
 
+// Targeted JD Improvement types
+export interface TargetedImprovementInput extends BaseAIInput {
+  jobTitle: string;
+  rawJD: string;
+  issueType: string;
+  issueDescription: string;
+  improvementPrompt?: string;
+}
+
+export interface TargetedImprovementResult {
+  suggestion: string;
+  confidence?: 'high' | 'medium' | 'low';
+  rationale?: string;
+}
+
 // Provider interface
 export interface LLMProvider {
   name: string;
   analyzeJD(input: AnalyzeJDInput): Promise<AnalyzeJDResult>;
   generateInterviewKit(input: InterviewKitInput): Promise<InterviewKitResult>;
   generateCandidateSignals(input: CandidateSignalsInput): Promise<CandidateSignalsResult>;
+  generateTargetedImprovement(input: TargetedImprovementInput): Promise<TargetedImprovementResult>;
 }
 
 // Provider configuration

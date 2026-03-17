@@ -332,6 +332,13 @@ export default function JobDetailsPage() {
     return job?.status === 'ACTIVE';
   };
 
+  // Handle job edit navigation
+  const handleEditJob = () => {
+    if (job?.id) {
+      router.push(`/app/jobs/${job.id}/edit`);
+    }
+  };
+
   // Refresh all data
   const refreshData = async () => {
     setLoading(true);
@@ -918,8 +925,10 @@ export default function JobDetailsPage() {
           {job.jdExtractionJson && (
             <JDExtractionViewer
               extraction={job.jdExtractionJson}
+              job={job}
               analyzedAt={job.jdAnalyzedAt}
               promptVersion={job.jdPromptVersion}
+              onEditJob={handleEditJob}
             />
           )}
 
