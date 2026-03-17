@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { GenerateJDButton } from "@/components/app/generate-jd-button";
 
 // Demo org ID
 const DEMO_ORG_ID = "cmmk1zo40000212ymhwgz0di8";
@@ -21,6 +22,14 @@ export default function EditJobPage() {
   // Form state
   const [title, setTitle] = useState("");
   const [rawJD, setRawJD] = useState("");
+  const [department, setDepartment] = useState("");
+  const [location, setLocation] = useState("");
+  const [employmentType, setEmploymentType] = useState("");
+  const [seniorityLevel, setSeniorityLevel] = useState("");
+  const [skills, setSkills] = useState("");
+  const [hiringManager, setHiringManager] = useState("");
+  const [numberOfOpenings, setNumberOfOpenings] = useState(1);
+  const [status, setStatus] = useState("DRAFT");
 
   const validateForm = () => {
     const newErrors: {title?: string; rawJD?: string} = {};
@@ -62,6 +71,14 @@ export default function EditJobPage() {
         setJob(data.job);
         setTitle(data.job.title || "");
         setRawJD(data.job.rawJD || "");
+        setDepartment(data.job.department || "");
+        setLocation(data.job.location || "");
+        setEmploymentType(data.job.employmentType || "");
+        setSeniorityLevel(data.job.seniorityLevel || "");
+        setSkills(data.job.skills?.join(", ") || "");
+        setHiringManager(data.job.hiringManager || "");
+        setNumberOfOpenings(data.job.numberOfOpenings || 1);
+        setStatus(data.job.status || "DRAFT");
       } else if (response.status === 404) {
         setError("Job not found");
       } else {
@@ -92,7 +109,15 @@ export default function EditJobPage() {
         },
         body: JSON.stringify({
           title: title.trim(),
-          rawJD: rawJD.trim()
+          rawJD: rawJD.trim(),
+          department: department.trim(),
+          location: location.trim(),
+          employmentType: employmentType,
+          seniorityLevel: seniorityLevel,
+          hiringManager: hiringManager.trim(),
+          numberOfOpenings: numberOfOpenings,
+          status: status,
+          skills: skills.split(",").map(s => s.trim()).filter(s => s)
         })
       });
 
@@ -215,6 +240,84 @@ export default function EditJobPage() {
               )}
             </div>
 
+            {/* Department */}
+            <div>
+              <label htmlFor="department" className="block text-sm font-medium text-gray-700 mb-2">
+                Department
+              </label>
+              <select
+                id="department"
+                value={department}
+                onChange={(e) => setDepartment(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+              >
+                <option value="">Select Department</option>
+                <option value="Engineering">Engineering</option>
+                <option value="Design">Design</option>
+                <option value="Marketing">Marketing</option>
+                <option value="Sales">Sales</option>
+                <option value="Product">Product</option>
+                <option value="HR">Human Resources</option>
+                <option value="Finance">Finance</option>
+                <option value="Operations">Operations</option>
+              </select>
+            </div>
+
+            {/* Location */}
+            <div>
+              <label htmlFor="location" className="block text-sm font-medium text-gray-700 mb-2">
+                Location
+              </label>
+              <input
+                type="text"
+                id="location"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                placeholder="e.g. New York, NY"
+              />
+            </div>
+
+            {/* Employment Type */}
+            <div>
+              <label htmlFor="employmentType" className="block text-sm font-medium text-gray-700 mb-2">
+                Employment Type
+              </label>
+              <select
+                id="employmentType"
+                value={employmentType}
+                onChange={(e) => setEmploymentType(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+              >
+                <option value="">Select Type</option>
+                <option value="FULL_TIME">Full Time</option>
+                <option value="PART_TIME">Part Time</option>
+                <option value="CONTRACT">Contract</option>
+                <option value="INTERNSHIP">Internship</option>
+              </select>
+            </div>
+
+            {/* Seniority Level */}
+            <div>
+              <label htmlFor="seniorityLevel" className="block text-sm font-medium text-gray-700 mb-2">
+                Seniority Level
+              </label>
+              <select
+                id="seniorityLevel"
+                value={seniorityLevel}
+                onChange={(e) => setSeniorityLevel(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+              >
+                <option value="">Select Level</option>
+                <option value="INTERN">Intern</option>
+                <option value="JUNIOR">Junior</option>
+                <option value="MID">Mid-Level</option>
+                <option value="SENIOR">Senior</option>
+                <option value="LEAD">Lead</option>
+                <option value="MANAGER">Manager</option>
+              </select>
+            </div>
+
             {/* Job Description */}
             <div>
               <label htmlFor="rawJD" className="block text-sm font-medium text-gray-700 mb-2">
@@ -257,6 +360,83 @@ export default function EditJobPage() {
               {rawJD.length < 50 && rawJD.length > 0 && (
                 <span className="block mt-1">⚠️ Too short for meaningful analysis</span>
               )}
+            </div>
+
+            {/* Generate Job Description Button */}
+            <div>
+              <GenerateJDButton
+                jobTitle={title}
+                seniority={seniorityLevel}
+                department={department}
+                onGenerated={(description) => setRawJD(description)}
+              />
+            </div>
+
+            {/* Skills */}
+            <div>
+              <label htmlFor="skills" className="block text-sm font-medium text-gray-700 mb-2">
+                Skills
+              </label>
+              <input
+                type="text"
+                id="skills"
+                value={skills}
+                onChange={(e) => setSkills(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                placeholder="e.g. React, TypeScript, Node.js (comma-separated)"
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                Enter skills separated by commas.
+              </p>
+            </div>
+
+            {/* Hiring Manager */}
+            <div>
+              <label htmlFor="hiringManager" className="block text-sm font-medium text-gray-700 mb-2">
+                Hiring Manager
+              </label>
+              <input
+                type="text"
+                id="hiringManager"
+                value={hiringManager}
+                onChange={(e) => setHiringManager(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                placeholder="e.g. John Smith"
+              />
+            </div>
+
+            {/* Number of Openings */}
+            <div>
+              <label htmlFor="numberOfOpenings" className="block text-sm font-medium text-gray-700 mb-2">
+                Number of Openings
+              </label>
+              <input
+                type="number"
+                id="numberOfOpenings"
+                min="1"
+                max="100"
+                value={numberOfOpenings}
+                onChange={(e) => setNumberOfOpenings(parseInt(e.target.value) || 1)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                placeholder="1"
+              />
+            </div>
+
+            {/* Job Status */}
+            <div>
+              <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-2">
+                Job Status
+              </label>
+              <select
+                id="status"
+                value={status}
+                onChange={(e) => setStatus(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+              >
+                <option value="DRAFT">Draft - Not visible to candidates</option>
+                <option value="ACTIVE">Active - Accepting candidates</option>
+                <option value="ARCHIVED">Archived - No longer accepting candidates</option>
+              </select>
             </div>
           </div>
 

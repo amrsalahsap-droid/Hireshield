@@ -11,6 +11,10 @@ import {
   InterviewKitResult,
   CandidateSignalsInput,
   CandidateSignalsResult,
+  ImproveJDInput,
+  ImproveJDResult,
+  TargetedImprovementInput,
+  TargetedImprovementResult,
   ProviderConfig 
 } from '../types';
 import { createAIError, AIErrorCode } from '../errors';
@@ -199,6 +203,53 @@ export class MockProvider implements LLMProvider {
       return this.getSalesCandidateSignals(input);
     } else {
       return this.getGenericCandidateSignals(input);
+    }
+  }
+
+  async improveJobDescription(input: ImproveJDInput): Promise<ImproveJDResult> {
+    this.checkFailureMode();
+    
+    // Store current job data for context
+    this.currentJobTitle = input.jobTitle;
+    this.currentRawJD = input.rawJD;
+    
+    // Simulate processing time
+    await this.delay(800 + Math.random() * 1200);
+    
+    // Generate improved JD based on role type and existing analysis
+    const improvedJD = this.generateImprovedJobDescription(input);
+    
+    return {
+      improvedJobDescription: improvedJD.text,
+      summary: improvedJD.summary,
+      changesMade: improvedJD.changesMade,
+      qualityFocus: improvedJD.qualityFocus,
+    };
+  }
+
+  private generateImprovedJobDescription(input: ImproveJDInput) {
+    const jobTitle = input.jobTitle.toLowerCase();
+    const rawJD = input.rawJD;
+    
+    // Detect role type
+    let roleType = 'generic';
+    if (jobTitle.includes('frontend') || jobTitle.includes('ui')) roleType = 'frontend';
+    else if (jobTitle.includes('backend') || jobTitle.includes('api')) roleType = 'backend';
+    else if (jobTitle.includes('sales')) roleType = 'sales';
+    else if (jobTitle.includes('data') || jobTitle.includes('analyst')) roleType = 'data';
+    
+    // Generate improved JD based on role type
+    switch (roleType) {
+      case 'frontend':
+        return this.getFrontendImprovedJD(input);
+      case 'backend':
+        return this.getBackendImprovedJD(input);
+      case 'sales':
+        return this.getSalesImprovedJD(input);
+      case 'data':
+        return this.getDataImprovedJD(input);
+      default:
+        return this.getGenericImprovedJD(input);
     }
   }
 
@@ -1548,5 +1599,410 @@ export class MockProvider implements LLMProvider {
       recommendation: 'maybe',
       reasoning: 'Has good soft skills and some relevant experience. May need additional training or mentorship for technical aspects of the role.'
     };
+  }
+
+  // Improved JD generation methods
+  private getFrontendImprovedJD(input: ImproveJDInput) {
+    return {
+      text: `Frontend Developer
+
+We are seeking a talented Frontend Developer to join our dynamic engineering team and create exceptional user experiences.
+
+About the Role:
+As a Frontend Developer, you will be responsible for building responsive, accessible, and performant web applications using modern JavaScript frameworks. You'll work closely with our design and backend teams to translate UI/UX designs into high-quality code.
+
+Key Responsibilities:
+• Develop and maintain responsive web applications using React, TypeScript, and modern CSS
+• Collaborate with UX designers to implement pixel-perfect interfaces
+• Optimize applications for maximum speed and scalability
+• Write clean, maintainable, and well-documented code
+• Participate in code reviews and contribute to technical decisions
+• Ensure cross-browser compatibility and accessibility standards
+
+Required Skills & Qualifications:
+• 3+ years of experience with frontend development
+• Strong proficiency in React, TypeScript, and modern JavaScript (ES6+)
+• Expert knowledge of HTML5, CSS3, and responsive design principles
+• Experience with state management libraries (Redux, Zustand, or similar)
+• Familiarity with testing frameworks (Jest, React Testing Library)
+• Understanding of web performance optimization techniques
+
+Preferred Qualifications:
+• Experience with Next.js or other React-based frameworks
+• Knowledge of build tools and modern development workflows
+• Understanding of RESTful APIs and GraphQL
+• Experience with design systems and component libraries
+• Familiarity with CI/CD pipelines and deployment processes
+
+What We Offer:
+• Competitive salary and comprehensive benefits package
+• Flexible work arrangements (remote/hybrid options)
+• Professional development opportunities and training budget
+• Collaborative and inclusive team environment
+• Modern tech stack and tools
+
+If you're passionate about creating exceptional user experiences and want to work with a team that values innovation and quality, we'd love to hear from you!`,
+      summary: 'Transformed the vague job description into a comprehensive frontend developer role with clear responsibilities, required skills, and company benefits. Added specific technical requirements and modern development practices.',
+      changesMade: [
+        'Added clear role introduction and team context',
+        'Structured responsibilities with specific technical tasks',
+        'Detailed required skills with experience levels',
+        'Added preferred qualifications section',
+        'Included company benefits and work environment',
+        'Improved readability with bullet points and sections',
+        'Added specific technologies and frameworks'
+      ],
+      qualityFocus: [
+        'Technical specificity',
+        'Role clarity',
+        'Candidate attraction',
+        'Professional presentation',
+        'Comprehensive coverage of frontend development'
+      ]
+    };
+  }
+
+  private getBackendImprovedJD(input: ImproveJDInput) {
+    return {
+      text: `Backend Developer
+
+Join our engineering team as a Backend Developer and build robust, scalable server-side applications that power our platform.
+
+About the Role:
+As a Backend Developer, you will design, develop, and maintain the server-side logic, APIs, and database architecture that support our applications. You'll work with modern technologies and best practices to ensure high performance, security, and reliability.
+
+Key Responsibilities:
+• Design and develop RESTful APIs and microservices
+• Build and maintain scalable database schemas and queries
+• Implement authentication, authorization, and security measures
+• Optimize application performance and troubleshoot issues
+• Collaborate with frontend developers to integrate APIs
+• Write unit tests, integration tests, and documentation
+• Participate in code reviews and architectural decisions
+
+Required Skills & Qualifications:
+• 3+ years of experience in backend development
+• Strong proficiency in Node.js, Python, or Java
+• Experience with relational databases (PostgreSQL, MySQL) and NoSQL databases
+• Knowledge of API design principles and RESTful services
+• Understanding of cloud platforms (AWS, Azure, or GCP)
+• Experience with containerization (Docker, Kubernetes)
+• Familiarity with CI/CD pipelines and DevOps practices
+
+Preferred Qualifications:
+• Experience with microservices architecture
+• Knowledge of message queues and event-driven systems
+• Understanding of database optimization and indexing
+• Familiarity with monitoring and logging tools
+• Experience with serverless computing
+• Knowledge of security best practices and compliance
+
+What We Offer:
+• Competitive compensation package with performance bonuses
+• Remote-first culture with flexible work hours
+• Cutting-edge technology stack and tools
+• Professional growth opportunities and conference budget
+• Collaborative and innovative team environment
+
+If you're passionate about building scalable backend systems and want to work with modern technologies, we encourage you to apply!`,
+      summary: 'Enhanced the backend developer position with specific technical requirements, clear responsibilities, and modern development practices. Added comprehensive skill requirements and company culture information.',
+      changesMade: [
+        'Added specific backend technologies and frameworks',
+        'Structured responsibilities around API development and database management',
+        'Detailed technical requirements with experience levels',
+        'Added cloud and DevOps skills requirements',
+        'Included company culture and benefits',
+        'Improved technical accuracy and specificity',
+        'Added performance and security focus areas'
+      ],
+      qualityFocus: [
+        'Technical depth',
+        'Modern backend practices',
+        'Scalability focus',
+        'Security considerations',
+        'Cloud computing skills'
+      ]
+    };
+  }
+
+  private getSalesImprovedJD(input: ImproveJDInput) {
+    return {
+      text: `Sales Representative
+
+Drive business growth and build lasting customer relationships as a Sales Representative on our dynamic sales team.
+
+About the Role:
+As a Sales Representative, you will be responsible for identifying new business opportunities, building relationships with potential clients, and driving revenue growth. You'll work closely with our marketing and product teams to understand customer needs and deliver tailored solutions.
+
+Key Responsibilities:
+• Identify and qualify new sales opportunities through research and outreach
+• Build and maintain relationships with prospective and existing clients
+• Conduct product demonstrations and presentations to potential customers
+• Negotiate and close sales deals to meet and exceed revenue targets
+• Collaborate with marketing teams to develop and execute sales strategies
+• Maintain accurate sales records and forecasting in our CRM system
+• Provide feedback to product teams based on customer insights
+
+Required Skills & Qualifications:
+• 2+ years of experience in sales or business development
+• Proven track record of meeting or exceeding sales targets
+• Excellent communication, negotiation, and presentation skills
+• Strong relationship-building and networking abilities
+• Experience with CRM software (Salesforce, HubSpot, or similar)
+• Self-motivated with excellent time management and organizational skills
+• Bachelor's degree in Business, Marketing, or related field (or equivalent experience)
+
+Preferred Qualifications:
+• Experience in B2B sales or SaaS industry
+• Knowledge of our industry and market landscape
+• Familiarity with consultative selling methodologies
+• Experience with sales analytics and reporting
+• Ability to understand technical products and explain value propositions
+• Multilingual abilities for international markets
+
+What We Offer:
+• Competitive base salary plus generous commission structure
+• Comprehensive benefits package including health, dental, and vision
+• Professional development and sales training programs
+• Company car allowance and travel reimbursement
+• Clear career progression paths and leadership opportunities
+• Dynamic and supportive team culture
+
+If you're passionate about sales and want to join a growing company with excellent earning potential, we'd love to hear from you!`,
+      summary: 'Transformed the sales role into a comprehensive position with clear sales responsibilities, specific skill requirements, and attractive compensation structure. Added professional development opportunities and career growth information.',
+      changesMade: [
+        'Added specific sales methodologies and tools',
+        'Structured responsibilities around business development',
+        'Detailed communication and relationship requirements',
+        'Added CRM and sales technology skills',
+        'Included competitive compensation details',
+        'Added career growth and development opportunities',
+        'Enhanced professional presentation and clarity'
+      ],
+      qualityFocus: [
+        'Sales effectiveness',
+        'Relationship building',
+        'Communication skills',
+        'Business development',
+        'Career growth opportunities'
+      ]
+    };
+  }
+
+  private getDataImprovedJD(input: ImproveJDInput) {
+    return {
+      text: `Data Analyst
+
+Transform raw data into actionable insights as a Data Analyst and help drive data-informed decision making across our organization.
+
+About the Role:
+As a Data Analyst, you will be responsible for collecting, analyzing, and interpreting complex datasets to provide valuable business insights. You'll work with various stakeholders to understand business questions and deliver data-driven recommendations.
+
+Key Responsibilities:
+• Collect, clean, and analyze large datasets from multiple sources
+• Create and maintain dashboards and reports for business stakeholders
+• Develop statistical models and perform hypothesis testing
+• Identify trends, patterns, and anomalies in data
+• Present findings and recommendations to non-technical audiences
+• Collaborate with business teams to define key performance indicators
+• Ensure data quality and integrity across analytical processes
+
+Required Skills & Qualifications:
+• 2+ years of experience in data analysis or business intelligence
+• Strong proficiency in SQL and experience with relational databases
+• Expert knowledge of Excel and data visualization tools (Tableau, Power BI)
+• Experience with statistical analysis and data manipulation
+• Understanding of data warehousing concepts and ETL processes
+• Excellent analytical thinking and problem-solving skills
+• Bachelor's degree in Statistics, Mathematics, Computer Science, or related field
+
+Preferred Qualifications:
+• Experience with programming languages (Python, R) for data analysis
+• Knowledge of machine learning algorithms and techniques
+• Familiarity with big data technologies (Hadoop, Spark)
+• Experience with data visualization libraries (D3.js, matplotlib)
+• Understanding of A/B testing and experimental design
+• Knowledge of specific industry analytics and metrics
+
+What We Offer:
+• Competitive salary with performance-based bonuses
+• Comprehensive benefits package and professional development budget
+• Access to cutting-edge analytics tools and technologies
+• Opportunities to work with diverse datasets and business challenges
+• Collaborative environment with data-driven culture
+• Clear career progression into senior analytics roles
+
+If you're passionate about data and want to help drive business decisions through analytics, we encourage you to apply!`,
+      summary: 'Enhanced the data analyst position with specific technical requirements, clear analytical responsibilities, and modern data analysis tools. Added comprehensive skill requirements and career development information.',
+      changesMade: [
+        'Added specific data analysis tools and technologies',
+        'Structured responsibilities around data insights and reporting',
+        'Detailed statistical and analytical skill requirements',
+        'Added programming and visualization skills',
+        'Included data-driven culture information',
+        'Enhanced technical accuracy and specificity',
+        'Added career progression opportunities'
+      ],
+      qualityFocus: [
+        'Technical data skills',
+        'Analytical thinking',
+        'Business intelligence',
+        'Data visualization',
+        'Statistical analysis'
+      ]
+    };
+  }
+
+  private getGenericImprovedJD(input: ImproveJDInput) {
+    return {
+      text: `${input.jobTitle}
+
+Join our team and contribute to our mission of delivering exceptional products and services to our customers.
+
+About the Role:
+We are seeking a talented ${input.jobTitle} to join our growing team. In this role, you will have the opportunity to make a significant impact while working in a collaborative and innovative environment.
+
+Key Responsibilities:
+• Contribute to team projects and initiatives with your expertise
+• Collaborate with cross-functional teams to achieve common goals
+• Maintain high standards of quality and professionalism in all work
+• Continuously learn and develop new skills relevant to your role
+• Provide insights and suggestions for process improvements
+• Support team members and foster a positive work environment
+• Meet deadlines and deliver results that exceed expectations
+
+Required Skills & Qualifications:
+• Relevant experience in ${input.jobTitle.toLowerCase()} or related field
+• Strong communication and interpersonal skills
+• Problem-solving abilities and attention to detail
+• Ability to work independently and as part of a team
+• Adaptability and willingness to learn new technologies
+• Professional attitude and strong work ethic
+• Educational background relevant to the role
+
+Preferred Qualifications:
+• Experience with industry-specific tools and technologies
+• Previous success in similar roles or projects
+• Leadership experience or potential
+• Certifications or specialized training
+• Multilingual abilities if relevant to the role
+• Experience with remote or distributed teams
+
+What We Offer:
+• Competitive compensation and benefits package
+• Professional development and training opportunities
+• Flexible work arrangements when possible
+• Collaborative and inclusive company culture
+• Clear career growth and advancement paths
+• Modern work environment and tools
+
+If you're looking for an opportunity to grow your career while making a meaningful contribution, we'd love to hear from you!`,
+      summary: 'Created a comprehensive and professional job description with clear structure, responsibilities, and qualifications. Enhanced readability and added company culture information.',
+      changesMade: [
+        'Added professional structure and formatting',
+        'Created clear sections for responsibilities and qualifications',
+        'Enhanced readability with bullet points and proper organization',
+        'Added company culture and benefits information',
+        'Improved professional tone and presentation',
+        'Added career growth opportunities',
+        'Enhanced overall completeness and attractiveness'
+      ],
+      qualityFocus: [
+        'Professional presentation',
+        'Clear structure',
+        'Comprehensive coverage',
+        'Attractive to candidates',
+        'Career development focus'
+      ]
+    };
+  }
+
+  async generateTargetedImprovement(input: TargetedImprovementInput): Promise<TargetedImprovementResult> {
+    this.checkFailureMode();
+    
+    // Simulate processing time
+    await this.delay(300 + Math.random() * 500);
+    
+    const { issueType, issueDescription, jobTitle, rawJD } = input;
+    
+    // Generate contextual suggestions based on issue type
+    let suggestion = '';
+    
+    switch (issueType) {
+      case 'missing':
+        if (issueDescription.toLowerCase().includes('salary')) {
+          suggestion = `Based on the ${jobTitle} role and current market data, we recommend adding a salary range of $${this.generateSalaryRange()} per year. This will help attract qualified candidates and set clear compensation expectations. Consider including additional benefits like health insurance, retirement plans, and professional development opportunities to make the position more competitive.`;
+        } else if (issueDescription.toLowerCase().includes('skills')) {
+          suggestion = `For the ${jobTitle} position, we suggest adding a dedicated 'Technologies & Tools' section that outlines the specific tech stack. Include must-have skills like ${this.generateRelevantSkills(jobTitle)} and nice-to-have skills that would make candidates stand out. Organize this as a bulleted list for easy scanning.`;
+        } else if (issueDescription.toLowerCase().includes('experience')) {
+          suggestion = `Clearly specify the required years of experience for the ${jobTitle} role. For example: "3-5 years of professional experience in ${jobTitle.toLowerCase()} or related field, with at least 2 years of experience with ${this.generateRelevantSkills(jobTitle)}." Consider including equivalent experience or transferable skills that would qualify candidates.`;
+        } else {
+          suggestion = `To address the missing information in your ${jobTitle} job description, add specific details about company culture, team structure, reporting lines, and growth opportunities. Include information about work environment (remote, hybrid, or on-site) and any unique benefits or perks that set your company apart.`;
+        }
+        break;
+        
+      case 'ambiguity':
+        if (issueDescription.toLowerCase().includes('placeholder')) {
+          suggestion = `Replace the placeholder text with specific, detailed information about the ${jobTitle} role. Include concrete examples of daily responsibilities, specific projects the candidate will work on, and clear metrics for success. Describe the team structure and who the candidate will report to, providing a clear picture of the role within the organization.`;
+        } else if (issueDescription.toLowerCase().includes('vague')) {
+          suggestion = `Add specific details to clarify the ambiguous statements in your ${jobTitle} job description. For example, instead of "manage projects," specify "manage 3-5 concurrent web development projects using Agile methodology, delivering features on a bi-weekly sprint cycle." Include specific technologies, tools, and processes the candidate will use.`;
+        } else {
+          suggestion = `Review the ${jobTitle} job description and identify any statements that could be interpreted multiple ways. Rephrase these with specific, measurable language. For example, instead of "strong communication skills," use "lead daily stand-up meetings and create clear technical documentation for cross-functional team collaboration."`;
+        }
+        break;
+        
+      case 'unrealistic':
+        if (issueDescription.toLowerCase().includes('experience')) {
+          suggestion = `Adjust the experience requirements for the ${jobTitle} role to be more realistic. Instead of requiring 10+ years for a mid-level position, consider "3-5 years of experience with ${this.generateRelevantSkills(jobTitle)}" or "2+ years of professional experience OR equivalent combination of education and relevant projects." Focus on skills and capabilities rather than strict years of experience.`;
+        } else if (issueDescription.toLowerCase().includes('skills')) {
+          suggestion = `Balance the required skills for the ${jobTitle} position to avoid asking for impossible combinations. Group related skills together (e.g., "React and related frontend technologies" rather than listing every framework). Prioritize must-have skills over nice-to-have ones, and consider that candidates might have equivalent experience with different but related technologies.`;
+        } else {
+          suggestion = `Review the ${jobTitle} job requirements and ensure they align with industry standards. Research similar positions and adjust expectations accordingly. Consider what a realistically qualified candidate looks like versus an idealized candidate, and focus on the core competencies needed for success in the role.`;
+        }
+        break;
+        
+      default:
+        suggestion = `To improve the ${jobTitle} job description, focus on providing clear, specific, and realistic information. Add details about company culture, growth opportunities, and what makes this role unique. Ensure all requirements are necessary and directly related to job performance.`;
+    }
+    
+    return {
+      suggestion,
+      confidence: this.calculateConfidence(issueType, rawJD),
+      rationale: `Generated targeted improvement for ${issueType} issue in ${jobTitle} job description`
+    };
+  }
+
+  // Helper methods for generating realistic content
+  private generateSalaryRange(): string {
+    const ranges = {
+      'junior': '60,000-85,000',
+      'mid': '85,000-120,000', 
+      'senior': '120,000-160,000',
+      'lead': '140,000-180,000'
+    };
+    return ranges[Math.floor(Math.random() * 4)] || '85,000-120,000';
+  }
+
+  private generateRelevantSkills(jobTitle: string): string {
+    const title = jobTitle.toLowerCase();
+    if (title.includes('frontend') || title.includes('react')) {
+      return 'React, JavaScript, TypeScript, HTML, CSS';
+    } else if (title.includes('backend') || title.includes('node')) {
+      return 'Node.js, Express, MongoDB, REST APIs';
+    } else if (title.includes('full')) {
+      return 'React, Node.js, TypeScript, PostgreSQL';
+    } else {
+      return 'relevant technical skills and tools';
+    }
+  }
+
+  private calculateConfidence(issueType: string, rawJD: string): 'high' | 'medium' | 'low' {
+    // Higher confidence for missing criteria (easier to fix)
+    if (issueType === 'missing') return 'high';
+    // Medium confidence for ambiguities (depends on context)
+    if (issueType === 'ambiguity') return 'medium';
+    // Lower confidence for unrealistic expectations (harder to judge)
+    if (issueType === 'unrealistic') return 'low';
+    return 'medium';
   }
 }
