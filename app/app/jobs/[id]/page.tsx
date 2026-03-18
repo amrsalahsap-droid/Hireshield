@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { ErrorState, LoadingState } from "@/components/ui/ErrorState";
-import { JDExtractionViewer } from "@/components/jobs/jd-extraction-viewer";
+import JDExtractionViewer from "@/components/jobs/jd-extraction-viewer";
 import { InterviewKitViewer } from "@/components/jobs/interview-kit-viewer";
 
 interface Job {
