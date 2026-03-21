@@ -20,6 +20,7 @@ export default function JDExtractionViewer({
   onEditJob,
   onAnalysisUpdate
 }: JDExtractionViewerProps) {
+  console.log("[JD_VIEWER][PROPS]", { jobId });
   const [showAllIssues, setShowAllIssues] = useState(false);
   const [loadingSuggestions, setLoadingSuggestions] = useState<Set<string>>(new Set());
   const [suggestionPreview, setSuggestionPreview] = useState<{
@@ -89,7 +90,7 @@ export default function JDExtractionViewer({
   if (!topIssue) return '';
   
   // Create a concise, actionable sentence
-  const actionMap = {
+  const actionMap: Record<string, string> = {
     'missing': `Add missing ${topIssue.title.toLowerCase().includes('salary') ? 'salary' : 'information'}`,
     'ambiguity': `Clarify vague ${topIssue.title.toLowerCase().includes('requirements') ? 'requirements' : 'details'}`,
     'unrealistic': `Adjust ${topIssue.title.toLowerCase().includes('expectations') ? 'expectations' : 'requirements'}`
@@ -288,10 +289,9 @@ const getImproveNextSuggestions = (extraction: any): string[] => {
   };
 
   const handleGenerateSuggestion = async (issue: any) => {
+    console.log("[GENERATE_SUGGESTION][INPUT]", { jobId, issue });
     if (!jobId) {
-      console.error('[GENERATE_SUGGESTION][FAILED] No job ID available');
-      setSuggestionError('No job ID available for generating suggestion');
-      return;
+      throw new Error("Invariant violation: jobId must be defined before generating suggestion");
     }
 
     const issueKey = `${issue.type}-${issue.title}`;
@@ -316,7 +316,40 @@ const getImproveNextSuggestions = (extraction: any): string[] => {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to generate improvement');
+        const contentType = response.headers.get("content-type");
+        let errorMessage = 'Failed to generate improvement';
+        let requestId = null;
+        
+        if (contentType && contentType.includes("application/json")) {
+          // Handle JSON response
+          const backendError = await response.json();
+          console.error("[GENERATE_SUGGESTION][BACKEND_ERROR]", {
+            jobId,
+            status: response.status,
+            backendError
+          });
+          
+          // Build error message using fallback order
+          errorMessage = backendError.message || backendError.error || backendError.details || response.statusText || 'Failed to generate improvement';
+          requestId = backendError.requestId;
+        } else {
+          // Handle non-JSON response
+          const text = await response.text();
+          console.error("[GENERATE_SUGGESTION][BACKEND_ERROR_TEXT]", {
+            jobId,
+            status: response.status,
+            text
+          });
+          
+          errorMessage = text || response.statusText || 'Failed to generate improvement';
+        }
+        
+        // Include requestId in error message if available
+        if (requestId) {
+          errorMessage += ` (Request ID: ${requestId})`;
+        }
+        
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
@@ -332,8 +365,9 @@ const getImproveNextSuggestions = (extraction: any): string[] => {
         issueType: issue.type,
       });
     } catch (error) {
-      console.error('[GENERATE_SUGGESTION][FAILED]', { jobId, error });
-      setSuggestionError('Failed to generate suggestion');
+      console.error('[GENERATE_SUGGESTION][CATCH]', { jobId, error });
+      const errorMessage = error instanceof Error ? error.message : 'Failed to generate suggestion';
+      setSuggestionError(errorMessage);
     } finally {
       setLoadingSuggestions(prev => {
         const newSet = new Set(prev);
@@ -583,17 +617,21 @@ const getImproveNextSuggestions = (extraction: any): string[] => {
       ];
       
       let jdElement = null;
+      let successfulSelector = null;
       for (const selector of jdSelectors) {
         jdElement = document.querySelector(selector);
-        if (jdElement) break;
+        if (jdElement) {
+          successfulSelector = selector;
+          break;
+        }
       }
       
       if (jdElement) {
         // Scroll to JD field
         jdElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
         
-        // Focus on the JD field
-        jdElement.focus();
+        // Focus on the JD field - cast to HTMLElement to access focus method
+        (jdElement as HTMLElement).focus();
         
         // Add visual highlight to draw attention
         jdElement.classList.add('ring-2', 'ring-blue-500', 'ring-offset-2');
@@ -601,7 +639,7 @@ const getImproveNextSuggestions = (extraction: any): string[] => {
           jdElement.classList.remove('ring-2', 'ring-blue-500', 'ring-offset-2');
         }, 3000);
         
-        console.log('[IMPROVE_JOB_DESCRIPTION] Focused on JD field:', selector);
+        console.log('[IMPROVE_JOB_DESCRIPTION] Focused on JD field:', successfulSelector);
       } else {
         console.log('[IMPROVE_JOB_DESCRIPTION] JD field not found, falling back to general edit flow');
       }
@@ -847,7 +885,9 @@ const getImproveNextSuggestions = (extraction: any): string[] => {
           
           {allIssues.length > 0 ? (
             <div className="space-y-3">
-              {allIssues.map((issue, index) => (
+              {allIssues.map((issue, index) => {
+                console.log("[ISSUE_CARD][PROPS]", { jobId, issue: issue.title });
+                return (
                 <div 
                   key={index} 
                   id={`issue-${issue.type}-${issue.title?.replace(/\s+/g, '-')}`}
@@ -914,8 +954,13 @@ const getImproveNextSuggestions = (extraction: any): string[] => {
                   <div className="flex items-center space-x-3 pt-3 border-t border-gray-100">
                     <button
                       onClick={() => handleGenerateSuggestion(issue)}
-                      disabled={loadingSuggestions.has(`${issue.type}-${issue.title}`)}
-                      className="inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={loadingSuggestions.has(`${issue.type}-${issue.title}`) || !jobId}
+                      title={!jobId ? (process.env.NODE_ENV === 'development' ? "Job ID missing" : undefined) : undefined}
+                      className={`inline-flex items-center px-4 py-2 text-sm font-medium rounded-md transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
+                        !jobId 
+                          ? 'bg-gray-400 text-gray-200 cursor-not-allowed opacity-60' 
+                          : 'text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed'
+                      }`}
                     >
                       {loadingSuggestions.has(`${issue.type}-${issue.title}`) ? (
                         <>
@@ -939,7 +984,8 @@ const getImproveNextSuggestions = (extraction: any): string[] => {
                     </button>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <div className="text-center py-8 bg-green-50 border border-green-200 rounded-lg">

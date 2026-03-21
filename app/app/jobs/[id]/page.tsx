@@ -926,8 +926,9 @@ export default function JobDetailsPage() {
             <JDExtractionViewer
               extraction={job.jdExtractionJson}
               job={job}
-              analyzedAt={job.jdAnalyzedAt}
-              promptVersion={job.jdPromptVersion}
+              jobId={job.id}
+              analyzedAt={job.jdAnalyzedAt || undefined}
+              promptVersion={job.jdPromptVersion || undefined}
               onEditJob={handleEditJob}
             />
           )}

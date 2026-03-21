@@ -47,6 +47,12 @@ export class OpenRouterProvider implements LLMProvider {
     return this.parseCandidateSignalsResponse(response);
   }
 
+  async generateTargetedImprovement(input: any): Promise<any> {
+    const prompt = this.buildTargetedImprovementPrompt(input);
+    const response = await this.callOpenRouter(prompt);
+    return this.parseTargetedImprovementResponse(response);
+  }
+
   private async callOpenRouter(prompt: string): Promise<any> {
     if (!this.config.apiKey) {
       throw createAIError(
@@ -408,6 +414,54 @@ Be objective and realistic in your assessment. Consider both strengths and poten
       throw createAIError(
         AIErrorCode.SCHEMA_VALIDATION_FAILED,
         `Failed to parse candidate signals response: ${error?.message || 'Unknown error'}`,
+        { provider: this.name, details: { response, error } }
+      );
+    }
+  }
+
+  private buildTargetedImprovementPrompt(input: any): string {
+    return `You are an expert HR analyst. Based on the following job description and issue, provide a specific, actionable improvement suggestion.
+
+Job Title: ${input.jobTitle}
+Current Description: ${input.rawJD.substring(0, 1000)}${input.rawJD.length > 1000 ? '...' : ''}
+
+Issue Type: ${input.issueType}
+Issue Description: ${input.issueDescription}
+
+Please provide a specific, actionable improvement suggestion to address this issue.
+Focus on practical, concrete changes that can be implemented in the job description.
+Keep the suggestion concise but detailed enough to be immediately useful.
+
+${input.improvementPrompt || ''}
+
+Respond with a JSON object:
+{
+  "suggestion": "Your specific improvement suggestion here"
+}`;
+  }
+
+  private parseTargetedImprovementResponse(response: any): any {
+    try {
+      let content = '';
+      if (response.choices && response.choices[0]) {
+        content = response.choices[0].message?.content || response.choices[0].text || '';
+      } else if (response.content) {
+        content = response.content;
+      } else {
+        content = String(response);
+      }
+
+      // Try to parse JSON response
+      const cleaned = content.replace(/```json\n?|\n?```/g, '').trim();
+      const parsed = JSON.parse(cleaned);
+      
+      return {
+        suggestion: parsed.suggestion || 'Unable to generate improvement suggestion.'
+      };
+    } catch (error: any) {
+      throw createAIError(
+        AIErrorCode.SCHEMA_VALIDATION_FAILED,
+        `Failed to parse targeted improvement response: ${error?.message || 'Unknown error'}`,
         { provider: this.name, details: { response, error } }
       );
     }

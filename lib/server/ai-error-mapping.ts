@@ -56,12 +56,13 @@ function getHttpStatusForAIError(code: AIErrorCode): number {
 // Map AI error codes to user-friendly operation-specific messages
 function getOperationSpecificMessage(
   code: AIErrorCode, 
-  operation: 'jd-analysis' | 'interview-kit' | 'candidate-signals'
+  operation: 'jd-analysis' | 'interview-kit' | 'candidate-signals' | 'targeted-improvement'
 ): string {
   const operationNames = {
     'jd-analysis': 'Job Description Analysis',
     'interview-kit': 'Interview Kit Generation', 
-    'candidate-signals': 'Candidate Signal Analysis'
+    'candidate-signals': 'Candidate Signal Analysis',
+    'targeted-improvement': 'Targeted Improvement'
   };
 
   const operationName = operationNames[operation];
@@ -99,7 +100,7 @@ function getOperationSpecificMessage(
 // Main error mapping function
 export function mapAIErrorToRouteResponse(
   error: unknown, 
-  operation: 'jd-analysis' | 'interview-kit' | 'candidate-signals',
+  operation: 'jd-analysis' | 'interview-kit' | 'candidate-signals' | 'targeted-improvement',
   requestId?: string
 ): NextResponse<RouteAIErrorResponse> {
   // Check if it's a structured AI error
@@ -151,7 +152,7 @@ export function mapAIErrorToRouteResponse(
 // Helper function for consistent error handling in routes
 export function handleAIRouteError(
   error: unknown,
-  operation: 'jd-analysis' | 'interview-kit' | 'candidate-signals',
+  operation: 'jd-analysis' | 'interview-kit' | 'candidate-signals' | 'targeted-improvement',
   requestId?: string
 ): NextResponse<RouteAIErrorResponse> {
   console.error(`AI ${operation} error:`, error);
