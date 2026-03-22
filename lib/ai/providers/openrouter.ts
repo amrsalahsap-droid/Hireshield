@@ -11,9 +11,19 @@ import {
   InterviewKitResult,
   CandidateSignalsInput,
   CandidateSignalsResult,
+  RefineJDInput,
+  RefineJDResult,
   ProviderConfig 
 } from '../types';
 import { createAIError, AIErrorCode } from '../errors';
+import {
+  REFINE_JOB_DESCRIPTION_SYSTEM_MESSAGE,
+  buildRefineJobDescriptionUserPrompt,
+  parseAndNormalizeRefineJobDescriptionContent,
+} from '../refine-job-description';
+
+const OPENROUTER_DEFAULT_JSON_SYSTEM =
+  'You are an expert AI assistant for HR and recruitment tasks. Always respond with valid JSON.';
 
 interface OpenRouterConfig extends ProviderConfig {
   apiKey: string;
@@ -53,7 +63,19 @@ export class OpenRouterProvider implements LLMProvider {
     return this.parseTargetedImprovementResponse(response);
   }
 
-  private async callOpenRouter(prompt: string): Promise<any> {
+  async refineJobDescription(input: RefineJDInput): Promise<RefineJDResult> {
+    const prompt = buildRefineJobDescriptionUserPrompt(input);
+    const response = await this.callOpenRouter(
+      prompt,
+      REFINE_JOB_DESCRIPTION_SYSTEM_MESSAGE
+    );
+    return this.parseRefineJobDescriptionResponse(response);
+  }
+
+  private async callOpenRouter(
+    prompt: string,
+    systemMessage: string = OPENROUTER_DEFAULT_JSON_SYSTEM
+  ): Promise<any> {
     if (!this.config.apiKey) {
       throw createAIError(
         AIErrorCode.PROVIDER_NOT_CONFIGURED,
@@ -79,12 +101,12 @@ export class OpenRouterProvider implements LLMProvider {
           messages: [
             {
               role: 'system',
-              content: 'You are an expert AI assistant for HR and recruitment tasks. Always respond with valid JSON.'
+              content: systemMessage,
             },
             {
               role: 'user',
-              content: prompt
-            }
+              content: prompt,
+            },
           ],
           temperature: 0.2,
           max_tokens: 4000,
@@ -544,6 +566,32 @@ ${jdBody}
       throw createAIError(
         AIErrorCode.SCHEMA_VALIDATION_FAILED,
         `Failed to parse targeted improvement response: ${error?.message || 'Unknown error'}`,
+        { provider: this.name, details: { response, error } }
+      );
+    }
+  }
+
+  private parseRefineJobDescriptionResponse(response: any): RefineJDResult {
+    try {
+      let content = '';
+      if (typeof response === 'string') {
+        content = response;
+      } else if (response?.choices?.[0]) {
+        content =
+          response.choices[0].message?.content ||
+          response.choices[0].text ||
+          '';
+      } else if (response?.content) {
+        content = String(response.content);
+      } else {
+        content = String(response);
+      }
+
+      return parseAndNormalizeRefineJobDescriptionContent(content);
+    } catch (error: any) {
+      throw createAIError(
+        AIErrorCode.SCHEMA_VALIDATION_FAILED,
+        `Failed to parse refine job description response: ${error?.message || 'Unknown error'}`,
         { provider: this.name, details: { response, error } }
       );
     }

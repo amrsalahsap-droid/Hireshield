@@ -106,8 +106,8 @@ export const POST = withOrgContext(async (request: NextRequest, orgId: string, {
     }
 
     try {
-      // Generate targeted improvement based on issue type
-      const improvementPrompt = generateTargetedPrompt(issueType, issueDescription, job.title, rawJD);
+      // Gap note for the model (see OpenRouter buildTargetedImprovementPrompt noteBlock)
+      const improvementPrompt = buildImprovementContextNote(issueType, issueDescription);
       
       lastSuccessfulStep = "AI_CALL_START";
       console.log('AI_CALL_START', { requestId, jobId, orgId });
@@ -190,18 +190,7 @@ export const POST = withOrgContext(async (request: NextRequest, orgId: string, {
         });
       }
 
-      // Return structured error response
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Targeted improvement failed",
-          message: "Failed to generate targeted improvement. Please try again.",
-          details: errorMessage,
-          requestId
-        },
-        { status: 500 }
-      );
+      return handleAIRouteError(error, "targeted-improvement", requestId);
     }
   } catch (error) {
     console.error("[IMPROVE_SECTION][FAILED]", {
@@ -212,17 +201,8 @@ export const POST = withOrgContext(async (request: NextRequest, orgId: string, {
       errorMessage: error instanceof Error ? error.message : String(error),
       stack: error instanceof Error ? error.stack : undefined
     });
-    
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Targeted improvement failed",
-        message: "Failed to generate targeted improvement. Please try again.",
-        details: error instanceof Error ? error.message : 'Unknown error occurred',
-        requestId
-      },
-      { status: 500 }
-    );
+
+    return handleAIRouteError(error, "targeted-improvement", requestId);
   }
 });
 

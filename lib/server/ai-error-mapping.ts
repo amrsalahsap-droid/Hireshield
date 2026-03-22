@@ -56,13 +56,19 @@ function getHttpStatusForAIError(code: AIErrorCode): number {
 // Map AI error codes to user-friendly operation-specific messages
 function getOperationSpecificMessage(
   code: AIErrorCode, 
-  operation: 'jd-analysis' | 'interview-kit' | 'candidate-signals' | 'targeted-improvement'
+  operation:
+    | 'jd-analysis'
+    | 'interview-kit'
+    | 'candidate-signals'
+    | 'targeted-improvement'
+    | 'refine-jd'
 ): string {
   const operationNames = {
     'jd-analysis': 'Job Description Analysis',
     'interview-kit': 'Interview Kit Generation', 
     'candidate-signals': 'Candidate Signal Analysis',
-    'targeted-improvement': 'Targeted Improvement'
+    'targeted-improvement': 'Targeted Improvement',
+    'refine-jd': 'Job Description Refinement',
   };
 
   const operationName = operationNames[operation];
@@ -100,7 +106,12 @@ function getOperationSpecificMessage(
 // Main error mapping function
 export function mapAIErrorToRouteResponse(
   error: unknown, 
-  operation: 'jd-analysis' | 'interview-kit' | 'candidate-signals' | 'targeted-improvement',
+  operation:
+    | 'jd-analysis'
+    | 'interview-kit'
+    | 'candidate-signals'
+    | 'targeted-improvement'
+    | 'refine-jd',
   requestId?: string
 ): NextResponse<RouteAIErrorResponse> {
   // Check if it's a structured AI error
@@ -152,9 +163,79 @@ export function mapAIErrorToRouteResponse(
 // Helper function for consistent error handling in routes
 export function handleAIRouteError(
   error: unknown,
-  operation: 'jd-analysis' | 'interview-kit' | 'candidate-signals' | 'targeted-improvement',
+  operation:
+    | 'jd-analysis'
+    | 'interview-kit'
+    | 'candidate-signals'
+    | 'targeted-improvement'
+    | 'refine-jd',
   requestId?: string
 ): NextResponse<RouteAIErrorResponse> {
   console.error(`AI ${operation} error:`, error);
   return mapAIErrorToRouteResponse(error, operation, requestId);
+}
+
+/** Failure envelope for POST /api/jobs/[id]/refine-jd (matches client contract). */
+export interface RefineJdFailureBody {
+  success: false;
+  error: string;
+  message: string;
+  details?: string;
+  requestId: string;
+}
+
+/**
+ * Maps AI / unexpected errors to the refine-jd route failure JSON + HTTP status.
+ */
+export function respondRefineJdFailure(
+  error: unknown,
+  requestId: string
+): NextResponse<RefineJdFailureBody> {
+  console.error("Refine JD error:", error);
+
+  if (error && typeof error === "object" && "code" in error) {
+    const aiError = error as AIError;
+    const message = getOperationSpecificMessage(aiError.code, "refine-jd");
+    const statusCode = getHttpStatusForAIError(aiError.code);
+    const rid = aiError.requestId ?? requestId;
+
+    let details: string | undefined;
+    if (aiError.details && typeof aiError.details === "string") {
+      const safe = aiError.details
+        .replace(/api[_-]?key/gi, "***")
+        .replace(/token/gi, "***")
+        .replace(/secret/gi, "***")
+        .replace(/password/gi, "***")
+        .substring(0, 200);
+      if (safe && safe !== "***") details = safe;
+    }
+
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Job description refinement failed",
+        message,
+        ...(details ? { details } : {}),
+        requestId: rid,
+      },
+      { status: statusCode }
+    );
+  }
+
+  const errorMessage =
+    error instanceof Error ? error.message : "Unknown error occurred";
+
+  return NextResponse.json(
+    {
+      success: false,
+      error: "Job description refinement failed",
+      message:
+        "An unexpected error occurred while refining the job description. Please try again.",
+      ...(process.env.NODE_ENV === "development"
+        ? { details: errorMessage }
+        : {}),
+      requestId,
+    },
+    { status: 500 }
+  );
 }

@@ -7,7 +7,7 @@ import { aiLogger } from "@/lib/ai/logging";
 import { AIError } from "@/lib/ai/errors";
 
 // Route-specific logging context
-interface RouteAILogContext {
+export interface RouteAILogContext {
   routeName: string;
   operation: 'analyzeJD' | 'generateInterviewKit' | 'generateCandidateSignals';
   requestId: string;

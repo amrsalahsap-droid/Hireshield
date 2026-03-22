@@ -192,6 +192,29 @@ export interface TargetedImprovementResult {
   rationale?: string;
 }
 
+/** Full-document JD refinement (structure, dedupe, readability; preserve meaning). */
+export interface RefineJDInput extends BaseAIInput {
+  jobTitle: string;
+  rawJD: string;
+  extraction?: AnalyzeJDResult;
+}
+
+export interface RefineJDResult {
+  refinedJobDescription: string;
+  summary: string;
+  changesMade: string[];
+}
+
+/** Legacy mock shape for improved JD body field name; prefer RefineJDResult for new code */
+export type ImproveJDInput = RefineJDInput;
+
+export interface ImproveJDResult {
+  improvedJobDescription: string;
+  summary: string;
+  changesMade: string[];
+  qualityFocus?: string[];
+}
+
 // Provider interface
 export interface LLMProvider {
   name: string;
@@ -199,6 +222,7 @@ export interface LLMProvider {
   generateInterviewKit(input: InterviewKitInput): Promise<InterviewKitResult>;
   generateCandidateSignals(input: CandidateSignalsInput): Promise<CandidateSignalsResult>;
   generateTargetedImprovement(input: TargetedImprovementInput): Promise<TargetedImprovementResult>;
+  refineJobDescription(input: RefineJDInput): Promise<RefineJDResult>;
 }
 
 // Provider configuration
@@ -223,6 +247,8 @@ export type {
   InterviewKitResult,
   CandidateSignalsInput,
   CandidateSignalsResult,
+  RefineJDInput,
+  RefineJDResult,
   LLMProvider,
   ProviderConfig,
 };

@@ -15,6 +15,8 @@ import {
   ProviderConfig,
   TargetedImprovementInput,
   TargetedImprovementResult,
+  RefineJDInput,
+  RefineJDResult,
 } from './types';
 import { getProviderConfig, getAIConfig, isProviderConfigured, getConfigurationError } from './config';
 import { createAIError, AIErrorCode, normalizeProviderError, AIError } from './errors';
@@ -305,6 +307,21 @@ export const aiService = {
     input: TargetedImprovementInput
   ): Promise<TargetedImprovementResult> {
     return generateTargetedImprovementWithDevTransientFallback(input);
+  },
+
+  /**
+   * Refine the full job description (structure, deduplication, readability; preserve meaning).
+   */
+  async refineJobDescription(input: RefineJDInput): Promise<RefineJDResult> {
+    return executeAIOperation(
+      async () => {
+        const provider = await getProvider();
+        return await provider.refineJobDescription(input);
+      },
+      'refineJobDescription',
+      input.requestId,
+      input.orgId
+    );
   },
 
   /**

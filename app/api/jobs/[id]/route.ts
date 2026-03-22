@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withOrgContext } from "@/lib/server/org-context";
 import { prisma } from "@/lib/prisma";
-import { jdAnalyzerV1 } from "@/lib/prompts/jd_analyzer_v1";
 import { interviewKitGeneratorV1 } from "@/lib/prompts/interview_kit_v1";
 import { aiService } from "@/lib/ai/service"; // 🏗️ AI Architecture: Use ONLY aiService - NO direct provider calls
 import { JDExtraction_v1 } from "@/lib/schemas/jd-extraction";
@@ -10,7 +9,8 @@ import { createAuditLog, AUDIT_ACTIONS } from "@/lib/audit";
 import { getCurrentUserOrThrow } from "@/lib/server/auth";
 import { incrementInterviewKitUsage, getUsageSnapshot } from "@/lib/usage";
 import { handleAIRouteError } from "@/lib/server/ai-error-mapping";
-import { createRouteLogContext, logRouteAIStart, logRouteAISuccess, logRouteAIError, logRoutePersistenceIssue } from "@/lib/server/route-ai-logging";
+import { createRouteLogContext } from "@/lib/server/route-ai-logging";
+import { runJdAnalysisForJob } from "@/lib/server/run-jd-analysis";
 
 // GET /api/jobs/[id] - Get job details or JD analysis status
 export const GET = withOrgContext(async (request: NextRequest, orgId: string, { params }: { params: { id: string } }) => {
@@ -327,116 +327,36 @@ export const POST = withOrgContext(async (request: NextRequest, orgId: string, {
         });
       }
 
-      // Update job status to RUNNING
-      await prisma.job.update({
-        where: { id },
-        data: {
-          jdAnalysisStatus: 'RUNNING',
-          jdLastError: null,
-        },
-      });
-
-      // Call AI service with centralized error handling and logging
-      logRouteAIStart(logContext, {
-        jobTitle: job.title,
-        rawJD: job.rawJD,
-      });
-
-      const result = await aiService.analyzeJD({
-        jobTitle: job.title,
-        rawJD: job.rawJD,
+      const analysisResult = await runJdAnalysisForJob({
+        jobId: id,
+        orgId,
         requestId,
-        orgId
+        jobTitle: job.title,
+        rawJD: job.rawJD,
+        actorUserId,
+        logContext,
       });
 
-      // Increment usage counter (only when AI is actually called, not cached)
-      try {
-        await prisma.org.update({
-          where: { id: orgId },
-          data: {
-            jdAnalysisCount: {
-              increment: 1,
-            },
-          },
-        });
-      } catch (usageError) {
-        // Log usage tracking error but don't fail the main operation
-        console.error('Failed to increment usage counter:', usageError);
-      }
-
-      // Save extraction results to database
-      const updatedJob = await prisma.job.update({
-        where: { id },
-        data: {
-          jdExtractionJson: result as any, // Type assertion for Prisma JSON field
-          jdAnalyzedAt: new Date(),
-          jdPromptVersion: jdAnalyzerV1.version,
-          jdAnalysisStatus: 'DONE',
-          jdLastError: null,
-      },
-      });
-
-      // Log AI operation success
-      logRouteAISuccess(logContext, result, true);
-
-      // Log successful completion
-      if (actorUserId) {
-        await createAuditLog({
-          orgId,
-          actorUserId,
-          action: AUDIT_ACTIONS.JOB_JD_ANALYZE_COMPLETED,
-          entityType: 'JOB',
-          entityId: id,
-          metadata: { requestId },
-        });
+      if (!analysisResult.ok) {
+        return handleAIRouteError(
+          analysisResult.error,
+          "jd-analysis",
+          requestId
+        );
       }
 
       return NextResponse.json({
-        jdExtraction: result,
+        jdExtraction: analysisResult.extraction,
         requestId,
         cached: false,
-        analyzedAt: updatedJob.jdAnalyzedAt,
-        promptVersion: updatedJob.jdPromptVersion,
-        meta: undefined, // AI service doesn't provide meta for analyzeJD
+        analyzedAt: analysisResult.analyzedAt,
+        promptVersion: analysisResult.promptVersion,
+        meta: undefined,
       });
 
     } catch (error) {
       console.error("Error analyzing job description:", error);
-      
-      // Log AI operation error
-      logRouteAIError(logContext, error, false);
-      
-      // Update job status to FAILED with error details
-      try {
-        await prisma.job.update({
-          where: { id },
-          data: {
-            jdAnalysisStatus: 'FAILED',
-            jdLastError: error instanceof Error ? error.message : 'Unknown error',
-          },
-        });
-      } catch (updateError) {
-        console.error("Failed to update job error status:", updateError);
-        logRoutePersistenceIssue(logContext, 'status', updateError);
-      }
-
-      // Log analysis failure
-      if (actorUserId) {
-        await createAuditLog({
-          orgId,
-          actorUserId,
-          action: AUDIT_ACTIONS.JOB_JD_ANALYZE_FAILED,
-          entityType: 'JOB',
-          entityId: id,
-          metadata: { 
-            requestId,
-            error: error instanceof Error ? error.message : 'Unknown error',
-          },
-        });
-      }
-      
-      // Use standardized AI error mapping
-      return handleAIRouteError(error, 'jd-analysis', requestId);
+      return handleAIRouteError(error, "jd-analysis", requestId);
     }
   } catch (error) {
     console.error("Error in POST /api/jobs/[id]/analyze-jd:", error);
@@ -449,6 +369,7 @@ export const POST = withOrgContext(async (request: NextRequest, orgId: string, {
 
 // PUT /api/jobs/[id]/generate-interview-kit - Generate interview kit from JD extraction
 export const PUT = withOrgContext(async (request: NextRequest, orgId: string, { params }: { params: { id: string } }) => {
+  const requestId = randomUUID();
   try {
     const { id } = params;
     const { searchParams } = new URL(request.url);
@@ -530,9 +451,6 @@ export const PUT = withOrgContext(async (request: NextRequest, orgId: string, { 
         usage: usageSnapshot,
       });
     }
-
-    // Generate request ID for tracking
-    const requestId = randomUUID();
 
     // Get current user for audit logging
     let actorUserId: string | null = null;

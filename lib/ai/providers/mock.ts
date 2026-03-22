@@ -13,6 +13,8 @@ import {
   CandidateSignalsResult,
   ImproveJDInput,
   ImproveJDResult,
+  RefineJDInput,
+  RefineJDResult,
   TargetedImprovementInput,
   TargetedImprovementResult,
   ProviderConfig 
@@ -225,6 +227,256 @@ export class MockProvider implements LLMProvider {
       changesMade: improvedJD.changesMade,
       qualityFocus: improvedJD.qualityFocus,
     };
+  }
+
+  async refineJobDescription(input: RefineJDInput): Promise<RefineJDResult> {
+    this.checkFailureMode();
+    this.currentJobTitle = input.jobTitle;
+    this.currentRawJD = input.rawJD;
+    await this.delay(400 + Math.random() * 500);
+    return this.buildMockRefinedJobDescription(input);
+  }
+
+  /**
+   * Deterministic full-JD refinement for mock/dev: dedupe, merge overlaps, section structure.
+   * Does not call external APIs or invent compensation, benefits, or team details.
+   */
+  private buildMockRefinedJobDescription(input: RefineJDInput): RefineJDResult {
+    const title = (input.jobTitle || 'Role').trim();
+    const raw = (input.rawJD || '').replace(/\r\n/g, '\n').trim();
+    const changesMade: string[] = [];
+
+    if (!raw) {
+      return {
+        refinedJobDescription: `${title}\n\n(Add role details here.)`,
+        summary: 'No job description text was provided to refine.',
+        changesMade: ['No input content'],
+      };
+    }
+
+    const lines = raw
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => l.length > 0);
+
+    const exactDeduped = this.mockRefineDedupeLines(lines, changesMade);
+    const merged = this.mockRefineMergeOverlappingLines(exactDeduped, changesMade);
+
+    const bullets: string[] = [];
+    const prose: string[] = [];
+    for (const line of merged) {
+      if (this.mockRefineIsBulletLine(line)) {
+        bullets.push(line);
+      } else {
+        prose.push(line);
+      }
+    }
+
+    const respBullets: string[] = [];
+    const reqBullets: string[] = [];
+    const otherBullets: string[] = [];
+    for (const b of bullets) {
+      const cls = this.mockRefineClassifyBullet(b);
+      if (cls === 'requirements') reqBullets.push(b);
+      else if (cls === 'responsibilities') respBullets.push(b);
+      else otherBullets.push(b);
+    }
+
+    for (const b of otherBullets) {
+      if (this.mockRefineIsResponsibilityBullet(b)) respBullets.push(b);
+      else reqBullets.push(b);
+    }
+
+    const { overview, restProse } = this.mockRefineSplitProse(prose, title, changesMade);
+    const parts: string[] = [`# ${title}`, ''];
+
+    if (overview) {
+      parts.push('## Overview', '', overview, '');
+      changesMade.push('Grouped opening context under Overview');
+    }
+
+    if (respBullets.length > 0) {
+      parts.push('## Key responsibilities', '');
+      for (const b of respBullets) {
+        parts.push(this.mockRefineToStandardBullet(b));
+      }
+      parts.push('');
+      changesMade.push('Organized responsibility bullets under a single section');
+    }
+
+    if (reqBullets.length > 0) {
+      parts.push('## Requirements', '');
+      for (const b of reqBullets) {
+        parts.push(this.mockRefineToStandardBullet(b));
+      }
+      parts.push('');
+      changesMade.push('Grouped qualification-style bullets under Requirements');
+    }
+
+    const trailingProse = restProse.map((p) => p.replace(/\s+/g, ' ').trim()).filter(Boolean).join('\n\n');
+    if (trailingProse) {
+      parts.push('## Additional details', '', trailingProse, '');
+      changesMade.push('Separated remaining narrative into Additional details');
+    }
+
+    const hasBody =
+      !!overview || respBullets.length > 0 || reqBullets.length > 0 || !!trailingProse;
+    if (!hasBody && merged.length > 0) {
+      parts.length = 0;
+      parts.push(`# ${title}`, '', '## Overview', '', merged.join('\n\n'), '');
+      changesMade.push('Structured plain text JD with title and Overview');
+    }
+
+    const refinedJobDescription = parts.join('\n').trim();
+    const summary = this.mockRefineBuildSummary(changesMade, respBullets.length, reqBullets.length);
+
+    return {
+      refinedJobDescription,
+      summary,
+      changesMade: Array.from(new Set(changesMade)),
+    };
+  }
+
+  private mockRefineNormalizeForDedupe(line: string): string {
+    return line
+      .replace(/^[\s•\-\*]+/, '')
+      .replace(/^\d+\.\s*/, '')
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, ' ');
+  }
+
+  private mockRefineDedupeLines(lines: string[], changesMade: string[]): string[] {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    let removed = 0;
+    for (const line of lines) {
+      const key = this.mockRefineNormalizeForDedupe(line);
+      if (!key) {
+        out.push(line);
+        continue;
+      }
+      if (seen.has(key)) {
+        removed++;
+        continue;
+      }
+      seen.add(key);
+      out.push(line);
+    }
+    if (removed > 0) {
+      changesMade.push(`Removed ${removed} duplicate line(s)`);
+    }
+    return out;
+  }
+
+  private mockRefineMergeOverlappingLines(lines: string[], changesMade: string[]): string[] {
+    const norm = (s: string) => this.mockRefineNormalizeForDedupe(s);
+    const out = [...lines];
+    let mergedAny = false;
+    for (let i = out.length - 1; i >= 0; i--) {
+      const ni = norm(out[i]);
+      if (ni.length < 12) continue;
+      for (let j = out.length - 1; j >= 0; j--) {
+        if (i === j) continue;
+        const nj = norm(out[j]);
+        if (nj.length < 12) continue;
+        if (ni.length > nj.length && ni.includes(nj)) {
+          out.splice(j, 1);
+          if (j < i) i--;
+          mergedAny = true;
+          break;
+        }
+        if (nj.length > ni.length && nj.includes(ni)) {
+          out.splice(i, 1);
+          mergedAny = true;
+          break;
+        }
+      }
+    }
+    if (mergedAny) {
+      changesMade.push('Merged overlapping or redundant lines');
+    }
+    return out;
+  }
+
+  private mockRefineIsBulletLine(line: string): boolean {
+    return /^[\s]*(?:[•\-\*]|\d+\.)\s+\S/.test(line);
+  }
+
+  private mockRefineToStandardBullet(line: string): string {
+    const m = line.match(/^[\s]*(?:[•\-\*]|\d+\.)\s*(.+)$/);
+    if (m) return `- ${m[1].trim()}`;
+    return `- ${line.trim()}`;
+  }
+
+  private mockRefineClassifyBullet(line: string): 'responsibilities' | 'requirements' | 'unknown' {
+    const t = line.toLowerCase().replace(/^[\s•\-\*\d.]+/, '');
+    if (/\b(must|required|minimum|bachelor|master|phd|degree|years?\s+of\s+experience|certified|certification|proficiency in|familiarity with|equivalent experience)\b/.test(t)) {
+      return 'requirements';
+    }
+    if (/\b(will\s+be responsible|you will|you'll|role includes|responsibilit|day[- ]to[- ]day|own the|drive the|collaborate with|work closely)\b/.test(t)) {
+      return 'responsibilities';
+    }
+    return 'unknown';
+  }
+
+  private mockRefineIsResponsibilityBullet(line: string): boolean {
+    const t = line.toLowerCase().replace(/^[\s•\-\*\d.]+/, '');
+    return /\b(develop|build|design|implement|lead|manage|mentor|create|deliver|support|maintain|optimize|analyze|define|execute|coordinate)\b/.test(t);
+  }
+
+  /**
+   * First substantive prose block → overview; remaining lines → additional details (all from input only).
+   */
+  private mockRefineSplitProse(
+    prose: string[],
+    title: string,
+    changesMade: string[]
+  ): { overview: string; restProse: string[] } {
+    const titleLower = title.toLowerCase();
+    const rest = [...prose];
+    while (rest.length > 0) {
+      const line = rest[0];
+      if (/^#+\s/.test(line)) {
+        rest.shift();
+        continue;
+      }
+      const plain = line.replace(/^#+\s*/, '').trim();
+      if (plain.toLowerCase() === titleLower) {
+        rest.shift();
+        continue;
+      }
+      const cleaned = plain.replace(/\s+/g, ' ').trim();
+      rest.shift();
+      if (cleaned.length > 900) {
+        changesMade.push('Trimmed overview to a readable length');
+        return { overview: `${cleaned.slice(0, 897).trim()}…`, restProse: rest };
+      }
+      return { overview: cleaned, restProse: rest };
+    }
+    return { overview: '', restProse: [] };
+  }
+
+  private mockRefineBuildSummary(
+    changesMade: string[],
+    respCount: number,
+    reqCount: number
+  ): string {
+    const bits: string[] = [
+      'Refined the job description for clearer structure and recruiter-ready formatting.',
+    ];
+    if (respCount || reqCount) {
+      bits.push(
+        `Organized content into sections (${respCount} responsibility-style bullets, ${reqCount} requirement-style bullets).`
+      );
+    }
+    if (changesMade.some((c) => c.includes('duplicate'))) {
+      bits.push('Removed repeated lines.');
+    }
+    if (changesMade.some((c) => c.includes('Overlapping'))) {
+      bits.push('Consolidated overlapping wording.');
+    }
+    return bits.join(' ');
   }
 
   private generateImprovedJobDescription(input: ImproveJDInput) {
@@ -501,7 +753,8 @@ export class MockProvider implements LLMProvider {
     // Check for excessive experience requirements
     const yearsMatch = jd.match(/(\d+)\+?\s*years?/);
     const years = yearsMatch ? parseInt(yearsMatch[1]) : 0;
-    if (years > 10 && !title.includes('senior') && !title.includes('lead') && !title.includes('director')) {
+    const titleLower = jobTitle.toLowerCase();
+    if (years > 10 && !titleLower.includes('senior') && !titleLower.includes('lead') && !titleLower.includes('director')) {
       unrealistic.push({
         issue: 'High experience requirement for role level',
         whyUnrealistic: '10+ years may be excessive for non-senior roles',

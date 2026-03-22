@@ -7,6 +7,7 @@ import { ErrorState, LoadingState } from "@/components/ui/ErrorState";
 import JDExtractionViewer from "@/components/jobs/jd-extraction-viewer";
 import { InterviewKitViewer } from "@/components/jobs/interview-kit-viewer";
 import { orgFetchHeaders } from "@/lib/client/org-fetch-headers";
+import { fingerprintJdExtractionJson } from "@/lib/client/jd-extraction-fingerprint";
 
 interface Job {
   id: string;
@@ -52,6 +53,32 @@ interface Evaluation {
   createdAt: string;
 }
 
+/** Apply successful POST /api/jobs/:id analyze payload so UI matches server before GET returns. */
+function mergeJobFromAnalyzePost(
+  prev: Job,
+  data: { jdExtraction?: unknown; analyzedAt?: string | null; promptVersion?: string | null }
+): Job {
+  if (data.jdExtraction == null) return prev;
+  return {
+    ...prev,
+    jdExtractionJson: data.jdExtraction,
+    jdAnalyzedAt:
+      data.analyzedAt != null ? (data.analyzedAt as string) : prev.jdAnalyzedAt,
+    jdPromptVersion:
+      data.promptVersion != null ? (data.promptVersion as string) : prev.jdPromptVersion,
+    jdAnalysisStatus: "DONE",
+    jdLastError: null,
+  };
+}
+
+/** Remount JD viewer when a new DONE analysis lands; stay stable during OUTDATED/RUNNING so in-flight apply/re-run state is not dropped. */
+function jdViewerReactKey(job: Job): string {
+  if (job.jdAnalysisStatus === "DONE" && job.jdExtractionJson != null) {
+    return `jd-done-${job.jdAnalyzedAt ?? ""}-${job.jdPromptVersion ?? ""}-${fingerprintJdExtractionJson(job.jdExtractionJson)}`;
+  }
+  return `jd-slot-${job.id}`;
+}
+
 export default function JobDetailsPage() {
   const params = useParams();
   const router = useRouter();
@@ -72,6 +99,7 @@ export default function JobDetailsPage() {
   const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [analysisRequestId, setAnalysisRequestId] = useState<string | null>(null);
+  const [refinedJdReanalysisError, setRefinedJdReanalysisError] = useState<string | null>(null);
   const [kitError, setKitError] = useState<string | null>(null);
   const [kitRequestId, setKitRequestId] = useState<string | null>(null);
   const [formErrors, setFormErrors] = useState({
@@ -84,6 +112,7 @@ export default function JobDetailsPage() {
   const fetchJob = async () => {
     try {
       const response = await fetch(`/api/jobs/${params.id}`, {
+        cache: "no-store",
         headers: {
           ...orgFetchHeaders(),
         }
@@ -170,6 +199,9 @@ export default function JobDetailsPage() {
     setIsAnalyzingJD(true);
     setAnalysisError(null);
     setAnalysisRequestId(null);
+    setJob((prev) =>
+      prev ? { ...prev, jdAnalysisStatus: "RUNNING", jdLastError: null } : prev
+    );
     
     try {
       const response = await fetch(`/api/jobs/${job.id}`, {
@@ -182,7 +214,7 @@ export default function JobDetailsPage() {
       
       if (response.ok) {
         const data = await response.json();
-        // Refresh job data to show the analysis results
+        setJob((prev) => (prev ? mergeJobFromAnalyzePost(prev, data) : prev));
         await fetchJob();
       } else {
         // Handle non-JSON responses properly
@@ -198,12 +230,14 @@ export default function JobDetailsPage() {
         
         setAnalysisError(errorData.error || 'Failed to analyze job description');
         setAnalysisRequestId(errorData.requestId || null);
+        await fetchJob();
       }
     } catch (error) {
       console.error("Error analyzing JD:", error);
       const errorMessage = error instanceof Error ? error.message : 'Network error occurred while analyzing job description';
       setAnalysisError(errorMessage);
       setAnalysisRequestId(null);
+      await fetchJob();
     } finally {
       setIsAnalyzingJD(false);
     }
@@ -216,6 +250,9 @@ export default function JobDetailsPage() {
     setIsAnalyzingJD(true);
     setAnalysisError(null);
     setAnalysisRequestId(null);
+    setJob((prev) =>
+      prev ? { ...prev, jdAnalysisStatus: "RUNNING", jdLastError: null } : prev
+    );
     
     try {
       const response = await fetch(`/api/jobs/${job.id}?force=1`, {
@@ -228,7 +265,7 @@ export default function JobDetailsPage() {
       
       if (response.ok) {
         const data = await response.json();
-        // Refresh job data to show the new analysis results
+        setJob((prev) => (prev ? mergeJobFromAnalyzePost(prev, data) : prev));
         await fetchJob();
       } else {
         // Handle non-JSON responses properly
@@ -244,16 +281,44 @@ export default function JobDetailsPage() {
         
         setAnalysisError(errorData.error || 'Failed to re-analyze job description');
         setAnalysisRequestId(errorData.requestId || null);
+        await fetchJob();
       }
     } catch (error) {
       console.error("Error re-analyzing JD:", error);
       const errorMessage = error instanceof Error ? error.message : 'Network error occurred while re-analyzing job description';
       setAnalysisError(errorMessage);
       setAnalysisRequestId(null);
+      await fetchJob();
     } finally {
       setIsAnalyzingJD(false);
     }
   };
+
+  const syncJobAfterViewerAnalysis = async (
+    optimisticJobPatch?: Partial<Job>,
+    analyzePostPayload?: {
+      jdExtraction?: unknown;
+      analyzedAt?: string | null;
+      promptVersion?: string | null;
+    }
+  ) => {
+    setAnalysisError(null);
+    setAnalysisRequestId(null);
+    if (optimisticJobPatch) {
+      setJob((prev) => (prev ? { ...prev, ...optimisticJobPatch } : prev));
+    }
+    if (analyzePostPayload?.jdExtraction != null) {
+      setJob((prev) => (prev ? mergeJobFromAnalyzePost(prev, analyzePostPayload) : prev));
+    }
+    await fetchJob();
+    router.refresh();
+  };
+
+  useEffect(() => {
+    if (job?.jdAnalysisStatus === "DONE" && job?.jdExtractionJson) {
+      setRefinedJdReanalysisError(null);
+    }
+  }, [job?.jdAnalysisStatus, job?.jdExtractionJson]);
 
   // Generate Interview Kit function
   const generateInterviewKit = async (force = false) => {
@@ -658,6 +723,8 @@ export default function JobDetailsPage() {
     );
   }
 
+  const headerJdAnalysisStatus = isAnalyzingJD ? "RUNNING" : job.jdAnalysisStatus;
+
   return (
     <div>
       {/* Header */}
@@ -680,7 +747,7 @@ export default function JobDetailsPage() {
             {/* JD Analysis Status */}
             <div className="flex items-center space-x-2">
               <span className="text-sm text-muted-foreground">JD Analysis:</span>
-              {getJDAnalysisStatus(job.jdAnalysisStatus, job.jdExtractionJson)}
+              {getJDAnalysisStatus(headerJdAnalysisStatus, job.jdExtractionJson)}
             </div>
             {/* Interview Kit Status */}
             <div className="flex items-center space-x-2">
@@ -693,6 +760,24 @@ export default function JobDetailsPage() {
           Manage job details and track candidate applications.
         </p>
       </div>
+
+      {refinedJdReanalysisError && (
+        <div
+          className="mb-6 rounded-md border border-amber-200 bg-amber-50 p-4"
+          role="alert"
+        >
+          <div className="flex items-start justify-between gap-4">
+            <p className="text-sm text-amber-950">{refinedJdReanalysisError}</p>
+            <button
+              type="button"
+              onClick={() => setRefinedJdReanalysisError(null)}
+              className="shrink-0 text-sm font-medium text-amber-900 hover:text-amber-950 underline"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Job Status Management */}
       <div className="mb-8 bg-white shadow rounded-lg p-6">
@@ -947,13 +1032,15 @@ export default function JobDetailsPage() {
           {/* JD Analysis Results */}
           {job.jdExtractionJson && (
             <JDExtractionViewer
+              key={jdViewerReactKey(job)}
               extraction={job.jdExtractionJson}
               job={job}
               jobId={job.id}
               analyzedAt={job.jdAnalyzedAt || undefined}
               promptVersion={job.jdPromptVersion || undefined}
               onEditJob={handleEditJob}
-              onSuggestionApplied={fetchJob}
+              onSuggestionApplied={syncJobAfterViewerAnalysis}
+              onRefinedJdReanalysisFailed={(msg) => setRefinedJdReanalysisError(msg)}
             />
           )}
 
@@ -1125,9 +1212,7 @@ export default function JobDetailsPage() {
                     <div>
                       <dt className="text-sm font-medium text-muted-foreground">Analysis Status</dt>
                       <dd className="mt-1">
-                        <div className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-green-100 text-green-800">
-                          ✓ Analyzed
-                        </div>
+                        {getJDAnalysisStatus(headerJdAnalysisStatus, job.jdExtractionJson)}
                       </dd>
                     </div>
                     {job.jdPromptVersion && (

@@ -11,9 +11,21 @@ import {
   InterviewKitResult,
   CandidateSignalsInput,
   CandidateSignalsResult,
+  RefineJDInput,
+  RefineJDResult,
+  TargetedImprovementInput,
+  TargetedImprovementResult,
   ProviderConfig 
 } from '../types';
 import { createAIError, AIErrorCode } from '../errors';
+import {
+  REFINE_JOB_DESCRIPTION_SYSTEM_MESSAGE,
+  buildRefineJobDescriptionUserPrompt,
+  parseAndNormalizeRefineJobDescriptionContent,
+} from '../refine-job-description';
+
+const GROQ_DEFAULT_JSON_SYSTEM =
+  'You are an expert AI assistant for HR and recruitment tasks. Always respond with valid JSON.';
 
 interface GroqConfig extends ProviderConfig {
   apiKey: string;
@@ -46,7 +58,29 @@ export class GroqProvider implements LLMProvider {
     return this.parseCandidateSignalsResponse(response);
   }
 
-  private async callGroq(prompt: string): Promise<any> {
+  async generateTargetedImprovement(
+    _input: TargetedImprovementInput
+  ): Promise<TargetedImprovementResult> {
+    throw createAIError(
+      AIErrorCode.MODEL_NOT_AVAILABLE,
+      'generateTargetedImprovement is not implemented for the Groq provider; use openrouter or mock.',
+      { provider: this.name }
+    );
+  }
+
+  async refineJobDescription(input: RefineJDInput): Promise<RefineJDResult> {
+    const prompt = buildRefineJobDescriptionUserPrompt(input);
+    const response = await this.callGroq(
+      prompt,
+      REFINE_JOB_DESCRIPTION_SYSTEM_MESSAGE
+    );
+    return this.parseRefineJobDescriptionResponse(response);
+  }
+
+  private async callGroq(
+    prompt: string,
+    systemMessage: string = GROQ_DEFAULT_JSON_SYSTEM
+  ): Promise<any> {
     if (!this.config.apiKey) {
       throw createAIError(
         AIErrorCode.PROVIDER_NOT_CONFIGURED,
@@ -72,16 +106,16 @@ export class GroqProvider implements LLMProvider {
           messages: [
             {
               role: 'system',
-              content: 'You are an expert AI assistant for HR and recruitment tasks. Always respond with valid JSON.'
+              content: systemMessage,
             },
             {
               role: 'user',
-              content: prompt
-            }
+              content: prompt,
+            },
           ],
           temperature: 0.2,
           max_tokens: 4000,
-          response_format: { type: 'json_object' }
+          response_format: { type: 'json_object' },
         }),
         signal: controller.signal,
       });
@@ -347,6 +381,20 @@ Be objective and realistic in your assessment. Consider both strengths and poten
       throw createAIError(
         AIErrorCode.SCHEMA_VALIDATION_FAILED,
         `Failed to parse candidate signals response: ${error?.message || 'Unknown error'}`,
+        { provider: this.name, details: { response, error } }
+      );
+    }
+  }
+
+  private parseRefineJobDescriptionResponse(response: string): RefineJDResult {
+    try {
+      return parseAndNormalizeRefineJobDescriptionContent(
+        typeof response === 'string' ? response : String(response)
+      );
+    } catch (error: any) {
+      throw createAIError(
+        AIErrorCode.SCHEMA_VALIDATION_FAILED,
+        `Failed to parse refine job description response: ${error?.message || 'Unknown error'}`,
         { provider: this.name, details: { response, error } }
       );
     }

@@ -1,6 +1,95 @@
-import React, { useState } from 'react';
-import { AlertCircle, CheckCircle, Clock, TrendingUp, Users, AlertTriangle, Edit, RefreshCw, X, Plus, Target, ChevronDown, ChevronUp } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import {
+  AlertCircle,
+  CheckCircle,
+  Clock,
+  TrendingUp,
+  Users,
+  AlertTriangle,
+  Edit,
+  RefreshCw,
+  X,
+  Plus,
+  Target,
+  ChevronDown,
+  ChevronUp,
+  Copy,
+} from 'lucide-react';
 import { orgFetchHeaders } from '@/lib/client/org-fetch-headers';
+import { fingerprintJdExtractionJson } from '@/lib/client/jd-extraction-fingerprint';
+
+type UnifiedIssue = {
+  type: 'ambiguity' | 'unrealistic' | 'missing';
+  title: string;
+  priority: number;
+};
+
+/** Same issue keys as the visible list; used so score and issue list stay aligned. */
+function collectUnifiedIssues(extraction: any, resolvedIssues: Set<string>): UnifiedIssue[] {
+  const issues: UnifiedIssue[] = [];
+
+  if (extraction?.ambiguities) {
+    extraction.ambiguities.forEach((ambiguity: any) => {
+      const issueKey = `ambiguity-${ambiguity.issue || 'Ambiguity detected'}`;
+      if (!resolvedIssues.has(issueKey)) {
+        issues.push({
+          type: 'ambiguity',
+          title: ambiguity.issue || 'Ambiguity detected',
+          priority: 1,
+        });
+      }
+    });
+  }
+
+  if (extraction?.missingCriteria) {
+    extraction.missingCriteria.forEach((criteria: any) => {
+      const issueKey = `missing-${criteria.missing || 'Missing criteria'}`;
+      if (!resolvedIssues.has(issueKey)) {
+        issues.push({
+          type: 'missing',
+          title: criteria.missing || 'Missing criteria',
+          priority: 2,
+        });
+      }
+    });
+  }
+
+  if (extraction?.unrealisticExpectations) {
+    extraction.unrealisticExpectations.forEach((expectation: any) => {
+      const issueKey = `unrealistic-${expectation.issue || 'Unrealistic expectation'}`;
+      if (!resolvedIssues.has(issueKey)) {
+        issues.push({
+          type: 'unrealistic',
+          title: expectation.issue || 'Unrealistic expectation',
+          priority: 3,
+        });
+      }
+    });
+  }
+
+  return issues.sort((a, b) => a.priority - b.priority);
+}
+
+function computeQualityScore(extraction: any, resolvedIssues: Set<string>): number {
+  if (!extraction) return 0;
+  const active = collectUnifiedIssues(extraction, resolvedIssues);
+
+  let score = 50;
+
+  if (extraction.requiredSkills?.length > 0) score += 10;
+  if (extraction.keyResponsibilities?.length > 0) score += 10;
+  if (extraction.qualifications?.length > 0) score += 10;
+  if (extraction.estimatedSalary) score += 10;
+  if (extraction.department) score += 5;
+  if (extraction.seniorityLevel) score += 5;
+
+  const amb = active.filter((i) => i.type === 'ambiguity').length;
+  const miss = active.filter((i) => i.type === 'missing').length;
+  const unreal = active.filter((i) => i.type === 'unrealistic').length;
+  score -= amb * 5 + miss * 3 + unreal * 7;
+
+  return Math.max(0, Math.min(100, score));
+}
 
 interface JDExtractionViewerProps {
   extraction: any;
@@ -10,8 +99,20 @@ interface JDExtractionViewerProps {
   jobId?: string | null;
   onEditJob?: () => void;
   onAnalysisUpdate?: (newExtraction: any) => void;
-  /** Called after a suggestion is persisted so the parent can refetch job (e.g. updated rawJD). */
-  onSuggestionApplied?: () => void | Promise<void>;
+  /**
+   * Called after a suggestion is persisted so the parent can refetch job (e.g. updated rawJD).
+   * Pass optional patch (e.g. jdAnalysisStatus OUTDATED from apply-suggestion) so UI updates before GET returns.
+   */
+  onSuggestionApplied?: (
+    optimisticJobPatch?: Record<string, unknown>,
+    analyzePostPayload?: {
+      jdExtraction?: unknown;
+      analyzedAt?: string | null;
+      promptVersion?: string | null;
+    }
+  ) => void | Promise<void>;
+  /** When refined JD is saved but server-side re-analysis fails (viewer may unmount — parent should show this). */
+  onRefinedJdReanalysisFailed?: (message: string) => void;
 }
 
 export default function JDExtractionViewer({
@@ -22,7 +123,10 @@ export default function JDExtractionViewer({
   jobId,
   onEditJob,
   onSuggestionApplied,
+  onRefinedJdReanalysisFailed,
 }: JDExtractionViewerProps) {
+  const jdExtraction = job?.jdExtractionJson ?? extraction;
+
   console.log("[JD_VIEWER][PROPS]", { jobId });
   const [showAllIssues, setShowAllIssues] = useState(false);
   const [loadingSuggestions, setLoadingSuggestions] = useState<Set<string>>(new Set());
@@ -42,14 +146,98 @@ export default function JDExtractionViewer({
   const [isApplyingSuggestion, setIsApplyingSuggestion] = useState(false);
   const [applyError, setApplyError] = useState<string | null>(null);
   const [resolvedIssues, setResolvedIssues] = useState<Set<string>>(new Set());
-  /** Full JD re-analysis after apply-suggestion (force=1); keeps UI from showing stale score/issues. */
+  /** Session-only hides; does not persist and must not trigger JD re-analysis. */
+  const [ignoredIssueKeys, setIgnoredIssueKeys] = useState<Set<string>>(new Set());
+  /** After rawJD persist only: forced re-analysis + refetch (see runForcedJdReanalysisThenRefetch). */
   const [isPostApplyAnalysisRunning, setIsPostApplyAnalysisRunning] = useState(false);
+  /** True only for the auto re-run triggered by Apply Suggestion (copy for loading overlay). */
+  const [isPostApplySuggestionRefresh, setIsPostApplySuggestionRefresh] = useState(false);
   const [postApplyAnalysisError, setPostApplyAnalysisError] = useState<string | null>(null);
+  /**
+   * If apply-succeeds but we could not merge server fields yet, block trusting DONE+cached extraction
+   * until refetch exposes OUTDATED (or non-DONE).
+   */
+  const [holdAnalysisTrustUntilServerSync, setHoldAnalysisTrustUntilServerSync] =
+    useState(false);
+  const [isRefiningJd, setIsRefiningJd] = useState(false);
+  const [refineJdError, setRefineJdError] = useState<string | null>(null);
+  const [refineReview, setRefineReview] = useState<{
+    originalJD: string;
+    refinedJobDescription: string;
+    summary: string;
+    changesMade: string[];
+    requestId: string;
+  } | null>(null);
+  const [isApplyingRefinedJd, setIsApplyingRefinedJd] = useState(false);
+  const [applyRefinedJdError, setApplyRefinedJdError] = useState<string | null>(null);
+  const [refinedJdCopyFeedback, setRefinedJdCopyFeedback] = useState<string | null>(null);
+
+  /**
+   * When server-backed JD analysis changes (new run, OUTDATED, etc.), drop all client-only
+   * suggestion UI. Prevents stale generated text from matching a different issue after re-order
+   * or rewording. Suggestions only repopulate via explicit Generate Suggestion clicks.
+   */
+  const jdAnalysisEpochKey = [
+    job?.jdAnalyzedAt ?? '',
+    job?.jdPromptVersion ?? '',
+    job?.jdAnalysisStatus ?? '',
+    fingerprintJdExtractionJson(jdExtraction),
+  ].join('|');
+
+  useEffect(() => {
+    setGeneratedSuggestions(new Map());
+    setLoadingSuggestions(new Set());
+    setSelectedFixes(new Set());
+    setSuggestionPreview({
+      isOpen: false,
+      issueTitle: '',
+      suggestion: '',
+      issueType: '',
+    });
+    setApplyError(null);
+    setSuggestionError(null);
+    setShowBulkPreview(false);
+    setResolvedIssues(new Set());
+    setIgnoredIssueKeys(new Set());
+    setPostApplyAnalysisError(null);
+    setRerunError(null);
+    setRefineReview(null);
+    setRefineJdError(null);
+    setApplyRefinedJdError(null);
+    setHoldAnalysisTrustUntilServerSync(false);
+  }, [jdAnalysisEpochKey]);
+
+  useEffect(() => {
+    if (!holdAnalysisTrustUntilServerSync) return;
+    if (job?.jdAnalysisStatus && job.jdAnalysisStatus !== 'DONE') {
+      setHoldAnalysisTrustUntilServerSync(false);
+    }
+  }, [job?.jdAnalysisStatus, holdAnalysisTrustUntilServerSync]);
 
   const POST_APPLY_ANALYSIS_ERROR =
     'Suggestion was applied, but analysis refresh failed. Please re-run analysis.';
 
-  const performForceReanalysisAndRefetch = async (): Promise<boolean> => {
+  const REFINED_JD_REANALYSIS_FAILED =
+    'Refined JD applied, but re-analysis failed. Please re-run analysis.';
+
+  /** Parent refetch only — safe after any server update; does not run JD analysis. */
+  const refetchParentJob = async (
+    optimisticJobPatch?: Record<string, unknown>,
+    analyzePostPayload?: {
+      jdExtraction?: unknown;
+      analyzedAt?: string | null;
+      promptVersion?: string | null;
+    }
+  ) => {
+    await Promise.resolve(onSuggestionApplied?.(optimisticJobPatch, analyzePostPayload));
+  };
+
+  /**
+   * POST /api/jobs/[id]?force=1 — full JD re-analysis, then parent refetch.
+   * Call ONLY when rawJD was just persisted (apply-suggestion, apply-refined-jd server flow, or future batch apply).
+   * Do NOT call after generate-suggestion, preview open, copy, dismiss, or ignore.
+   */
+  const runForcedJdReanalysisThenRefetch = async (): Promise<boolean> => {
     if (!jobId) return false;
     const response = await fetch(`/api/jobs/${jobId}?force=1`, {
       method: 'POST',
@@ -58,31 +246,21 @@ export default function JDExtractionViewer({
         ...orgFetchHeaders(),
       },
     });
+    let analyzePostPayload:
+      | { jdExtraction?: unknown; analyzedAt?: string | null; promptVersion?: string | null }
+      | undefined;
+    try {
+      analyzePostPayload = (await response.json()) as {
+        jdExtraction?: unknown;
+        analyzedAt?: string | null;
+        promptVersion?: string | null;
+      };
+    } catch {
+      analyzePostPayload = undefined;
+    }
     if (!response.ok) return false;
-    await Promise.resolve(onSuggestionApplied?.());
+    await refetchParentJob(undefined, analyzePostPayload);
     return true;
-  };
-
-  // Helper functions (keeping existing implementations)
-  const getQualityScore = (extraction: any): number => {
-    if (!extraction) return 0;
-    
-    let score = 50; // Base score
-    
-    // Add points for completeness
-    if (extraction.requiredSkills?.length > 0) score += 10;
-    if (extraction.keyResponsibilities?.length > 0) score += 10;
-    if (extraction.qualifications?.length > 0) score += 10;
-    if (extraction.estimatedSalary) score += 10;
-    if (extraction.department) score += 5;
-    if (extraction.seniorityLevel) score += 5;
-    
-    // Deduct points for issues
-    if (extraction.ambiguities?.length > 0) score -= extraction.ambiguities.length * 5;
-    if (extraction.missingCriteria?.length > 0) score -= extraction.missingCriteria.length * 3;
-    if (extraction.unrealisticExpectations?.length > 0) score -= extraction.unrealisticExpectations.length * 7;
-    
-    return Math.max(0, Math.min(100, score));
   };
 
   const getQualityLabel = (score: number): string => {
@@ -103,10 +281,6 @@ export default function JDExtractionViewer({
   const formatDate = (dateString?: string): string => {
     if (!dateString) return 'Unknown';
     return new Date(dateString).toLocaleDateString();
-  };
-
-  const getRoleTitle = (): string => {
-    return extraction?.roleTitle || job?.title || 'Unknown Role';
   };
 
   const getHighestPriorityFix = (issues: any[]): string => {
@@ -157,8 +331,7 @@ const getImproveNextSuggestions = (extraction: any): string[] => {
   return suggestions.slice(0, 4); // Limit to 4 suggestions
 };
 
-  const getRecommendedAction = (extraction: any): string => {
-    const score = getQualityScore(extraction);
+  const recommendedActionForScore = (score: number): string => {
     if (score >= 80) return 'Publish Job';
     if (score >= 60) return 'Review & Edit';
     return 'Major Revision Needed';
@@ -271,58 +444,6 @@ const getImproveNextSuggestions = (extraction: any): string[] => {
     }
   };
 
-  const getUnifiedIssues = (extraction: any) => {
-    const issues: Array<{
-      type: 'ambiguity' | 'unrealistic' | 'missing';
-      title: string;
-      priority: number;
-    }> = [];
-
-    // Add ambiguities (high priority)
-    if (extraction.ambiguities) {
-      extraction.ambiguities.forEach((ambiguity: any, index: number) => {
-        const issueKey = `ambiguity-${ambiguity.issue || 'Ambiguity detected'}`;
-        if (!resolvedIssues.has(issueKey)) {
-          issues.push({
-            type: 'ambiguity',
-            title: ambiguity.issue || 'Ambiguity detected',
-            priority: 1
-          });
-        }
-      });
-    }
-
-    // Add missing criteria (medium priority)
-    if (extraction.missingCriteria) {
-      extraction.missingCriteria.forEach((criteria: any, index: number) => {
-        const issueKey = `missing-${criteria.missing || 'Missing criteria'}`;
-        if (!resolvedIssues.has(issueKey)) {
-          issues.push({
-            type: 'missing',
-            title: criteria.missing || 'Missing criteria',
-            priority: 2
-          });
-        }
-      });
-    }
-
-    // Add unrealistic expectations (low priority)
-    if (extraction.unrealisticExpectations) {
-      extraction.unrealisticExpectations.forEach((expectation: any, index: number) => {
-        const issueKey = `unrealistic-${expectation.issue || 'Unrealistic expectation'}`;
-        if (!resolvedIssues.has(issueKey)) {
-          issues.push({
-            type: 'unrealistic',
-            title: expectation.issue || 'Unrealistic expectation',
-            priority: 3
-          });
-        }
-      });
-    }
-
-    return issues.sort((a, b) => a.priority - b.priority);
-  };
-
   const handleGenerateSuggestion = async (issue: any) => {
     console.log("[GENERATE_SUGGESTION][INPUT]", { jobId, issue });
     if (!jobId) {
@@ -364,8 +485,13 @@ const getImproveNextSuggestions = (extraction: any): string[] => {
             backendError
           });
           
-          // Build error message using fallback order
-          errorMessage = backendError.message || backendError.error || backendError.details || response.statusText || 'Failed to generate improvement';
+          // Prefer API user message, then technical details (e.g. dev), then short error code
+          errorMessage =
+            backendError.message ||
+            backendError.details ||
+            backendError.error ||
+            response.statusText ||
+            'Failed to generate improvement';
           requestId = backendError.requestId;
         } else {
           // Handle non-JSON response
@@ -482,36 +608,54 @@ const getImproveNextSuggestions = (extraction: any): string[] => {
         return;
       }
 
-      await response.json();
+      const body = (await response.json()) as {
+        data?: {
+          jdAnalysisStatus?: string;
+          updatedAt?: string;
+          interviewKitStatus?: string;
+        };
+      };
       console.log('[ADD_TO_JD][SUCCESS]', { jobId });
 
-      await Promise.resolve(onSuggestionApplied?.());
+      // 1) Persist complete (apply-suggestion updated rawJD + marked analysis OUTDATED on server).
+      // 2) Mirror OUTDATED (and kit status) into parent state immediately so score/issues are not shown as current
+      //    while GET / refetch is in flight.
+      // 3) Refetch for full job (e.g. rawJD), then forced re-analysis, then refetch again inside runForced*.
+      const d = body?.data;
+      const optimisticPatch =
+        d?.jdAnalysisStatus === 'OUTDATED'
+          ? {
+              jdAnalysisStatus: 'OUTDATED' as const,
+              ...(typeof d.updatedAt === 'string' ? { updatedAt: d.updatedAt } : {}),
+              ...(typeof d.interviewKitStatus === 'string'
+                ? { interviewKitStatus: d.interviewKitStatus }
+                : {}),
+            }
+          : undefined;
 
-      const issueKey = `${suggestionPreview.issueType}-${suggestionPreview.issueTitle}`;
-      setResolvedIssues(prev => new Set(prev).add(issueKey));
-      setGeneratedSuggestions(prev => {
-        const next = new Map(prev);
-        next.delete(issueKey);
-        return next;
-      });
+      if (optimisticPatch) {
+        setHoldAnalysisTrustUntilServerSync(false);
+      } else {
+        setHoldAnalysisTrustUntilServerSync(true);
+      }
+
+      setIsPostApplySuggestionRefresh(true);
+      setIsPostApplyAnalysisRunning(true);
+      setPostApplyAnalysisError(null);
 
       handleCancelPreview();
 
-      setIsPostApplyAnalysisRunning(true);
-      setPostApplyAnalysisError(null);
       try {
-        const ok = await performForceReanalysisAndRefetch();
+        await refetchParentJob(optimisticPatch);
+        const ok = await runForcedJdReanalysisThenRefetch();
         if (!ok) {
           setPostApplyAnalysisError(POST_APPLY_ANALYSIS_ERROR);
-        } else {
-          setResolvedIssues(new Set());
-          setGeneratedSuggestions(new Map());
-          setSelectedFixes(new Set());
         }
       } catch {
         setPostApplyAnalysisError(POST_APPLY_ANALYSIS_ERROR);
       } finally {
         setIsPostApplyAnalysisRunning(false);
+        setIsPostApplySuggestionRefresh(false);
       }
     } catch (error) {
       console.error('[ADD_TO_JD][CATCH]', { 
@@ -612,10 +756,21 @@ const getImproveNextSuggestions = (extraction: any): string[] => {
   };
 
   const handleIgnoreIssue = (issue: any) => {
-    console.log('[IGNORE_ISSUE]', issue);
-    // In a real implementation, this would mark the issue as ignored
+    const issueKey = `${issue.type}-${issue.title}`;
+    setIgnoredIssueKeys((prev) => new Set(prev).add(issueKey));
+    setGeneratedSuggestions((prev) => {
+      const next = new Map(prev);
+      next.delete(issueKey);
+      return next;
+    });
+    setSelectedFixes((prev) => {
+      const next = new Set(prev);
+      next.delete(issueKey);
+      return next;
+    });
   };
 
+  /** User explicitly clicks "Re-run analysis" — does not persist JD; not an auto-refresh. */
   const handleReRunAnalysis = async () => {
     console.log('[RE_RUN_ANALYSIS]', { jobId, isReRunningAnalysis });
     
@@ -629,13 +784,10 @@ const getImproveNextSuggestions = (extraction: any): string[] => {
     setIsReRunningAnalysis(true);
 
     try {
-      const ok = await performForceReanalysisAndRefetch();
+      const ok = await runForcedJdReanalysisThenRefetch();
       if (!ok) {
         throw new Error('Analysis request failed');
       }
-      setGeneratedSuggestions(new Map());
-      setSelectedFixes(new Set());
-      setResolvedIssues(new Set());
       console.log('[RE_RUN_ANALYSIS] Analysis updated successfully');
     } catch (error) {
       console.error('[RE_RUN_ANALYSIS][FAILED]', { jobId, error });
@@ -687,7 +839,7 @@ const getImproveNextSuggestions = (extraction: any): string[] => {
 
   const handleApplySelectedFixes = () => {
     console.log('[APPLY_SELECTED_FIXES]', { selectedFixes: Array.from(selectedFixes) });
-    // In a real implementation, this would apply the selected fixes to the JD
+    // When implemented: persist merged rawJD via API, then runForcedJdReanalysisThenRefetch only on success (same contract as apply-suggestion).
     alert('This would apply selected fixes to the job description');
   };
 
@@ -704,63 +856,199 @@ const getImproveNextSuggestions = (extraction: any): string[] => {
     });
   };
 
-  const handleImproveJobDescription = () => {
-    console.log('[IMPROVE_JOB_DESCRIPTION]', { jobId, hasIssues: allIssues.length > 0 });
-    
-    // Call the existing edit handler but with enhanced context for JD editing
-    if (onEditJob) {
-      onEditJob();
+  const handleRefineJobDescription = async () => {
+    if (!jobId || isRefiningJd) return;
+    setRefineJdError(null);
+    setIsRefiningJd(true);
+    try {
+      const response = await fetch(`/api/jobs/${jobId}/refine-jd`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...orgFetchHeaders(),
+        },
+        body: JSON.stringify({}),
+      });
+
+      let payload: Record<string, unknown>;
+      try {
+        payload = (await response.json()) as Record<string, unknown>;
+      } catch {
+        setRefineJdError(
+          `Could not read server response (HTTP ${response.status}). Please try again.`
+        );
+        console.error('[REFINE_JD] Invalid JSON', { status: response.status });
+        return;
+      }
+
+      if (!response.ok || payload.success === false) {
+        const message =
+          (typeof payload.message === 'string' && payload.message) ||
+          (typeof payload.error === 'string' && payload.error) ||
+          'Job description refinement failed.';
+        const details =
+          typeof payload.details === 'string' ? payload.details : undefined;
+        const rid =
+          typeof payload.requestId === 'string' ? payload.requestId : undefined;
+        const parts = [message, details ? `Details: ${details}` : '', rid ? `Request ID: ${rid}` : ''].filter(
+          Boolean
+        );
+        setRefineJdError(parts.join(' '));
+        console.error('[REFINE_JD][BACKEND_ERROR]', {
+          jobId,
+          status: response.status,
+          payload,
+        });
+        return;
+      }
+
+      const data = payload.data as Record<string, unknown> | undefined;
+      const refined =
+        data && typeof data.refinedJobDescription === 'string'
+          ? data.refinedJobDescription
+          : '';
+      if (!refined.trim()) {
+        setRefineJdError('The server returned an empty refined description. Please try again.');
+        console.error('[REFINE_JD] Empty refinedJobDescription', payload);
+        return;
+      }
+
+      setRefineReview({
+        originalJD: typeof job?.rawJD === 'string' ? job.rawJD : '',
+        refinedJobDescription: refined,
+        summary:
+          data && typeof data.summary === 'string'
+            ? data.summary
+            : 'Refined for structure and readability.',
+        changesMade: Array.isArray(data?.changesMade)
+          ? (data.changesMade as unknown[]).filter((x): x is string => typeof x === 'string')
+          : [],
+        requestId: typeof payload.requestId === 'string' ? payload.requestId : '',
+      });
+    } catch (err) {
+      const msg =
+        err instanceof Error ? err.message : 'Network error while refining the job description.';
+      setRefineJdError(msg);
+      console.error('[REFINE_JD][CATCH]', { jobId, err });
+    } finally {
+      setIsRefiningJd(false);
     }
-    
-    // Attempt to focus on JD text area if available in the current context
-    setTimeout(() => {
-      // Try to find JD input/textarea elements in the page
-      const jdSelectors = [
-        'textarea[name*="description"]',
-        'textarea[name*="job"]',
-        'textarea[placeholder*="job"]',
-        'textarea[placeholder*="description"]',
-        'div[contenteditable="true"][data-placeholder*="job"]',
-        '.job-description-field',
-        '#job-description',
-        '[data-testid="job-description"]'
-      ];
-      
-      let jdElement = null;
-      let successfulSelector = null;
-      for (const selector of jdSelectors) {
-        jdElement = document.querySelector(selector);
-        if (jdElement) {
-          successfulSelector = selector;
-          break;
-        }
+  };
+
+  const closeRefineReview = () => {
+    setRefineReview(null);
+    setApplyRefinedJdError(null);
+    setRefinedJdCopyFeedback(null);
+  };
+
+  const handleCopyRefinedJd = async () => {
+    if (!refineReview) return;
+    const text = refineReview.refinedJobDescription;
+    try {
+      await navigator.clipboard.writeText(text);
+      setRefinedJdCopyFeedback('Copied to clipboard.');
+      window.setTimeout(() => setRefinedJdCopyFeedback(null), 2500);
+    } catch {
+      setRefinedJdCopyFeedback('Could not copy automatically. Select the refined text and copy manually.');
+      window.setTimeout(() => setRefinedJdCopyFeedback(null), 4000);
+    }
+  };
+
+  const handleApplyRefinedJd = async () => {
+    if (!jobId || !refineReview || isApplyingRefinedJd) return;
+    const raw = refineReview.refinedJobDescription.trim();
+    if (raw.length < 50) {
+      setApplyRefinedJdError(
+        'The refined job description must be at least 50 characters before it can be saved to this job.'
+      );
+      return;
+    }
+    if (raw.length > 10000) {
+      setApplyRefinedJdError(
+        'The refined job description exceeds 10,000 characters. Edit it elsewhere or shorten it before applying.'
+      );
+      return;
+    }
+
+    setIsApplyingRefinedJd(true);
+    setApplyRefinedJdError(null);
+
+    try {
+      const response = await fetch(`/api/jobs/${jobId}/apply-refined-jd`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...orgFetchHeaders(),
+        },
+        body: JSON.stringify({ rawJD: raw }),
+      });
+
+      let payload: Record<string, unknown>;
+      try {
+        payload = (await response.json()) as Record<string, unknown>;
+      } catch {
+        setApplyRefinedJdError(
+          `Could not read server response (HTTP ${response.status}). Please try again.`
+        );
+        console.error('[APPLY_REFINED_JD] Invalid JSON', { status: response.status });
+        return;
       }
-      
-      if (jdElement) {
-        // Scroll to JD field
-        jdElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        
-        // Focus on the JD field - cast to HTMLElement to access focus method
-        (jdElement as HTMLElement).focus();
-        
-        // Add visual highlight to draw attention
-        jdElement.classList.add('ring-2', 'ring-blue-500', 'ring-offset-2');
-        setTimeout(() => {
-          jdElement.classList.remove('ring-2', 'ring-blue-500', 'ring-offset-2');
-        }, 3000);
-        
-        console.log('[IMPROVE_JOB_DESCRIPTION] Focused on JD field:', successfulSelector);
-      } else {
-        console.log('[IMPROVE_JOB_DESCRIPTION] JD field not found, falling back to general edit flow');
+
+      if (!response.ok || payload.success === false) {
+        const message =
+          (typeof payload.message === 'string' && payload.message) ||
+          (typeof payload.error === 'string' && payload.error) ||
+          'Failed to apply refined job description.';
+        const details =
+          typeof payload.details === 'string' ? payload.details : undefined;
+        const rid =
+          typeof payload.requestId === 'string' ? payload.requestId : undefined;
+        const parts = [
+          message,
+          details ? `Details: ${details}` : '',
+          rid ? `Request ID: ${rid}` : '',
+        ].filter(Boolean);
+        setApplyRefinedJdError(parts.join(' '));
+        console.error('[APPLY_REFINED_JD][BACKEND_ERROR]', {
+          jobId,
+          status: response.status,
+          payload,
+        });
+        return;
       }
-    }, 500); // Small delay to ensure any modal/navigation completes
+
+      const analysisSuccess = payload.analysisSuccess === true;
+      console.log('[APPLY_REFINED_JD][SUCCESS]', { jobId, analysisSuccess });
+
+      if (!analysisSuccess) {
+        const msg =
+          (typeof payload.message === 'string' && payload.message) ||
+          REFINED_JD_REANALYSIS_FAILED;
+        onRefinedJdReanalysisFailed?.(msg);
+      }
+
+      await refetchParentJob();
+
+      closeRefineReview();
+
+      if (analysisSuccess) {
+        setPostApplyAnalysisError(null);
+      }
+    } catch (error) {
+      console.error('[APPLY_REFINED_JD][CATCH]', { jobId, error });
+      setApplyRefinedJdError(
+        error instanceof Error ? error.message : 'Network error while saving the job description.'
+      );
+    } finally {
+      setIsApplyingRefinedJd(false);
+    }
   };
 
   const storeGeneratedSuggestion = (issueKey: string, suggestion: string) => {
     setGeneratedSuggestions(prev => new Map(prev.set(issueKey, suggestion)));
   };
 
-  if (!extraction) {
+  if (!jdExtraction) {
     return (
       <div className="bg-white shadow rounded-lg p-6">
         <div className="text-center text-gray-500">
@@ -771,25 +1059,49 @@ const getImproveNextSuggestions = (extraction: any): string[] => {
     );
   }
 
-  const score = getQualityScore(extraction);
-  const qualityLabel = getQualityLabel(score);
-  const qualityColor = getQualityColor(score);
-  const allIssues = getUnifiedIssues(extraction);
-  
-  // Get total issues including resolved ones for metrics
-  const getTotalIssues = (extraction: any) => {
+  const getTotalIssues = (ext: any) => {
     let total = 0;
-    if (extraction.ambiguities) total += extraction.ambiguities.length;
-    if (extraction.missingCriteria) total += extraction.missingCriteria.length;
-    if (extraction.unrealisticExpectations) total += extraction.unrealisticExpectations.length;
+    if (ext.ambiguities) total += ext.ambiguities.length;
+    if (ext.missingCriteria) total += ext.missingCriteria.length;
+    if (ext.unrealisticExpectations) total += ext.unrealisticExpectations.length;
     return total;
   };
-  
-  const totalIssues = getTotalIssues(extraction);
-  const resolvedCount = resolvedIssues.size;
 
-  const showAnalysisLoadingOverlay =
+  /** True while this viewer is driving or showing a full JD re-run (overlay). */
+  const isAnalysisRefreshInFlight =
     isPostApplyAnalysisRunning || isReRunningAnalysis;
+
+  /**
+   * Single source of truth for all analysis-derived UI: only DONE + not mid-refresh.
+   * OUTDATED / RUNNING / FAILED / NOT_STARTED → do not show cached extraction as current.
+   */
+  const canTrustStoredAnalysis =
+    job?.jdAnalysisStatus === 'DONE' &&
+    !!jdExtraction &&
+    !isAnalysisRefreshInFlight &&
+    !holdAnalysisTrustUntilServerSync;
+
+  const analysisSource = canTrustStoredAnalysis ? jdExtraction : null;
+
+  const score = analysisSource
+    ? computeQualityScore(analysisSource, resolvedIssues)
+    : null;
+  const qualityLabel =
+    score !== null ? getQualityLabel(score) : 'Pending refresh';
+  const qualityColor =
+    score !== null ? getQualityColor(score) : 'text-gray-500';
+  const allIssues = analysisSource
+    ? collectUnifiedIssues(analysisSource, resolvedIssues).filter(
+        (issue) => !ignoredIssueKeys.has(`${issue.type}-${issue.title}`)
+      )
+    : [];
+
+  const totalIssues = analysisSource ? getTotalIssues(analysisSource) : 0;
+  const resolvedCount = resolvedIssues.size;
+  const displayRoleTitle =
+    analysisSource?.roleTitle || job?.title || 'Unknown Role';
+
+  const showAnalysisLoadingOverlay = isAnalysisRefreshInFlight;
 
   return (
     <div className="bg-white shadow rounded-lg relative min-h-[240px]">
@@ -800,9 +1112,15 @@ const getImproveNextSuggestions = (extraction: any): string[] => {
           aria-live="polite"
         >
           <RefreshCw className="h-8 w-8 animate-spin text-blue-600 mb-3" />
-          <p className="text-sm font-semibold text-gray-800">Refreshing JD analysis…</p>
+          <p className="text-sm font-semibold text-gray-800">
+            {isPostApplySuggestionRefresh
+              ? 'Suggestion applied. Re-running analysis…'
+              : 'Refreshing JD analysis…'}
+          </p>
           <p className="text-xs text-gray-500 mt-1 max-w-sm">
-            Recalculating score, issues, skills, responsibilities, and guidance from your updated JD.
+            {isPostApplySuggestionRefresh
+              ? 'Score and issues stay hidden until the new run finishes — nothing below is treated as current yet.'
+              : 'Recalculating score, issues, skills, responsibilities, and guidance from your updated JD.'}
           </p>
         </div>
       )}
@@ -819,8 +1137,8 @@ const getImproveNextSuggestions = (extraction: any): string[] => {
           <div className="flex items-start gap-2">
             <AlertTriangle className="h-4 w-4 shrink-0 text-amber-700 mt-0.5" />
             <p>
-              The job description was updated after this analysis. Scores and issues below may not
-              match the current JD — use <strong>Re-run analysis</strong> to refresh.
+              The job description was updated after this analysis. Score and issue details are hidden
+              until a fresh run completes — use <strong>Re-run analysis</strong> if needed.
             </p>
           </div>
         </div>
@@ -830,22 +1148,32 @@ const getImproveNextSuggestions = (extraction: any): string[] => {
         <div className="flex items-start justify-between mb-4">
           <div className="flex-1">
             <div className="flex items-center space-x-4 mb-2">
-              <div className={`inline-flex items-center px-4 py-2 rounded-full text-lg font-bold ${
-                score >= 80 ? 'bg-green-100 text-green-800 border border-green-200' :
-                score >= 60 ? 'bg-yellow-100 text-yellow-800 border border-yellow-200' :
-                'bg-red-100 text-red-800 border border-red-200'
-              }`}>
-                {score}/100
-              </div>
+              {score !== null ? (
+                <div
+                  className={`inline-flex items-center px-4 py-2 rounded-full text-lg font-bold ${
+                    score >= 80
+                      ? 'bg-green-100 text-green-800 border border-green-200'
+                      : score >= 60
+                        ? 'bg-yellow-100 text-yellow-800 border border-yellow-200'
+                        : 'bg-red-100 text-red-800 border border-red-200'
+                  }`}
+                >
+                  {score}/100
+                </div>
+              ) : (
+                <div className="inline-flex items-center px-4 py-2 rounded-full text-lg font-semibold border-2 border-dashed border-gray-300 bg-gray-50 text-gray-500">
+                  —
+                </div>
+              )}
               <div>
-                <h2 className="text-xl font-bold text-gray-900">{qualityLabel}</h2>
+                <h2 className={`text-xl font-bold ${qualityColor}`}>{qualityLabel}</h2>
                 <div className="flex items-center justify-between mt-1">
                   <div className="flex items-center space-x-3 text-xs text-gray-500">
                     <span className="flex items-center">
                       <Clock className="w-3 h-3 mr-1" />
-                      {formatDate(analyzedAt)}
+                      {analysisSource ? formatDate(analyzedAt) : 'Awaiting current analysis'}
                     </span>
-                    {promptVersion && (
+                    {analysisSource && promptVersion && (
                       <span>v{promptVersion}</span>
                     )}
                     {jobId && (
@@ -863,11 +1191,19 @@ const getImproveNextSuggestions = (extraction: any): string[] => {
               </div>
             </div>
             
-            {/* Improvement Guidance */}
+            {/* Improvement Guidance — only from trusted analysisSource */}
             <div className="bg-white bg-opacity-70 rounded-lg p-4 mb-4">
-              {allIssues.length > 0 ? (
+              {!analysisSource ? (
+                <div className="rounded-md border border-amber-100 bg-amber-50/80 px-3 py-3 text-sm text-amber-950">
+                  <p className="font-medium">Guidance is paused until analysis matches your latest job description.</p>
+                  <p className="mt-1 text-xs text-amber-900/90">
+                    {showAnalysisLoadingOverlay
+                      ? 'Refreshing score, issues, and recommendations from the updated JD…'
+                      : 'Run Re-run analysis to produce a current score and issue list.'}
+                  </p>
+                </div>
+              ) : allIssues.length > 0 ? (
                 <div className="space-y-3">
-                  {/* Highest Priority Fix */}
                   <div>
                     <div className="flex items-center space-x-2 mb-2">
                       <Target className="w-4 h-4 text-blue-600" />
@@ -878,15 +1214,17 @@ const getImproveNextSuggestions = (extraction: any): string[] => {
                     </p>
                   </div>
 
-                  {/* Improve Next */}
                   <div>
                     <div className="flex items-center space-x-2 mb-2">
                       <TrendingUp className="w-4 h-4 text-green-600" />
                       <h4 className="text-sm font-semibold text-gray-900">Improve Next</h4>
                     </div>
                     <ul className="text-sm text-gray-600 space-y-1">
-                      {getImproveNextSuggestions(extraction).map((suggestion, index) => (
-                        <li key={index} className="flex items-start space-x-2">
+                      {getImproveNextSuggestions(analysisSource).map((suggestion, index) => (
+                        <li
+                          key={`${suggestion.slice(0, 64)}-${index}`}
+                          className="flex items-start space-x-2"
+                        >
                           <span className="text-gray-400 mt-1">•</span>
                           <span>{suggestion}</span>
                         </li>
@@ -894,14 +1232,13 @@ const getImproveNextSuggestions = (extraction: any): string[] => {
                     </ul>
                   </div>
 
-                  {/* Optional CTA */}
                   <div className="pt-2 border-t border-gray-200">
                     <button
                       disabled
                       className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-gray-500 bg-gray-100 rounded-md cursor-not-allowed opacity-60"
                     >
                       <Edit className="w-3 h-3 mr-1" />
-                      Generate Improved JD Draft (Coming Soon)
+                      Refine full job description — automated (coming soon)
                     </button>
                   </div>
                 </div>
@@ -916,7 +1253,7 @@ const getImproveNextSuggestions = (extraction: any): string[] => {
             
             {/* Actions */}
             <div className="flex items-center space-x-4">
-              {allIssues.length > 0 ? (
+              {!analysisSource ? null : allIssues.length > 0 ? (
                 <button
                   onClick={handleFixTopIssue}
                   className="inline-flex items-center px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors shadow-sm"
@@ -930,17 +1267,35 @@ const getImproveNextSuggestions = (extraction: any): string[] => {
                   className="inline-flex items-center px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors shadow-sm"
                 >
                   <Edit className="w-5 h-5 mr-2" />
-                  {getRecommendedAction(extraction)}
+                  {recommendedActionForScore(score!)}
                 </button>
               )}
-              
-              {allIssues.length > 0 && (
+
+              {analysisSource && allIssues.length > 0 && (
                 <button
-                  onClick={handleImproveJobDescription}
-                  className="inline-flex items-center px-4 py-3 bg-gray-100 text-gray-700 font-medium rounded-lg hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors"
+                  type="button"
+                  onClick={() => void handleRefineJobDescription()}
+                  disabled={
+                    !jobId ||
+                    isRefiningJd ||
+                    isPostApplyAnalysisRunning ||
+                    isReRunningAnalysis
+                  }
+                  title="Generate an AI-refined draft of the full job description for review. Nothing is saved until you copy or apply changes elsewhere."
+                  aria-label="Refine full job description with AI. Opens a review panel; does not save automatically."
+                  className="inline-flex items-center px-4 py-3 bg-gray-100 text-gray-700 font-medium rounded-lg hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  <Edit className="w-4 h-4 mr-2" />
-                  Improve Job Description
+                  {isRefiningJd ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                      Refining…
+                    </>
+                  ) : (
+                    <>
+                      <Edit className="w-4 h-4 mr-2" />
+                      Refine Job Description
+                    </>
+                  )}
                 </button>
               )}
               
@@ -957,7 +1312,9 @@ const getImproveNextSuggestions = (extraction: any): string[] => {
               {jobId && job && (
                 <button
                   onClick={handleReRunAnalysis}
-                  disabled={isReRunningAnalysis || isPostApplyAnalysisRunning}
+                  disabled={
+                    isReRunningAnalysis || isPostApplyAnalysisRunning || isRefiningJd
+                  }
                   className={`inline-flex items-center px-4 py-3 font-medium rounded-lg transition-colors ${
                     getFreshnessState() === 'outdated' 
                       ? 'bg-amber-100 text-amber-800 hover:bg-amber-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500' 
@@ -978,6 +1335,37 @@ const getImproveNextSuggestions = (extraction: any): string[] => {
                 </button>
               )}
             </div>
+            {analysisSource && allIssues.length > 0 && (
+              <p className="text-xs text-gray-600 mt-3 max-w-3xl leading-relaxed">
+                <span className="font-medium text-gray-800">Refine Job Description</span> runs AI on the{' '}
+                <span className="font-medium text-gray-800">entire JD</span> and opens a review panel
+                (original vs refined, summary, changes). The posting is{' '}
+                <span className="font-medium text-gray-800">not updated automatically</span>. For one
+                issue, use <span className="font-medium text-gray-800">Generate Suggestion</span> on that
+                card below.
+              </p>
+            )}
+            {analysisSource && allIssues.length > 0 && refineJdError && (
+              <div
+                className="mt-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900 max-w-3xl"
+                role="alert"
+              >
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="h-4 w-4 shrink-0 text-red-600 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="font-medium text-red-800">Refinement failed</p>
+                    <p className="mt-1 text-red-800">{refineJdError}</p>
+                    <button
+                      type="button"
+                      onClick={() => setRefineJdError(null)}
+                      className="mt-2 text-xs font-medium text-red-700 hover:text-red-900 underline"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -986,67 +1374,100 @@ const getImproveNextSuggestions = (extraction: any): string[] => {
         {/* 2. Role Understanding */}
         <div>
           <h3 className="text-lg font-semibold text-gray-900 mb-6">Role Understanding</h3>
-          
-          <div className="bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-200 rounded-xl p-6 mb-6">
-            <div className="flex items-start justify-between">
-              <div className="flex-1">
-                <div className="flex items-center space-x-3 mb-3">
-                  <h2 className="text-2xl font-bold text-gray-900">{getRoleTitle()}</h2>
-                </div>
-                <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
-                  {extraction.seniorityLevel && (
-                    <div className="flex items-center">
-                      <CheckCircle className="w-4 h-4 mr-1.5 text-gray-400" />
-                      {extraction.seniorityLevel}
+
+          {!analysisSource ? (
+            <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-6 mb-6 text-sm text-amber-950">
+              <p className="font-medium">Role profile pending</p>
+              <p className="mt-1 text-amber-900/90">
+                Seniority, department, and summary will reflect the latest analysis once it finishes
+                running against your current job description.
+              </p>
+              <p className="mt-3 text-xs text-amber-800">Job title: {job?.title || '—'}</p>
+            </div>
+          ) : (
+            <>
+              <div className="bg-gradient-to-r from-indigo-50 to-blue-50 border border-indigo-200 rounded-xl p-6 mb-6">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1">
+                    <div className="flex items-center space-x-3 mb-3">
+                      <h2 className="text-2xl font-bold text-gray-900">{displayRoleTitle}</h2>
                     </div>
-                  )}
-                  {extraction.department && (
-                    <div className="flex items-center">
-                      <Users className="w-4 h-4 mr-1.5 text-gray-400" />
-                      {extraction.department}
+                    <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600">
+                      {analysisSource.seniorityLevel && (
+                        <div className="flex items-center">
+                          <CheckCircle className="w-4 h-4 mr-1.5 text-gray-400" />
+                          {analysisSource.seniorityLevel}
+                        </div>
+                      )}
+                      {analysisSource.department && (
+                        <div className="flex items-center">
+                          <Users className="w-4 h-4 mr-1.5 text-gray-400" />
+                          {analysisSource.department}
+                        </div>
+                      )}
+                      {analysisSource.experienceLevel && (
+                        <div className="flex items-center">
+                          <TrendingUp className="w-4 h-4 mr-1.5 text-gray-400" />
+                          {analysisSource.experienceLevel}
+                        </div>
+                      )}
                     </div>
-                  )}
-                  {extraction.experienceLevel && (
-                    <div className="flex items-center">
-                      <TrendingUp className="w-4 h-4 mr-1.5 text-gray-400" />
-                      {extraction.experienceLevel}
-                    </div>
-                  )}
+                  </div>
+
+                  {analysisSource.estimatedSalary &&
+                    analysisSource.estimatedSalary.min &&
+                    analysisSource.estimatedSalary.max && (
+                      <div className="text-right">
+                        <div className="text-sm text-gray-600 mb-1">Estimated Salary</div>
+                        <div className="text-lg font-semibold text-gray-900">
+                          {analysisSource.estimatedSalary.currency}{' '}
+                          {analysisSource.estimatedSalary.min.toLocaleString()} -{' '}
+                          {analysisSource.estimatedSalary.max.toLocaleString()}
+                        </div>
+                      </div>
+                    )}
                 </div>
               </div>
-              
-              {extraction.estimatedSalary && extraction.estimatedSalary.min && extraction.estimatedSalary.max && (
-                <div className="text-right">
-                  <div className="text-sm text-gray-600 mb-1">Estimated Salary</div>
-                  <div className="text-lg font-semibold text-gray-900">
-                    {extraction.estimatedSalary.currency} {extraction.estimatedSalary.min.toLocaleString()} - {extraction.estimatedSalary.max.toLocaleString()}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
 
-          {/* Role Summary */}
-          <div className="bg-white border border-gray-200 rounded-lg p-5">
-            <h4 className="text-sm font-semibold text-gray-900 mb-3">Role Summary</h4>
-            <p className="text-sm text-gray-700 leading-relaxed">
-              This is a {extraction.seniorityLevel?.toLowerCase() || ''} position in the {extraction.department?.toLowerCase() || ''} department. 
-              The role requires {extraction.experienceLevel?.toLowerCase() || ''} and involves key responsibilities including {extraction.keyResponsibilities?.slice(0, 2).join(', ') || 'various tasks'}.
-            </p>
-          </div>
+              <div className="bg-white border border-gray-200 rounded-lg p-5">
+                <h4 className="text-sm font-semibold text-gray-900 mb-3">Role Summary</h4>
+                <p className="text-sm text-gray-700 leading-relaxed">
+                  This is a {analysisSource.seniorityLevel?.toLowerCase() || ''} position in the{' '}
+                  {analysisSource.department?.toLowerCase() || ''} department. The role requires{' '}
+                  {analysisSource.experienceLevel?.toLowerCase() || ''} and involves key responsibilities
+                  including{' '}
+                  {analysisSource.keyResponsibilities?.slice(0, 2).join(', ') || 'various tasks'}.
+                </p>
+              </div>
+            </>
+          )}
         </div>
 
         {/* 3. Fix These Issues */}
         <div>
           <h3 className="text-lg font-semibold text-gray-900 mb-6">Fix These Issues</h3>
-          
-          {allIssues.length > 0 ? (
+
+          {!analysisSource ? (
+            <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-8 text-center text-sm text-gray-600">
+              {showAnalysisLoadingOverlay ? (
+                <RefreshCw className="h-8 w-8 mx-auto text-gray-400 mb-2 animate-spin" />
+              ) : (
+                <AlertTriangle className="h-8 w-8 mx-auto text-amber-500 mb-2" />
+              )}
+              <p className="font-medium text-gray-800">Issue list not shown for current JD</p>
+              <p className="mt-1 text-xs text-gray-500 max-w-md mx-auto">
+                {showAnalysisLoadingOverlay
+                  ? 'Loading the latest issues from your updated job description…'
+                  : 'Run Re-run analysis to load issues that match the current posting.'}
+              </p>
+            </div>
+          ) : allIssues.length > 0 ? (
             <div className="space-y-3">
               {allIssues.map((issue, index) => {
                 console.log("[ISSUE_CARD][PROPS]", { jobId, issue: issue.title });
                 return (
                 <div 
-                  key={index} 
+                  key={`${issue.type}-${issue.title}-${index}`}
                   id={`issue-${issue.type}-${issue.title?.replace(/\s+/g, '-')}`}
                   className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
                 >
@@ -1156,111 +1577,123 @@ const getImproveNextSuggestions = (extraction: any): string[] => {
         {/* 4. Supporting Intelligence */}
         <div>
           <h3 className="text-lg font-semibold text-gray-900 mb-6">Supporting Intelligence</h3>
-          
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Skills & Responsibilities */}
-            <div className="space-y-6">
-              {/* Required Skills */}
-              <div className="bg-white border border-gray-200 rounded-lg p-5">
-                <div className="flex items-center justify-between mb-4">
-                  <h4 className="text-sm font-semibold text-gray-900">Required Skills</h4>
-                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                    {extraction.requiredSkills?.length || 0}
-                  </span>
-                </div>
-                {extraction.requiredSkills && extraction.requiredSkills.length > 0 ? (
-                  <div className="flex flex-wrap gap-2">
-                    {extraction.requiredSkills.map((skill: string, index: number) => (
-                      <span
-                        key={index}
-                        className="inline-flex items-center px-3 py-1.5 rounded-md text-sm font-medium bg-blue-50 text-blue-800 border border-blue-200"
-                      >
-                        {skill}
-                      </span>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-gray-500">No required skills specified</p>
-                )}
-              </div>
 
-              {/* Key Responsibilities */}
-              <div className="bg-white border border-gray-200 rounded-lg p-5">
-                <div className="flex items-center justify-between mb-4">
-                  <h4 className="text-sm font-semibold text-gray-900">Key Responsibilities</h4>
-                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                    {extraction.keyResponsibilities?.length || 0}
-                  </span>
-                </div>
-                {extraction.keyResponsibilities && extraction.keyResponsibilities.length > 0 ? (
-                  <ul className="space-y-2">
-                    {extraction.keyResponsibilities.map((resp: string, index: number) => (
-                      <li key={index} className="text-sm text-gray-700 flex items-start">
-                        <span className="w-2 h-2 bg-purple-500 rounded-full mt-1.5 mr-3 flex-shrink-0"></span>
-                        {resp}
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="text-sm text-gray-500">No responsibilities specified</p>
-                )}
-              </div>
+          {!analysisSource ? (
+            <div className="rounded-lg border border-gray-200 bg-gray-50 p-6 text-sm text-gray-600">
+              <p className="font-medium text-gray-800">Skills, match, and risk insights pending</p>
+              <p className="mt-1 text-xs text-gray-500">
+                This section will repopulate from the latest analysis once it matches your current job
+                description.
+              </p>
             </div>
-
-            {/* Analysis Details */}
-            <div className="space-y-6">
-              {/* Candidate Match Prediction */}
-              <div className="bg-white border border-gray-200 rounded-lg p-5">
-                <h4 className="text-sm font-semibold text-gray-900 mb-4">Candidate Match Prediction</h4>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">Match Quality</span>
-                    <span className="text-sm font-medium text-gray-900">Good Fit</span>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="space-y-6">
+                <div className="bg-white border border-gray-200 rounded-lg p-5">
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="text-sm font-semibold text-gray-900">Required Skills</h4>
+                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                      {analysisSource.requiredSkills?.length || 0}
+                    </span>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">Expected Applicants</span>
-                    <span className="text-sm font-medium text-gray-900">25-40</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-600">Time to Fill</span>
-                    <span className="text-sm font-medium text-gray-900">2-3 weeks</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Hiring Risks */}
-              <div className="bg-white border border-gray-200 rounded-lg p-5">
-                <h4 className="text-sm font-semibold text-gray-900 mb-4">Hiring Risks</h4>
-                <div className="space-y-2">
-                  {allIssues.length > 0 ? (
-                    <>
-                      <div className="flex items-start space-x-2">
-                        <AlertTriangle className="w-4 h-4 text-yellow-500 mt-0.5" />
-                        <div>
-                          <p className="text-sm text-gray-700">Unclear requirements may attract unqualified candidates</p>
-                        </div>
-                      </div>
-                      {allIssues.length > 2 && (
-                        <div className="flex items-start space-x-2">
-                          <AlertTriangle className="w-4 h-4 text-orange-500 mt-0.5" />
-                          <div>
-                            <p className="text-sm text-gray-700">Multiple issues may extend hiring timeline</p>
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <div className="flex items-start space-x-2">
-                      <CheckCircle className="w-4 h-4 text-green-500 mt-0.5" />
-                      <div>
-                        <p className="text-sm text-gray-700">Low risk - well-defined position</p>
-                      </div>
+                  {analysisSource.requiredSkills && analysisSource.requiredSkills.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {analysisSource.requiredSkills.map((skill: string, index: number) => (
+                        <span
+                          key={`${skill}-${index}`}
+                          className="inline-flex items-center px-3 py-1.5 rounded-md text-sm font-medium bg-blue-50 text-blue-800 border border-blue-200"
+                        >
+                          {skill}
+                        </span>
+                      ))}
                     </div>
+                  ) : (
+                    <p className="text-sm text-gray-500">No required skills specified</p>
+                  )}
+                </div>
+
+                <div className="bg-white border border-gray-200 rounded-lg p-5">
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="text-sm font-semibold text-gray-900">Key Responsibilities</h4>
+                    <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                      {analysisSource.keyResponsibilities?.length || 0}
+                    </span>
+                  </div>
+                  {analysisSource.keyResponsibilities &&
+                  analysisSource.keyResponsibilities.length > 0 ? (
+                    <ul className="space-y-2">
+                      {analysisSource.keyResponsibilities.map((resp: string, index: number) => (
+                        <li
+                          key={`${resp.slice(0, 48)}-${index}`}
+                          className="text-sm text-gray-700 flex items-start"
+                        >
+                          <span className="w-2 h-2 bg-purple-500 rounded-full mt-1.5 mr-3 flex-shrink-0"></span>
+                          {resp}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-sm text-gray-500">No responsibilities specified</p>
                   )}
                 </div>
               </div>
+
+              <div className="space-y-6">
+                <div className="bg-white border border-gray-200 rounded-lg p-5">
+                  <h4 className="text-sm font-semibold text-gray-900 mb-4">Candidate Match Prediction</h4>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">Match Quality</span>
+                      <span className="text-sm font-medium text-gray-900">Good Fit</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">Expected Applicants</span>
+                      <span className="text-sm font-medium text-gray-900">25-40</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">Time to Fill</span>
+                      <span className="text-sm font-medium text-gray-900">2-3 weeks</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white border border-gray-200 rounded-lg p-5">
+                  <h4 className="text-sm font-semibold text-gray-900 mb-4">Hiring Risks</h4>
+                  <div className="space-y-2">
+                    {allIssues.length > 0 ? (
+                      <>
+                        <div className="flex items-start space-x-2">
+                          <AlertTriangle className="w-4 h-4 text-yellow-500 mt-0.5" />
+                          <div>
+                            <p className="text-sm text-gray-700">
+                              Unclear requirements may attract unqualified candidates
+                            </p>
+                          </div>
+                        </div>
+                        {allIssues.length > 2 && (
+                          <div className="flex items-start space-x-2">
+                            <AlertTriangle className="w-4 h-4 text-orange-500 mt-0.5" />
+                            <div>
+                              <p className="text-sm text-gray-700">
+                                Multiple issues may extend hiring timeline
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <div className="flex items-start space-x-2">
+                        <CheckCircle className="w-4 h-4 text-green-500 mt-0.5" />
+                        <div>
+                          <p className="text-sm text-gray-700">Low risk - well-defined position</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
 
@@ -1270,10 +1703,16 @@ const getImproveNextSuggestions = (extraction: any): string[] => {
           <div className="px-6 py-4">
             <div className="mb-4">
               <h3 className="text-sm font-semibold text-gray-900 mb-2">Raw Analysis Data</h3>
+              {!analysisSource && (
+                <p className="text-xs text-amber-800 mb-2">
+                  Stored extraction below is not used as the current UI (status{' '}
+                  {job?.jdAnalysisStatus ?? 'unknown'}) — shown for debugging only.
+                </p>
+              )}
               <details className="text-xs">
                 <summary className="cursor-pointer text-gray-600 hover:text-gray-800 mb-2">Click to expand extraction data</summary>
                 <pre className="bg-white border border-gray-200 rounded p-3 overflow-x-auto text-xs">
-                  {JSON.stringify(extraction, null, 2)}
+                  {JSON.stringify(jdExtraction, null, 2)}
                 </pre>
               </details>
             </div>
@@ -1292,16 +1731,158 @@ const getImproveNextSuggestions = (extraction: any): string[] => {
             <div>
               <h3 className="text-sm font-semibold text-gray-900 mb-2">Analysis Metrics</h3>
               <div className="bg-white border border-gray-200 rounded p-3 text-xs space-y-1">
-                <div><strong>Quality Score:</strong> {score}/100</div>
-                <div><strong>Active Issues:</strong> {allIssues.length} / {totalIssues}</div>
+                <div>
+                  <strong>Quality Score (UI):</strong>{' '}
+                  {score !== null ? `${score}/100` : '— (pending current analysis)'}
+                </div>
+                <div>
+                  <strong>Active Issues:</strong> {analysisSource ? `${allIssues.length} / ${totalIssues}` : '—'}
+                </div>
                 {resolvedCount > 0 && (
                   <div><strong>Resolved Issues:</strong> {resolvedCount}</div>
                 )}
-                <div><strong>Ambiguities:</strong> {extraction.ambiguities?.length || 0}</div>
-                <div><strong>Missing Criteria:</strong> {extraction.missingCriteria?.length || 0}</div>
-                <div><strong>Unrealistic Expectations:</strong> {extraction.unrealisticExpectations?.length || 0}</div>
-                <div><strong>Required Skills:</strong> {extraction.requiredSkills?.length || 0}</div>
-                <div><strong>Key Responsibilities:</strong> {extraction.keyResponsibilities?.length || 0}</div>
+                <div><strong>Ambiguities:</strong> {jdExtraction.ambiguities?.length || 0}</div>
+                <div><strong>Missing Criteria:</strong> {jdExtraction.missingCriteria?.length || 0}</div>
+                <div><strong>Unrealistic Expectations:</strong> {jdExtraction.unrealisticExpectations?.length || 0}</div>
+                <div><strong>Required Skills:</strong> {jdExtraction.requiredSkills?.length || 0}</div>
+                <div><strong>Key Responsibilities:</strong> {jdExtraction.keyResponsibilities?.length || 0}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Full JD refine — review (same overlay pattern as suggestion / bulk modals) */}
+      {refineReview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+          <div
+            className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-lg bg-white shadow-xl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="refine-jd-review-title"
+          >
+            <div className="shrink-0 border-b px-6 py-4">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2 id="refine-jd-review-title" className="text-xl font-semibold text-gray-900">
+                    Review refined job description
+                  </h2>
+                  <p className="mt-1 text-sm text-gray-600">
+                    Compare the original posting with the recruiter-facing refined version. Nothing is saved
+                    until you choose <span className="font-medium text-gray-800">Apply Refined JD</span>.
+                    {refineReview.requestId ? (
+                      <span className="block mt-1 text-xs text-gray-500">
+                        Request ID: {refineReview.requestId}
+                      </span>
+                    ) : null}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeRefineReview}
+                  disabled={isApplyingRefinedJd}
+                  className="shrink-0 text-gray-400 transition-colors hover:text-gray-600 disabled:cursor-not-allowed disabled:opacity-50"
+                  aria-label="Cancel and close review"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+              <div className="grid gap-6 lg:grid-cols-2">
+                <section className="flex min-h-0 flex-col">
+                  <h3 className="mb-2 text-sm font-semibold text-gray-900">Original job description</h3>
+                  <div
+                    className="min-h-[14rem] max-h-[min(48vh,32rem)] overflow-y-auto rounded-md border border-gray-200 bg-gray-50/80 p-4 text-sm leading-relaxed text-gray-900 whitespace-pre-wrap"
+                    tabIndex={0}
+                  >
+                    {refineReview.originalJD?.trim() ? refineReview.originalJD : '—'}
+                  </div>
+                </section>
+                <section className="flex min-h-0 flex-col">
+                  <h3 className="mb-2 text-sm font-semibold text-gray-900">
+                    Refined job description{' '}
+                    <span className="font-normal text-gray-600">(recruiter-facing)</span>
+                  </h3>
+                  <div
+                    className="min-h-[14rem] max-h-[min(48vh,32rem)] overflow-y-auto rounded-md border border-green-200 bg-green-50/50 p-4 text-sm leading-relaxed text-gray-900 whitespace-pre-wrap"
+                    tabIndex={0}
+                  >
+                    {refineReview.refinedJobDescription}
+                  </div>
+                </section>
+              </div>
+
+              <section className="mt-6 rounded-md border border-blue-100 bg-blue-50/90 p-4">
+                <h3 className="text-sm font-semibold text-blue-950">Summary of improvements</h3>
+                <p className="mt-2 text-sm leading-relaxed text-blue-950">{refineReview.summary}</p>
+              </section>
+
+              {refineReview.changesMade.length > 0 && (
+                <section className="mt-6">
+                  <h3 className="text-sm font-semibold text-gray-900">Changes made</h3>
+                  <ul className="mt-2 list-disc space-y-2 pl-5 text-sm leading-relaxed text-gray-800">
+                    {refineReview.changesMade.map((line, i) => (
+                      <li key={i}>{line}</li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+
+              {applyRefinedJdError && (
+                <div className="mt-6 rounded-md border border-red-200 bg-red-50 p-3" role="alert">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
+                    <p className="text-sm text-red-800">{applyRefinedJdError}</p>
+                  </div>
+                </div>
+              )}
+
+              {refinedJdCopyFeedback && (
+                <p
+                  className={`mt-4 text-sm ${refinedJdCopyFeedback.startsWith('Copied') ? 'text-green-700' : 'text-amber-800'}`}
+                  role="status"
+                >
+                  {refinedJdCopyFeedback}
+                </p>
+              )}
+            </div>
+
+            <div className="shrink-0 border-t bg-gray-50 px-6 py-4">
+              <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={closeRefineReview}
+                  disabled={isApplyingRefinedJd}
+                  className="rounded-md bg-gray-100 px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-200 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleCopyRefinedJd()}
+                  disabled={isApplyingRefinedJd}
+                  className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-800 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Copy className="mr-2 h-4 w-4" aria-hidden />
+                  Copy Refined JD
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleApplyRefinedJd()}
+                  disabled={isApplyingRefinedJd}
+                  className="inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {isApplyingRefinedJd ? (
+                    <>
+                      <RefreshCw className="mr-2 h-4 w-4 animate-spin" aria-hidden />
+                      Applying…
+                    </>
+                  ) : (
+                    'Apply Refined JD'
+                  )}
+                </button>
               </div>
             </div>
           </div>

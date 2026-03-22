@@ -25,4 +25,12 @@ export class OpenAIProvider implements LLMProvider {
   async generateCandidateSignals(input: any): Promise<any> {
     throw new Error('OpenAI provider not implemented yet. Use LLM_PROVIDER=mock for development.');
   }
+
+  async generateTargetedImprovement(_input: any): Promise<any> {
+    throw new Error('OpenAI provider not implemented yet. Use LLM_PROVIDER=mock for development.');
+  }
+
+  async refineJobDescription(_input: any): Promise<any> {
+    throw new Error('OpenAI provider not implemented yet. Use LLM_PROVIDER=mock for development.');
+  }
 }
