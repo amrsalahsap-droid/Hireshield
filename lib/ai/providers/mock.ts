@@ -1929,40 +1929,40 @@ If you're looking for an opportunity to grow your career while making a meaningf
     let suggestion = '';
     
     switch (issueType) {
-      case 'missing':
-        if (issueDescription.toLowerCase().includes('salary')) {
-          suggestion = `Based on the ${jobTitle} role and current market data, we recommend adding a salary range of $${this.generateSalaryRange()} per year. This will help attract qualified candidates and set clear compensation expectations. Consider including additional benefits like health insurance, retirement plans, and professional development opportunities to make the position more competitive.`;
-        } else if (issueDescription.toLowerCase().includes('skills')) {
-          suggestion = `For the ${jobTitle} position, we suggest adding a dedicated 'Technologies & Tools' section that outlines the specific tech stack. Include must-have skills like ${this.generateRelevantSkills(jobTitle)} and nice-to-have skills that would make candidates stand out. Organize this as a bulleted list for easy scanning.`;
-        } else if (issueDescription.toLowerCase().includes('experience')) {
-          suggestion = `Clearly specify the required years of experience for the ${jobTitle} role. For example: "3-5 years of professional experience in ${jobTitle.toLowerCase()} or related field, with at least 2 years of experience with ${this.generateRelevantSkills(jobTitle)}." Consider including equivalent experience or transferable skills that would qualify candidates.`;
+      case "missing":
+        if (issueDescription.toLowerCase().includes("salary")) {
+          suggestion = `Compensation\n\nSalary range: $${this.generateSalaryRange()} per year, depending on experience and location.\n\nBenefits include medical, dental, and vision insurance; 401(k) with employer match; flexible PTO; and a professional development stipend.`;
+        } else if (issueDescription.toLowerCase().includes("skills")) {
+          suggestion = `Skills & Technologies\n\nRequired:\n• ${this.generateRelevantSkills(jobTitle)}\n\nPreferred:\n• Cloud deployment experience\n• Automated testing and CI/CD familiarity`;
+        } else if (issueDescription.toLowerCase().includes("experience")) {
+          suggestion = `3–5 years of professional experience in ${jobTitle.toLowerCase()} or a closely related role, including at least 2 years hands-on with ${this.generateRelevantSkills(jobTitle)}.\n\nEquivalent experience or a strong portfolio may substitute for formal years where outcomes are clearly demonstrated.`;
         } else {
-          suggestion = `To address the missing information in your ${jobTitle} job description, add specific details about company culture, team structure, reporting lines, and growth opportunities. Include information about work environment (remote, hybrid, or on-site) and any unique benefits or perks that set your company apart.`;
+          suggestion = `About the team\n\nYou will join a collaborative group focused on shipping high-quality work with clear ownership. Reporting structure and growth paths are discussed during interviews.\n\nWork arrangement (remote, hybrid, or on-site) and core hours will be confirmed with the hiring manager.`;
         }
         break;
-        
-      case 'ambiguity':
-        if (issueDescription.toLowerCase().includes('placeholder')) {
-          suggestion = `Replace the placeholder text with specific, detailed information about the ${jobTitle} role. Include concrete examples of daily responsibilities, specific projects the candidate will work on, and clear metrics for success. Describe the team structure and who the candidate will report to, providing a clear picture of the role within the organization.`;
-        } else if (issueDescription.toLowerCase().includes('vague')) {
-          suggestion = `Add specific details to clarify the ambiguous statements in your ${jobTitle} job description. For example, instead of "manage projects," specify "manage 3-5 concurrent web development projects using Agile methodology, delivering features on a bi-weekly sprint cycle." Include specific technologies, tools, and processes the candidate will use.`;
+
+      case "ambiguity":
+        if (issueDescription.toLowerCase().includes("placeholder")) {
+          suggestion = `• Own end-to-end delivery for assigned features, from discovery through release and follow-up metrics.\n• Partner with product, design, and operations on roadmap prioritization and tradeoffs.\n• Report to the Engineering Manager; collaborate daily with a cross-functional squad.`;
+        } else if (issueDescription.toLowerCase().includes("vague")) {
+          suggestion = `• Manage 3–5 concurrent product initiatives using Agile practices, with two-week delivery cycles and clear acceptance criteria.\n• Use our standard stack (${this.generateRelevantSkills(jobTitle)}) and document decisions for the broader engineering team.\n• Track sprint goals, risks, and dependencies in the team workflow tools.`;
         } else {
-          suggestion = `Review the ${jobTitle} job description and identify any statements that could be interpreted multiple ways. Rephrase these with specific, measurable language. For example, instead of "strong communication skills," use "lead daily stand-up meetings and create clear technical documentation for cross-functional team collaboration."`;
+          suggestion = `• Lead daily stand-ups for the core team and produce written updates for stakeholders.\n• Produce technical specs and runbooks for features you ship.\n• Present tradeoff recommendations with data-backed rationale in weekly planning.`;
         }
         break;
-        
-      case 'unrealistic':
-        if (issueDescription.toLowerCase().includes('experience')) {
-          suggestion = `Adjust the experience requirements for the ${jobTitle} role to be more realistic. Instead of requiring 10+ years for a mid-level position, consider "3-5 years of experience with ${this.generateRelevantSkills(jobTitle)}" or "2+ years of professional experience OR equivalent combination of education and relevant projects." Focus on skills and capabilities rather than strict years of experience.`;
-        } else if (issueDescription.toLowerCase().includes('skills')) {
-          suggestion = `Balance the required skills for the ${jobTitle} position to avoid asking for impossible combinations. Group related skills together (e.g., "React and related frontend technologies" rather than listing every framework). Prioritize must-have skills over nice-to-have ones, and consider that candidates might have equivalent experience with different but related technologies.`;
+
+      case "unrealistic":
+        if (issueDescription.toLowerCase().includes("experience")) {
+          suggestion = `3–5 years of professional experience with ${this.generateRelevantSkills(jobTitle)}, or 2+ years with a strong portfolio demonstrating equivalent depth.\n\nWe value demonstrated impact and learning agility over a fixed year count.`;
+        } else if (issueDescription.toLowerCase().includes("skills")) {
+          suggestion = `Required:\n• ${this.generateRelevantSkills(jobTitle)}\n\nWe welcome candidates with depth in a subset of these tools if they can ramp quickly on the rest. Related frameworks and transferable experience are acceptable when outcomes are comparable.`;
         } else {
-          suggestion = `Review the ${jobTitle} job requirements and ensure they align with industry standards. Research similar positions and adjust expectations accordingly. Consider what a realistically qualified candidate looks like versus an idealized candidate, and focus on the core competencies needed for success in the role.`;
+          suggestion = `Requirements are aligned with typical ${jobTitle} roles in our market. Must-haves reflect day-one needs; nice-to-haves are weighted flexibly when hiring.`;
         }
         break;
-        
+
       default:
-        suggestion = `To improve the ${jobTitle} job description, focus on providing clear, specific, and realistic information. Add details about company culture, growth opportunities, and what makes this role unique. Ensure all requirements are necessary and directly related to job performance.`;
+        suggestion = `This role emphasizes clear ownership, measurable outcomes, and collaboration across teams. Expect regular feedback, defined milestones, and support for professional growth.`;
     }
     
     return {

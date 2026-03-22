@@ -129,10 +129,10 @@ export const POST = withOrgContext(async (request: NextRequest, orgId: string) =
     });
 
     const authUser = await getAuthUserFromRequest(request).catch(() => null);
-    if (authUser?.id) {
+    if (authUser?.userId) {
       createAuditLog({
         orgId,
-        actorUserId: authUser.id,
+        actorUserId: authUser.userId,
         action: AUDIT_ACTIONS.CANDIDATE_ADDED,
         entityType: 'CANDIDATE',
         entityId: candidate.id,

@@ -1,12 +1,16 @@
-// Clerk middleware is OFF: clerkMiddleware() causes MIDDLEWARE_INVOCATION_FAILED
-// on Vercel Edge. See docs/vercel-clerk-auth.md for details and workarounds.
-// With middleware disabled: auth() in Server Components throws, so the dashboard
-// shows a friendly message and "Sign in again" when deployed on Vercel.
-import { NextResponse } from "next/server";
+import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 
-export function middleware() {
-  return NextResponse.next();
-}
+const isPublicRoute = createRouteMatcher([
+  '/',
+  '/auth(.*)',
+  '/api/webhooks(.*)',
+]);
+
+export default clerkMiddleware((auth, req) => {
+  if (!isPublicRoute(req)) {
+    auth.protect();
+  }
+});
 
 export const config = {
   matcher: ["/((?!.*\\..*|_next).*)", "/", "/(api|trpc)(.*)"],

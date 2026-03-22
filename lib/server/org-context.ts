@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthUserFromRequest } from "@/lib/server/auth-request";
 
@@ -28,15 +28,28 @@ export async function getOrgId(request: NextRequest): Promise<string> {
     return orgIdHeader;
   }
 
-  // 3. Check if we're in development stub mode
+  // 3. Development: no session/header — pick a stable org for local API use
   if (process.env.NODE_ENV !== "production") {
-    // Use the default seeded org for development
-    const defaultOrg = await prisma.org.findFirst({
+    const fromEnv = process.env.DEV_DEFAULT_ORG_ID?.trim();
+    if (fromEnv) {
+      const envOrg = await prisma.org.findUnique({ where: { id: fromEnv } });
+      if (envOrg) {
+        console.log("Using DEV_DEFAULT_ORG_ID for development:", envOrg.id);
+        return envOrg.id;
+      }
+    }
+
+    let defaultOrg = await prisma.org.findFirst({
       where: { name: "Demo Workspace" },
     });
-    
+    if (!defaultOrg) {
+      defaultOrg = await prisma.org.findFirst({
+        orderBy: { createdAt: "asc" },
+      });
+    }
+
     if (defaultOrg) {
-      console.log("Using default demo org for development:", defaultOrg.id);
+      console.log("Using default org for development:", defaultOrg.id);
       return defaultOrg.id;
     }
   }
@@ -69,9 +82,18 @@ export function withOrgContext<T extends unknown[]>(
           }
         );
       }
-      
-      // Re-throw other errors
-      throw error;
+
+      const message = error instanceof Error ? error.message : String(error);
+      console.error("[withOrgContext]", error);
+      return NextResponse.json(
+        {
+          error: "Service unavailable",
+          ...(process.env.NODE_ENV !== "production"
+            ? { details: message }
+            : { message: "Database or configuration error. Try again later." }),
+        },
+        { status: 503 }
+      );
     }
   };
 }

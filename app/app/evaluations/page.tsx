@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ErrorState, EmptyState, LoadingState } from "@/components/ui/ErrorState";
 import { RiskBadge } from "@/components/ui/risk-badge";
+import { orgFetchHeaders } from "@/lib/client/org-fetch-headers";
 
 interface Evaluation {
   id: string;
@@ -42,7 +43,7 @@ export default function EvaluationsPage() {
   const fetchEvaluations = async () => {
     try {
       setError(null);
-      const headers = { "x-org-id": "cmm87bloy0000v9nvvzyt6aqn" };
+      const headers = { ...orgFetchHeaders() };
       const [allResponse, recentResponse] = await Promise.all([
         fetch("/api/evaluations", { headers }),
         fetch("/api/evaluations?recentCompleted=1", { headers }),

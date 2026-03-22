@@ -18,6 +18,7 @@ interface AppLayoutClientProps {
   user: {
     id?: string;
     fullName?: string | null;
+    imageUrl?: string;
     primaryEmailAddress?: {
       emailAddress: string;
     } | null;

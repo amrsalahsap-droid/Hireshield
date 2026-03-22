@@ -29,7 +29,7 @@ const aiConfigSchema = z.object({
   OPENAI_TEMPERATURE_DEFAULT: z.number().default(0.2),
   
   // Development testing controls
-  LLM_TIMEOUT_MS: z.number().default(30000),
+  LLM_TIMEOUT_MS: z.number().default(120000),
   LLM_MAX_RETRIES: z.number().default(2),
   LLM_FORCE_FAILURE_RATE: z.number().min(0).max(1).default(0), // 0-1, 0.1 = 10%
   LLM_SIMULATE_LATENCY_MS: z.number().default(0), // Add artificial latency for testing
@@ -163,7 +163,7 @@ export function getDevTestingControls() {
     forceFailureRate: config.LLM_FORCE_FAILURE_RATE || 0,
     simulateLatencyMs: config.LLM_SIMULATE_LATENCY_MS || 0,
     debugRequests: config.LLM_DEBUG_REQUESTS || false,
-    timeoutMs: config.LLM_TIMEOUT_MS || 30000,
+    timeoutMs: config.LLM_TIMEOUT_MS || 120000,
     maxRetries: config.LLM_MAX_RETRIES || 2,
   };
 }

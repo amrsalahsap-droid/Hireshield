@@ -6,6 +6,7 @@ import Link from "next/link";
 import { ErrorState, LoadingState } from "@/components/ui/ErrorState";
 import JDExtractionViewer from "@/components/jobs/jd-extraction-viewer";
 import { InterviewKitViewer } from "@/components/jobs/interview-kit-viewer";
+import { orgFetchHeaders } from "@/lib/client/org-fetch-headers";
 
 interface Job {
   id: string;
@@ -17,12 +18,12 @@ interface Job {
   jdExtractionJson: any;
   jdAnalyzedAt: string | null;
   jdPromptVersion: string | null;
-  jdAnalysisStatus: 'NOT_STARTED' | 'RUNNING' | 'DONE' | 'FAILED';
+  jdAnalysisStatus: 'NOT_STARTED' | 'RUNNING' | 'DONE' | 'FAILED' | 'OUTDATED';
   jdLastError: string | null;
   interviewKitJson: any;
   interviewKitGeneratedAt: string | null;
   interviewKitPromptVersion: string | null;
-  interviewKitStatus: 'NOT_STARTED' | 'RUNNING' | 'DONE' | 'FAILED';
+  interviewKitStatus: 'NOT_STARTED' | 'RUNNING' | 'DONE' | 'FAILED' | 'OUTDATED';
   interviewKitLastError: string | null;
 }
 
@@ -84,7 +85,7 @@ export default function JobDetailsPage() {
     try {
       const response = await fetch(`/api/jobs/${params.id}`, {
         headers: {
-          "x-org-id": "cmm87bloy0000v9nvvzyt6aqn" // Demo org ID
+          ...orgFetchHeaders(),
         }
       });
       
@@ -107,7 +108,7 @@ export default function JobDetailsPage() {
     try {
       const response = await fetch(`/api/interviews?jobId=${params.id}`, {
         headers: {
-          "x-org-id": "cmm87bloy0000v9nvvzyt6aqn"
+          ...orgFetchHeaders(),
         }
       });
       
@@ -127,7 +128,7 @@ export default function JobDetailsPage() {
     try {
       const response = await fetch(`/api/evaluations?jobId=${params.id}`, {
         headers: {
-          "x-org-id": "cmm87bloy0000v9nvvzyt6aqn"
+          ...orgFetchHeaders(),
         }
       });
       
@@ -147,7 +148,7 @@ export default function JobDetailsPage() {
     try {
       const response = await fetch("/api/candidates", {
         headers: {
-          "x-org-id": "cmm87bloy0000v9nvvzyt6aqn"
+          ...orgFetchHeaders(),
         }
       });
       
@@ -175,7 +176,7 @@ export default function JobDetailsPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-org-id': 'cmm87bloy0000v9nvvzyt6aqn'
+          ...orgFetchHeaders(),
         }
       });
       
@@ -221,7 +222,7 @@ export default function JobDetailsPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-org-id': 'cmm87bloy0000v9nvvzyt6aqn'
+          ...orgFetchHeaders(),
         }
       });
       
@@ -271,7 +272,7 @@ export default function JobDetailsPage() {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'x-org-id': 'cmm87bloy0000v9nvvzyt6aqn'
+          ...orgFetchHeaders(),
         }
       });
       
@@ -304,7 +305,7 @@ export default function JobDetailsPage() {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          'x-org-id': 'cmm87bloy0000v9nvvzyt6aqn'
+          ...orgFetchHeaders(),
         },
         body: JSON.stringify({
           status: newStatus
@@ -410,7 +411,7 @@ export default function JobDetailsPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-org-id": "cmm87bloy0000v9nvvzyt6aqn"
+          ...orgFetchHeaders(),
         },
         body: JSON.stringify({
           jobId: params.id,
@@ -486,7 +487,7 @@ export default function JobDetailsPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-org-id": "cmm87bloy0000v9nvvzyt6aqn"
+          ...orgFetchHeaders(),
         },
         body: JSON.stringify({
           jobId: params.id,
@@ -523,8 +524,14 @@ export default function JobDetailsPage() {
   };
 
   const getJDAnalysisStatus = (status: string | null | undefined, hasExtraction: any) => {
-    // If we have extraction data, consider it done regardless of status
-    if (hasExtraction) {
+    const trustExtraction =
+      hasExtraction &&
+      status !== "NOT_STARTED" &&
+      status !== "FAILED" &&
+      status !== "RUNNING" &&
+      status !== "OUTDATED";
+
+    if (trustExtraction) {
       return (
         <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-safe/10 text-safe">
           ✓ Completed
@@ -532,7 +539,6 @@ export default function JobDetailsPage() {
       );
     }
 
-    // Otherwise show the actual status
     switch (status) {
       case "RUNNING":
         return (
@@ -553,6 +559,12 @@ export default function JobDetailsPage() {
             ✓ Completed
           </span>
         );
+      case "OUTDATED":
+        return (
+          <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-investigate/10 text-investigate">
+            ↻ Re-run analysis
+          </span>
+        );
       case "NOT_STARTED":
       default:
         return (
@@ -564,8 +576,14 @@ export default function JobDetailsPage() {
   };
 
   const getInterviewKitStatus = (status: string | null | undefined, hasKit: any) => {
-    // If we have kit data, consider it done regardless of status
-    if (hasKit) {
+    const trustKit =
+      hasKit &&
+      status !== "NOT_STARTED" &&
+      status !== "FAILED" &&
+      status !== "RUNNING" &&
+      status !== "OUTDATED";
+
+    if (trustKit) {
       return (
         <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-safe/10 text-safe">
           ✓ Generated
@@ -573,7 +591,6 @@ export default function JobDetailsPage() {
       );
     }
 
-    // Otherwise show the actual status
     switch (status) {
       case "RUNNING":
         return (
@@ -592,6 +609,12 @@ export default function JobDetailsPage() {
         return (
           <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-safe/10 text-safe">
             ✓ Generated
+          </span>
+        );
+      case "OUTDATED":
+        return (
+          <span className="inline-flex items-center px-2 py-1 text-xs font-semibold rounded-full bg-investigate/10 text-investigate">
+            ↻ Re-generate kit
           </span>
         );
       case "NOT_STARTED":
@@ -930,6 +953,7 @@ export default function JobDetailsPage() {
               analyzedAt={job.jdAnalyzedAt || undefined}
               promptVersion={job.jdPromptVersion || undefined}
               onEditJob={handleEditJob}
+              onSuggestionApplied={fetchJob}
             />
           )}
 

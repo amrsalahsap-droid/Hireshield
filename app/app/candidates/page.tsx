@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { ErrorState, EmptyState, LoadingState } from "@/components/ui/ErrorState";
 import { Button } from "@/components/ui/button";
+import { orgFetchHeaders } from "@/lib/client/org-fetch-headers";
 
 interface Candidate {
   id: string;
@@ -35,7 +36,7 @@ export default function CandidatesPage() {
       setError(null);
       const response = await fetch("/api/candidates", {
         headers: {
-          "x-org-id": "cmm87bloy0000v9nvvzyt6aqn" // Demo org ID
+          ...orgFetchHeaders(),
         }
       });
       
@@ -104,7 +105,7 @@ export default function CandidatesPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-org-id": "cmm87bloy0000v9nvvzyt6aqn" // Demo org ID
+          ...orgFetchHeaders(),
         },
         body: JSON.stringify({
           fullName: formData.fullName.trim(),

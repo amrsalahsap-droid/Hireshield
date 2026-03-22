@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { AlertCircle, CheckCircle, Clock, TrendingUp, Users, AlertTriangle, Edit, RefreshCw, X, Plus, Target, ChevronDown, ChevronUp } from 'lucide-react';
+import { orgFetchHeaders } from '@/lib/client/org-fetch-headers';
 
 interface JDExtractionViewerProps {
   extraction: any;
@@ -9,6 +10,8 @@ interface JDExtractionViewerProps {
   jobId?: string | null;
   onEditJob?: () => void;
   onAnalysisUpdate?: (newExtraction: any) => void;
+  /** Called after a suggestion is persisted so the parent can refetch job (e.g. updated rawJD). */
+  onSuggestionApplied?: () => void | Promise<void>;
 }
 
 export default function JDExtractionViewer({
@@ -18,7 +21,7 @@ export default function JDExtractionViewer({
   promptVersion,
   jobId,
   onEditJob,
-  onAnalysisUpdate
+  onSuggestionApplied,
 }: JDExtractionViewerProps) {
   console.log("[JD_VIEWER][PROPS]", { jobId });
   const [showAllIssues, setShowAllIssues] = useState(false);
@@ -36,6 +39,29 @@ export default function JDExtractionViewer({
   const [selectedFixes, setSelectedFixes] = useState<Set<string>>(new Set());
   const [isReRunningAnalysis, setIsReRunningAnalysis] = useState(false);
   const [rerunError, setRerunError] = useState<string | null>(null);
+  const [isApplyingSuggestion, setIsApplyingSuggestion] = useState(false);
+  const [applyError, setApplyError] = useState<string | null>(null);
+  const [resolvedIssues, setResolvedIssues] = useState<Set<string>>(new Set());
+  /** Full JD re-analysis after apply-suggestion (force=1); keeps UI from showing stale score/issues. */
+  const [isPostApplyAnalysisRunning, setIsPostApplyAnalysisRunning] = useState(false);
+  const [postApplyAnalysisError, setPostApplyAnalysisError] = useState<string | null>(null);
+
+  const POST_APPLY_ANALYSIS_ERROR =
+    'Suggestion was applied, but analysis refresh failed. Please re-run analysis.';
+
+  const performForceReanalysisAndRefetch = async (): Promise<boolean> => {
+    if (!jobId) return false;
+    const response = await fetch(`/api/jobs/${jobId}?force=1`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...orgFetchHeaders(),
+      },
+    });
+    if (!response.ok) return false;
+    await Promise.resolve(onSuggestionApplied?.());
+    return true;
+  };
 
   // Helper functions (keeping existing implementations)
   const getQualityScore = (extraction: any): number => {
@@ -255,33 +281,42 @@ const getImproveNextSuggestions = (extraction: any): string[] => {
     // Add ambiguities (high priority)
     if (extraction.ambiguities) {
       extraction.ambiguities.forEach((ambiguity: any, index: number) => {
-        issues.push({
-          type: 'ambiguity',
-          title: ambiguity.issue || 'Ambiguity detected',
-          priority: 1
-        });
+        const issueKey = `ambiguity-${ambiguity.issue || 'Ambiguity detected'}`;
+        if (!resolvedIssues.has(issueKey)) {
+          issues.push({
+            type: 'ambiguity',
+            title: ambiguity.issue || 'Ambiguity detected',
+            priority: 1
+          });
+        }
       });
     }
 
     // Add missing criteria (medium priority)
     if (extraction.missingCriteria) {
       extraction.missingCriteria.forEach((criteria: any, index: number) => {
-        issues.push({
-          type: 'missing',
-          title: criteria.missing || 'Missing criteria',
-          priority: 2
-        });
+        const issueKey = `missing-${criteria.missing || 'Missing criteria'}`;
+        if (!resolvedIssues.has(issueKey)) {
+          issues.push({
+            type: 'missing',
+            title: criteria.missing || 'Missing criteria',
+            priority: 2
+          });
+        }
       });
     }
 
     // Add unrealistic expectations (low priority)
     if (extraction.unrealisticExpectations) {
       extraction.unrealisticExpectations.forEach((expectation: any, index: number) => {
-        issues.push({
-          type: 'unrealistic',
-          title: expectation.issue || 'Unrealistic expectation',
-          priority: 3
-        });
+        const issueKey = `unrealistic-${expectation.issue || 'Unrealistic expectation'}`;
+        if (!resolvedIssues.has(issueKey)) {
+          issues.push({
+            type: 'unrealistic',
+            title: expectation.issue || 'Unrealistic expectation',
+            priority: 3
+          });
+        }
       });
     }
 
@@ -305,7 +340,7 @@ const getImproveNextSuggestions = (extraction: any): string[] => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-org-id': 'cmmk1zo40000212ymhwgz0di8'
+          ...orgFetchHeaders(),
         },
         body: JSON.stringify({
           jobId,
@@ -384,12 +419,114 @@ const getImproveNextSuggestions = (extraction: any): string[] => {
       suggestion: '',
       issueType: '',
     });
+    setApplyError(null);
   };
 
-  const handleAddToJobDescription = () => {
-    console.log('[ADD_TO_JD]', suggestionPreview);
-    alert('This would add the suggestion to the job description');
-    handleCancelPreview();
+  const handleAddToJobDescription = async () => {
+    console.log('[ADD_TO_JD][START]', suggestionPreview);
+    
+    if (!jobId) {
+      setApplyError('Job ID is required to apply suggestion');
+      return;
+    }
+
+    setIsApplyingSuggestion(true);
+    setApplyError(null);
+
+    try {
+      const response = await fetch(`/api/jobs/${jobId}/apply-suggestion`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...orgFetchHeaders(),
+        },
+        body: JSON.stringify({
+          suggestionText: suggestionPreview.suggestion,
+          issueType: suggestionPreview.issueType,
+          issueTitle: suggestionPreview.issueTitle,
+          targetSection: suggestionPreview.issueType === 'missing' ? 'Requirements' : undefined
+        })
+      });
+
+      console.log('[ADD_TO_JD][RESPONSE]', { 
+        jobId, 
+        status: response.status,
+        ok: response.ok 
+      });
+
+      if (!response.ok) {
+        const contentType = response.headers.get("content-type");
+        let errorMessage = 'Failed to apply suggestion';
+        
+        if (contentType && contentType.includes("application/json")) {
+          const backendError = await response.json();
+          console.error("[ADD_TO_JD][BACKEND_ERROR]", {
+            jobId,
+            status: response.status,
+            backendError
+          });
+          
+          errorMessage = backendError.message || backendError.error || backendError.details || response.statusText || 'Failed to apply suggestion';
+        } else {
+          const text = await response.text();
+          console.error("[ADD_TO_JD][BACKEND_ERROR_TEXT]", {
+            jobId,
+            status: response.status,
+            text
+          });
+          
+          errorMessage = text || response.statusText || 'Failed to apply suggestion';
+        }
+        
+        setApplyError(errorMessage);
+        return;
+      }
+
+      await response.json();
+      console.log('[ADD_TO_JD][SUCCESS]', { jobId });
+
+      await Promise.resolve(onSuggestionApplied?.());
+
+      const issueKey = `${suggestionPreview.issueType}-${suggestionPreview.issueTitle}`;
+      setResolvedIssues(prev => new Set(prev).add(issueKey));
+      setGeneratedSuggestions(prev => {
+        const next = new Map(prev);
+        next.delete(issueKey);
+        return next;
+      });
+
+      handleCancelPreview();
+
+      setIsPostApplyAnalysisRunning(true);
+      setPostApplyAnalysisError(null);
+      try {
+        const ok = await performForceReanalysisAndRefetch();
+        if (!ok) {
+          setPostApplyAnalysisError(POST_APPLY_ANALYSIS_ERROR);
+        } else {
+          setResolvedIssues(new Set());
+          setGeneratedSuggestions(new Map());
+          setSelectedFixes(new Set());
+        }
+      } catch {
+        setPostApplyAnalysisError(POST_APPLY_ANALYSIS_ERROR);
+      } finally {
+        setIsPostApplyAnalysisRunning(false);
+      }
+    } catch (error) {
+      console.error('[ADD_TO_JD][CATCH]', { 
+        jobId, 
+        error: error instanceof Error ? {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
+        } : error
+      });
+      
+      setApplyError('Failed to apply suggestion. Please try again.');
+    } finally {
+      setIsApplyingSuggestion(false);
+    }
   };
 
   const getFreshnessState = () => {
@@ -482,51 +619,24 @@ const getImproveNextSuggestions = (extraction: any): string[] => {
   const handleReRunAnalysis = async () => {
     console.log('[RE_RUN_ANALYSIS]', { jobId, isReRunningAnalysis });
     
-    // Prevent multiple simultaneous reruns
-    if (isReRunningAnalysis) {
+    if (isReRunningAnalysis || isPostApplyAnalysisRunning) {
       console.log('[RE_RUN_ANALYSIS] Already running, ignoring request');
       return;
     }
     
-    // Clear any previous errors
     setRerunError(null);
-    
-    // Set running state
+    setPostApplyAnalysisError(null);
     setIsReRunningAnalysis(true);
-    
+
     try {
-      // Call JD analysis endpoint with force refresh
-      const response = await fetch(`/api/jobs/${jobId}/analyze`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          forceRefresh: true,
-          timestamp: Date.now()
-        })
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Analysis request failed: ${response.status}`);
+      const ok = await performForceReanalysisAndRefetch();
+      if (!ok) {
+        throw new Error('Analysis request failed');
       }
-      
-      const data = await response.json();
-      console.log('[RE_RUN_ANALYSIS][SUCCESS]', { jobId, responseData: data });
-      
-      // In a real implementation, this would update the parent component state
-      // For now, we'll simulate the update by triggering a refresh
-      if (onAnalysisUpdate) {
-        onAnalysisUpdate(data.extraction);
-      }
-      
-      // Clear any cached suggestions since analysis changed
       setGeneratedSuggestions(new Map());
       setSelectedFixes(new Set());
-      
-      // Show success feedback (optional)
+      setResolvedIssues(new Set());
       console.log('[RE_RUN_ANALYSIS] Analysis updated successfully');
-      
     } catch (error) {
       console.error('[RE_RUN_ANALYSIS][FAILED]', { jobId, error });
       setRerunError('Failed to re-run analysis. Please try again or contact support if the issue persists.');
@@ -665,9 +775,56 @@ const getImproveNextSuggestions = (extraction: any): string[] => {
   const qualityLabel = getQualityLabel(score);
   const qualityColor = getQualityColor(score);
   const allIssues = getUnifiedIssues(extraction);
+  
+  // Get total issues including resolved ones for metrics
+  const getTotalIssues = (extraction: any) => {
+    let total = 0;
+    if (extraction.ambiguities) total += extraction.ambiguities.length;
+    if (extraction.missingCriteria) total += extraction.missingCriteria.length;
+    if (extraction.unrealisticExpectations) total += extraction.unrealisticExpectations.length;
+    return total;
+  };
+  
+  const totalIssues = getTotalIssues(extraction);
+  const resolvedCount = resolvedIssues.size;
+
+  const showAnalysisLoadingOverlay =
+    isPostApplyAnalysisRunning || isReRunningAnalysis;
 
   return (
-    <div className="bg-white shadow rounded-lg">
+    <div className="bg-white shadow rounded-lg relative min-h-[240px]">
+      {showAnalysisLoadingOverlay && (
+        <div
+          className="absolute inset-0 z-20 flex flex-col items-center justify-center rounded-lg bg-white/90 backdrop-blur-[2px] px-6 text-center"
+          aria-busy="true"
+          aria-live="polite"
+        >
+          <RefreshCw className="h-8 w-8 animate-spin text-blue-600 mb-3" />
+          <p className="text-sm font-semibold text-gray-800">Refreshing JD analysis…</p>
+          <p className="text-xs text-gray-500 mt-1 max-w-sm">
+            Recalculating score, issues, skills, responsibilities, and guidance from your updated JD.
+          </p>
+        </div>
+      )}
+      {postApplyAnalysisError && (
+        <div className="mx-6 mt-6 mb-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="h-4 w-4 shrink-0 text-amber-700 mt-0.5" />
+            <p>{postApplyAnalysisError}</p>
+          </div>
+        </div>
+      )}
+      {job?.jdAnalysisStatus === "OUTDATED" && !showAnalysisLoadingOverlay && (
+        <div className="mx-6 mt-6 mb-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="h-4 w-4 shrink-0 text-amber-700 mt-0.5" />
+            <p>
+              The job description was updated after this analysis. Scores and issues below may not
+              match the current JD — use <strong>Re-run analysis</strong> to refresh.
+            </p>
+          </div>
+        </div>
+      )}
       {/* 1. Decision Header */}
       <div className="bg-gradient-to-r from-slate-50 to-blue-50 border border-slate-200 rounded-xl p-6 mb-8">
         <div className="flex items-start justify-between mb-4">
@@ -797,17 +954,17 @@ const getImproveNextSuggestions = (extraction: any): string[] => {
                 </button>
               )}
               
-              {(jobId && job && !isReRunningAnalysis) && (
+              {jobId && job && (
                 <button
                   onClick={handleReRunAnalysis}
-                  disabled={isReRunningAnalysis}
+                  disabled={isReRunningAnalysis || isPostApplyAnalysisRunning}
                   className={`inline-flex items-center px-4 py-3 font-medium rounded-lg transition-colors ${
                     getFreshnessState() === 'outdated' 
                       ? 'bg-amber-100 text-amber-800 hover:bg-amber-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500' 
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500'
-                  } ${isReRunningAnalysis ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  } ${isReRunningAnalysis || isPostApplyAnalysisRunning ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
-                  {isReRunningAnalysis ? (
+                  {isReRunningAnalysis || isPostApplyAnalysisRunning ? (
                     <>
                       <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-amber-600 mr-2"></div>
                       Running Analysis...
@@ -1136,7 +1293,10 @@ const getImproveNextSuggestions = (extraction: any): string[] => {
               <h3 className="text-sm font-semibold text-gray-900 mb-2">Analysis Metrics</h3>
               <div className="bg-white border border-gray-200 rounded p-3 text-xs space-y-1">
                 <div><strong>Quality Score:</strong> {score}/100</div>
-                <div><strong>Total Issues:</strong> {allIssues.length}</div>
+                <div><strong>Active Issues:</strong> {allIssues.length} / {totalIssues}</div>
+                {resolvedCount > 0 && (
+                  <div><strong>Resolved Issues:</strong> {resolvedCount}</div>
+                )}
                 <div><strong>Ambiguities:</strong> {extraction.ambiguities?.length || 0}</div>
                 <div><strong>Missing Criteria:</strong> {extraction.missingCriteria?.length || 0}</div>
                 <div><strong>Unrealistic Expectations:</strong> {extraction.unrealisticExpectations?.length || 0}</div>
@@ -1159,7 +1319,8 @@ const getImproveNextSuggestions = (extraction: any): string[] => {
                 </h2>
                 <button
                   onClick={handleCancelPreview}
-                  className="text-gray-400 hover:text-gray-600 transition-colors"
+                  disabled={isApplyingSuggestion}
+                  className="text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -1172,19 +1333,38 @@ const getImproveNextSuggestions = (extraction: any): string[] => {
                   {suggestionPreview.suggestion}
                 </p>
               </div>
+              
+              {/* Error Message */}
+              {applyError && (
+                <div className="mt-4 p-3 bg-red-50 border-red-200 rounded-md">
+                  <div className="flex items-center">
+                    <AlertCircle className="w-4 h-4 text-red-600 mr-2" />
+                    <p className="text-sm text-red-800">{applyError}</p>
+                  </div>
+                </div>
+              )}
             </div>
             <div className="px-6 py-4 border-t flex justify-end space-x-3">
               <button
                 onClick={handleCancelPreview}
-                className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
+                disabled={isApplyingSuggestion}
+                className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancel
               </button>
               <button
                 onClick={handleAddToJobDescription}
-                className="px-4 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors"
+                disabled={isApplyingSuggestion}
+                className="px-4 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
               >
-                Add to Job Description
+                {isApplyingSuggestion ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                    Applying...
+                  </>
+                ) : (
+                  'Add to Job Description'
+                )}
               </button>
             </div>
           </div>

@@ -12,9 +12,11 @@ import {
   CandidateSignalsInput,
   CandidateSignalsResult,
   BaseAIResult,
-  ProviderConfig
+  ProviderConfig,
+  TargetedImprovementInput,
+  TargetedImprovementResult,
 } from './types';
-import { getProviderConfig, isProviderConfigured, getConfigurationError } from './config';
+import { getProviderConfig, getAIConfig, isProviderConfigured, getConfigurationError } from './config';
 import { createAIError, AIErrorCode, normalizeProviderError, AIError } from './errors';
 import { aiLogger } from './logging';
 
@@ -152,15 +154,66 @@ async function executeAIOperation<T>(
   }
 }
 
+function isStructuredAIError(e: unknown): e is AIError {
+  return (
+    typeof e === 'object' &&
+    e !== null &&
+    'code' in e &&
+    typeof (e as { code: unknown }).code === 'string'
+  );
+}
+
 /**
- * AI Service - Main interface for all AI operations
+ * Dev-only, opt-in: after rate limit / timeout / network errors, complete with the mock provider.
+ * Off by default so an unlimited (or paid) LLM always returns real model output.
  */
-export const aiService = {
-  /**
-   * Analyze job description
-   */
-  async analyzeJD(input: AnalyzeJDInput): Promise<AnalyzeJDResult> {
-    return executeAIOperation(
+function devMockFallbackForTransientLLMFailures(): boolean {
+  if (process.env.NODE_ENV === 'production') return false;
+  return (
+    process.env.AI_DEV_MOCK_FALLBACK === '1' ||
+    process.env.AI_DEV_MOCK_ON_RATE_LIMIT === '1'
+  );
+}
+
+const TRANSIENT_LLM_MOCK_FALLBACK_CODES: AIErrorCode[] = [
+  AIErrorCode.RATE_LIMITED,
+  AIErrorCode.TIMEOUT,
+  AIErrorCode.NETWORK_ERROR,
+];
+
+function isTransientLLMFailureForDevMock(error: unknown): boolean {
+  return (
+    isStructuredAIError(error) &&
+    TRANSIENT_LLM_MOCK_FALLBACK_CODES.includes(error.code as AIErrorCode)
+  );
+}
+
+async function createDevMockProvider(): Promise<import('./providers/mock').MockProvider> {
+  const c = getAIConfig();
+  const { MockProvider } = await import('./providers/mock');
+  const mockConfig = {
+    name: 'mock',
+    model: 'mock',
+    timeout: c.LLM_TIMEOUT_MS,
+    maxRetries: c.LLM_MAX_RETRIES,
+    scenario: c.MOCK_AI_SCENARIO,
+    failureMode: 'none' as const,
+    forceFailureRate: 0,
+    simulateLatencyMs: 0,
+  } as ProviderConfig & {
+    scenario?: string;
+    failureMode?: string;
+    forceFailureRate?: number;
+    simulateLatencyMs?: number;
+  };
+  return new MockProvider(mockConfig);
+}
+
+async function analyzeJDWithDevTransientFallback(
+  input: AnalyzeJDInput
+): Promise<AnalyzeJDResult> {
+  try {
+    return await executeAIOperation(
       async () => {
         const provider = await getProvider();
         return await provider.analyzeJD(input);
@@ -169,6 +222,52 @@ export const aiService = {
       input.requestId,
       input.orgId
     );
+  } catch (error) {
+    if (devMockFallbackForTransientLLMFailures() && isTransientLLMFailureForDevMock(error)) {
+      console.warn(
+        '[aiService] Remote LLM transient failure — using mock JD analysis (dev only, AI_DEV_MOCK_FALLBACK=1).'
+      );
+      const mock = await createDevMockProvider();
+      return mock.analyzeJD(input);
+    }
+    throw error;
+  }
+}
+
+async function generateTargetedImprovementWithDevTransientFallback(
+  input: TargetedImprovementInput
+): Promise<TargetedImprovementResult> {
+  try {
+    return await executeAIOperation(
+      async () => {
+        const provider = await getProvider();
+        return await provider.generateTargetedImprovement(input);
+      },
+      'generateTargetedImprovement',
+      input.requestId,
+      input.orgId
+    );
+  } catch (error) {
+    if (devMockFallbackForTransientLLMFailures() && isTransientLLMFailureForDevMock(error)) {
+      console.warn(
+        '[aiService] Remote LLM transient failure — using mock targeted improvement (dev only).'
+      );
+      const mock = await createDevMockProvider();
+      return mock.generateTargetedImprovement(input);
+    }
+    throw error;
+  }
+}
+
+/**
+ * AI Service - Main interface for all AI operations
+ */
+export const aiService = {
+  /**
+   * Analyze job description
+   */
+  async analyzeJD(input: AnalyzeJDInput): Promise<AnalyzeJDResult> {
+    return analyzeJDWithDevTransientFallback(input);
   },
 
   /**
@@ -202,16 +301,10 @@ export const aiService = {
   /**
    * Generate targeted improvement for specific JD issue
    */
-  async generateTargetedImprovement(input: any): Promise<any> {
-    return executeAIOperation(
-      async () => {
-        const provider = await getProvider();
-        return await provider.generateTargetedImprovement(input);
-      },
-      'generateTargetedImprovement',
-      input.requestId,
-      input.orgId
-    );
+  async generateTargetedImprovement(
+    input: TargetedImprovementInput
+  ): Promise<TargetedImprovementResult> {
+    return generateTargetedImprovementWithDevTransientFallback(input);
   },
 
   /**

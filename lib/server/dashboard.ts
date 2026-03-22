@@ -1,7 +1,12 @@
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 
-export type JDAnalysisStatus = "NOT_STARTED" | "RUNNING" | "DONE" | "FAILED";
+export type JDAnalysisStatus =
+  | "NOT_STARTED"
+  | "RUNNING"
+  | "DONE"
+  | "FAILED"
+  | "OUTDATED";
 export type InterviewKitStatus = "NOT_STARTED" | "RUNNING" | "DONE" | "FAILED";
 
 export type DashboardJobRow = {

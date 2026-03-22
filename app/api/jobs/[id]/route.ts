@@ -305,8 +305,13 @@ export const POST = withOrgContext(async (request: NextRequest, orgId: string, {
     }
 
     try {
-      // Check for cached results (unless force flag is set)
-      if (!force && job.jdExtractionJson && job.jdAnalyzedAt) {
+      // Only serve cached extraction when analysis is still DONE (OUTDATED / edited JD must re-run)
+      if (
+        !force &&
+        job.jdAnalysisStatus === "DONE" &&
+        job.jdExtractionJson &&
+        job.jdAnalyzedAt
+      ) {
         return NextResponse.json({
           jdExtraction: job.jdExtractionJson,
           requestId,

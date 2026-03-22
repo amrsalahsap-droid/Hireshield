@@ -4,9 +4,7 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { GenerateJDButton } from "@/components/app/generate-jd-button";
-
-// Demo org ID
-const DEMO_ORG_ID = "cmmk1zo40000212ymhwgz0di8";
+import { orgFetchHeaders } from "@/lib/client/org-fetch-headers";
 
 export default function EditJobPage() {
   const params = useParams();
@@ -62,7 +60,7 @@ export default function EditJobPage() {
     try {
       const response = await fetch(`/api/jobs/${params.id}`, {
         headers: {
-          "x-org-id": DEMO_ORG_ID
+          ...orgFetchHeaders(),
         }
       });
 
@@ -105,7 +103,7 @@ export default function EditJobPage() {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          'x-org-id': DEMO_ORG_ID
+          ...orgFetchHeaders(),
         },
         body: JSON.stringify({
           title: title.trim(),

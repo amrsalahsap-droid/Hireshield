@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { ErrorState, LoadingState } from "@/components/ui/ErrorState";
 import { Button } from "@/components/ui/button";
+import { orgFetchHeaders } from "@/lib/client/org-fetch-headers";
 
 interface Candidate {
   id: string;
@@ -52,7 +53,7 @@ export default function CandidateDetailsPage() {
     try {
       const response = await fetch(`/api/candidates/${params.id}`, {
         headers: {
-          "x-org-id": "cmm87bloy0000v9nvvzyt6aqn" // Demo org ID
+          ...orgFetchHeaders(),
         }
       });
       
@@ -75,7 +76,7 @@ export default function CandidateDetailsPage() {
     try {
       const response = await fetch(`/api/interviews?candidateId=${params.id}`, {
         headers: {
-          "x-org-id": "cmm87bloy0000v9nvvzyt6aqn"
+          ...orgFetchHeaders(),
         }
       });
       
@@ -95,7 +96,7 @@ export default function CandidateDetailsPage() {
     try {
       const response = await fetch(`/api/evaluations?candidateId=${params.id}`, {
         headers: {
-          "x-org-id": "cmm87bloy0000v9nvvzyt6aqn"
+          ...orgFetchHeaders(),
         }
       });
       

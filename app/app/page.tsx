@@ -25,6 +25,7 @@ import { EmptyStateCard } from "@/components/ui/empty-state-card";
 import { AIInsightCards } from "@/components/app/ai-insight-cards";
 import { InsightCard } from "@/components/app/insight-card";
 import { LiveActivityPulse, useLiveActivity } from "@/components/app/live-activity-pulse";
+import { orgFetchHeaders } from "@/lib/client/org-fetch-headers";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Briefcase, UserPlus, FileSearch, ShieldAlert, Inbox, CheckCircle, AlertTriangle, Clock, Users, Mic, FileCheck, Timer, Calendar, ChevronRight, Info, TrendingUp, TrendingDown, Minus, RefreshCw, Play, FileText, UserCheck, AlertCircle, Zap, Expand, Maximize2, Brain, Lightbulb, Target, Activity, Wifi } from "lucide-react";
 import type {
@@ -334,7 +335,7 @@ export default function AppPage() {
             }),
             fetch(`/api/activity-dev?page=${activityPage}&pageSize=${activityPageSize}`, {
               headers: {
-                "x-org-id": "cmm87bloy0000v9nvvzyt6aqn",
+                ...orgFetchHeaders(),
               },
             })
           ]);
@@ -405,7 +406,7 @@ export default function AppPage() {
           fetch(`/api/activity?page=${activityPage}&pageSize=${activityPageSize}`, {
             headers: {
               Authorization: `Bearer ${token}`,
-              "x-org-id": "cmm87bloy0000v9nvvzyt6aqn",
+              ...orgFetchHeaders(),
             },
           })
         ]);
@@ -468,7 +469,7 @@ export default function AppPage() {
       try {
         const res = await fetch(`/api/activity-dev?page=${page}&pageSize=${pageSize}`, {
           headers: {
-            "x-org-id": "cmm87bloy0000v9nvvzyt6aqn",
+            ...orgFetchHeaders(),
           },
         });
         if (res.ok) {
@@ -498,7 +499,7 @@ export default function AppPage() {
         }),
         fetch(`/api/activity-dev?page=${activityPage}&pageSize=${activityPageSize}`, {
           headers: {
-            "x-org-id": "cmm87bloy0000v9nvvzyt6aqn",
+            ...orgFetchHeaders(),
           },
         })
       ]);

@@ -33,8 +33,8 @@ AI-powered hiring evaluation platform built with Next.js, Clerk, and Prisma.
    CLERK_SECRET_KEY=your_clerk_secret_key
    NEXT_PUBLIC_CLERK_SIGN_IN_URL=/login
    NEXT_PUBLIC_CLERK_SIGN_UP_URL=/signup
-   NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL=/app
-   NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL=/app
+   NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL=/app
+   NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL=/app
    ```
 
 3. **Database setup**

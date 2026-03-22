@@ -11,13 +11,9 @@ export default function Home() {
         </p>
         
         <div className="space-y-4">
-          <Link
-            href="/auth"
-          >
-            <Button size="lg" className="w-full">
-              Get Started
-            </Button>
-          </Link>
+          <Button asChild size="lg" className="w-full">
+            <Link href="/auth">Get Started</Link>
+          </Button>
         </div>
         
         <p className="text-sm text-muted-foreground mt-8">

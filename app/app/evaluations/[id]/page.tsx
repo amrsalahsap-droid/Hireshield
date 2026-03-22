@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { ErrorState, LoadingState } from "@/components/ui/ErrorState";
+import { orgFetchHeaders } from "@/lib/client/org-fetch-headers";
 
 interface Evaluation {
   id: string;
@@ -41,7 +42,7 @@ export default function EvaluationDetailsPage() {
     try {
       const response = await fetch(`/api/evaluations/${params.id}`, {
         headers: {
-          "x-org-id": "cmm87bloy0000v9nvvzyt6aqn" // Demo org ID
+          ...orgFetchHeaders(),
         }
       });
       
@@ -80,7 +81,7 @@ export default function EvaluationDetailsPage() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-org-id': 'cmm87bloy0000v9nvvzyt6aqn'
+          ...orgFetchHeaders(),
         }
       });
       

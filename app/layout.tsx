@@ -30,13 +30,13 @@ export default function RootLayout({
   // Only use ClerkProvider if environment variables are available
   const clerkPublishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
   
+  const bodyClass = `${inter.variable} ${spaceGrotesk.variable} font-body antialiased`;
+
   if (!clerkPublishableKey) {
     // Fallback for build time without Clerk keys
     return (
-      <html lang="en">
-        <body
-          className={`${inter.variable} ${spaceGrotesk.variable} font-body antialiased`}
-        >
+      <html lang="en" suppressHydrationWarning>
+        <body className={bodyClass} suppressHydrationWarning>
           <div className="min-h-screen flex items-center justify-center bg-background">
             <div className="text-center">
               <h1 className="text-4xl font-bold mb-4 text-foreground">HireShield</h1>
@@ -53,16 +53,19 @@ export default function RootLayout({
     );
   }
 
+  // ClerkProvider inside <body> avoids html/body tree mismatches vs client hydration (incl. not-found).
   return (
-    <ClerkProvider appearance={clerkAppearance}>
-      <html lang="en">
-        <body
-          className={`${inter.variable} ${spaceGrotesk.variable} font-body antialiased`}
+    <html lang="en" suppressHydrationWarning>
+      <body className={bodyClass} suppressHydrationWarning>
+        <ClerkProvider
+          appearance={clerkAppearance}
+          signInFallbackRedirectUrl="/app"
+          signUpFallbackRedirectUrl="/app"
         >
           {children}
           <Toaster richColors position="top-center" />
-        </body>
-      </html>
-    </ClerkProvider>
+        </ClerkProvider>
+      </body>
+    </html>
   );
 }

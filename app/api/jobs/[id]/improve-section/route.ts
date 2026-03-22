@@ -6,6 +6,7 @@ import { createAuditLog, AUDIT_ACTIONS } from "@/lib/audit";
 import { getCurrentUserOrThrow } from "@/lib/server/auth";
 import { aiService } from "@/lib/ai/service";
 import { handleAIRouteError } from "@/lib/server/ai-error-mapping";
+import { normalizeJdSuggestionForRawJd } from "@/lib/server/normalize-jd-suggestion";
 
 // POST /api/jobs/[id]/improve-section - Generate targeted JD improvement
 export const POST = withOrgContext(async (request: NextRequest, orgId: string, { params }: { params: { id: string } }) => {
@@ -143,8 +144,19 @@ export const POST = withOrgContext(async (request: NextRequest, orgId: string, {
       lastSuccessfulStep = "RESPONSE_BUILD_DONE";
       console.log('RESPONSE_BUILD_DONE', { requestId, jobId, orgId });
 
+      const rawSuggestion = typeof result.suggestion === "string" ? result.suggestion : "";
+      const normalized = normalizeJdSuggestionForRawJd(rawSuggestion, {
+        issueType: String(issueType),
+        issueTitle: String(issueDescription),
+        issueDescription: String(issueDescription),
+        targetSection:
+          issueType === "missing" && String(issueDescription).toLowerCase().includes("skill")
+            ? "Requirements"
+            : undefined,
+      });
+
       return NextResponse.json({
-        suggestion: result.suggestion,
+        suggestion: normalized.trim() || rawSuggestion.trim(),
         requestId,
         job: {
           id: job.id,
@@ -214,95 +226,8 @@ export const POST = withOrgContext(async (request: NextRequest, orgId: string, {
   }
 });
 
-// Helper function to generate targeted improvement prompts
-function generateTargetedPrompt(issueType: string, issueDescription: string, jobTitle: string, rawJD: string): string {
-  const baseContext = `
-Job Title: ${jobTitle}
-Current Description: ${rawJD.substring(0, 1000)}${rawJD.length > 1000 ? '...' : ''}
-
-Issue Type: ${issueType}
-Issue Description: ${issueDescription}
-
-Please provide a specific, actionable improvement suggestion to address this issue.
-Focus on practical, concrete changes that can be implemented in the job description.
-Keep the suggestion concise but detailed enough to be immediately useful.
-`;
-
-  switch (issueType) {
-    case 'missing':
-      if (issueDescription.toLowerCase().includes('salary')) {
-        return baseContext + `
-        
-Specifically, suggest:
-1. A realistic salary range based on market data for this role
-2. How to phrase the compensation section professionally
-3. Whether to include additional benefits or perks information`;
-      }
-      if (issueDescription.toLowerCase().includes('skills')) {
-        return baseContext + `
-        
-Specifically, suggest:
-1. Key technical skills required for this role
-2. How to organize them in a clear, scannable format
-3. Whether to separate required vs. preferred skills`;
-      }
-      if (issueDescription.toLowerCase().includes('experience')) {
-        return baseContext + `
-        
-Specifically, suggest:
-1. Clear years of experience requirement
-2. What level of seniority this represents
-3. How to phrase experience requirements attractively`;
-      }
-      break;
-
-    case 'ambiguity':
-      if (issueDescription.toLowerCase().includes('placeholder')) {
-        return baseContext + `
-        
-Specifically, suggest:
-1. Replace placeholder text with specific job details
-2. Add concrete examples of responsibilities
-3. Include actual requirements and qualifications`;
-      }
-      if (issueDescription.toLowerCase().includes('vague')) {
-        return baseContext + `
-        
-Specifically, suggest:
-1. Add specific metrics or deliverables
-2. Include concrete examples of daily tasks
-3. Clarify ambiguous statements with precise language`;
-      }
-      break;
-
-    case 'unrealistic':
-      if (issueDescription.toLowerCase().includes('experience')) {
-        return baseContext + `
-        
-Specifically, suggest:
-1. More realistic experience requirements for the role level
-2. Alternative ways to phrase experience requirements
-3. What comparable roles typically require`;
-      }
-      if (issueDescription.toLowerCase().includes('skills')) {
-        return baseContext + `
-        
-Specifically, suggest:
-1. A balanced set of technical skills
-2. Prioritizing must-have vs. nice-to-have skills
-3. Skills that are commonly found together in this role`;
-      }
-      break;
-
-    default:
-      return baseContext + `
-      
-Provide a general improvement suggestion that addresses the specific issue mentioned.
-Focus on making the job description more complete, clear, and attractive to qualified candidates.`;
-  }
-
-  return baseContext + `
-  
-Provide a specific, actionable improvement suggestion to address this issue.
-The suggestion should be practical and immediately implementable in the job description.`;
+/** One-line gap description for the model — avoids "suggest 1/2/3" coaching that leaks into output. */
+function buildImprovementContextNote(issueType: string, issueDescription: string): string {
+  const t = issueDescription.trim();
+  return t ? `${t} (${issueType})` : `Issue class: ${issueType}`;
 }
