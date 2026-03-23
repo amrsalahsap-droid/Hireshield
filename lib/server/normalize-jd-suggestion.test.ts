@@ -30,13 +30,13 @@ Replace the vague bullets with specifics. For example:
     expect(out).not.toMatch(/we recommend/i);
   });
 
-  it("adds section heading for skills context", () => {
+  it("returns body only for skills context (headings added at insert time)", () => {
     const raw = `React, TypeScript, Node.js, PostgreSQL`;
     const out = normalizeJdSuggestionForRawJd(raw, {
       issueType: "missing",
       issueTitle: "Missing technical skills",
     });
-    expect(out).toMatch(/Skills & Technologies/i);
+    expect(out).not.toMatch(/^Skills\b/m);
     expect(out).toMatch(/React/);
   });
 
@@ -58,13 +58,38 @@ For example:
     expect(out).toMatch(/^•/m);
   });
 
-  it("adds work arrangement heading for environment-style issues", () => {
+  it("returns body only for work arrangement issues (headings added at insert time)", () => {
     const raw = `This role is hybrid in Austin with core hours 10–4 CT and quarterly travel for team weeks.`;
     const out = normalizeJdSuggestionForRawJd(raw, {
       issueType: "missing",
       issueTitle: "Work environment not described",
     });
-    expect(out).toMatch(/Location & Work Arrangement/i);
+    expect(out).not.toMatch(/^Location\b/m);
     expect(out).toMatch(/hybrid/i);
+  });
+
+  it("strips inline For example: on same line", () => {
+    const raw = `Intro line. For example: Hybrid in Austin, 3 days in office.`;
+    const out = normalizeJdSuggestionForRawJd(raw, {
+      issueType: "missing",
+      issueTitle: "Remote policy unclear",
+    });
+    expect(out).not.toMatch(/for example/i);
+    expect(out).toMatch(/Hybrid in Austin/);
+  });
+
+  it("drops consider adding and generated suggestion label lines", () => {
+    const raw = `Generated Suggestion
+
+Consider adding:
+
+Salary: $90k–$110k depending on experience.`;
+    const out = normalizeJdSuggestionForRawJd(raw, {
+      issueType: "missing",
+      issueTitle: "Salary range",
+    });
+    expect(out).not.toMatch(/consider adding/i);
+    expect(out).not.toMatch(/generated suggestion/i);
+    expect(out).toMatch(/\$90k/);
   });
 });

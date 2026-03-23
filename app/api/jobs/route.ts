@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withOrgContext } from "@/lib/server/org-context";
 import { prisma } from "@/lib/prisma";
+import { getJobCandidateCountsForJobs } from "@/lib/server/job-candidate-count";
 import { assertMaxLen, assertNonEmpty, assertLengthBounds, isGuardViolation, formatGuardError } from "@/lib/guards";
 
 // GET /api/jobs - List jobs for the organization
@@ -26,16 +27,22 @@ export const GET = withOrgContext(async (request: NextRequest, orgId: string) =>
         include: {
           skills: {
             include: {
-              skill: true
-            }
-          }
-        }
+              skill: true,
+            },
+          },
+        },
       }),
       prisma.job.count({ where }),
     ]);
 
-    return NextResponse.json({ 
-      jobs,
+    const counts = await getJobCandidateCountsForJobs(jobs.map((j) => j.id));
+    const jobsWithCounts = jobs.map((j) => ({
+      ...j,
+      _count: { jobCandidates: counts[j.id] ?? 0 },
+    }));
+
+    return NextResponse.json({
+      jobs: jobsWithCounts,
       pagination: {
         total,
         limit,

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withOrgContext } from "@/lib/server/org-context";
 import { prisma } from "@/lib/prisma";
+import { getJobCandidateCountForJob } from "@/lib/server/job-candidate-count";
+import { JDAnalysisStatus, InterviewKitStatus } from "@prisma/client";
 import { interviewKitGeneratorV1 } from "@/lib/prompts/interview_kit_v1";
 import { aiService } from "@/lib/ai/service"; // 🏗️ AI Architecture: Use ONLY aiService - NO direct provider calls
 import { JDExtraction_v1 } from "@/lib/schemas/jd-extraction";
@@ -55,9 +57,9 @@ export const GET = withOrgContext(async (request: NextRequest, orgId: string, { 
       });
     }
 
-    // Regular job details endpoint
+    // Regular job details endpoint (counts loaded separately so missing `job_candidates` table does not 500)
     const job = await prisma.job.findFirst({
-      where: { 
+      where: {
         id,
         orgId, // Ensures cross-org protection
       },
@@ -70,7 +72,14 @@ export const GET = withOrgContext(async (request: NextRequest, orgId: string, { 
       );
     }
 
-    return NextResponse.json({ job });
+    const jobCandidateCount = await getJobCandidateCountForJob(id);
+
+    return NextResponse.json({
+      job: {
+        ...job,
+        _count: { jobCandidates: jobCandidateCount },
+      },
+    });
   } catch (error) {
     console.error("Error fetching job:", error);
     return NextResponse.json(
@@ -145,6 +154,19 @@ export const PATCH = withOrgContext(async (request: NextRequest, orgId: string, 
         );
       }
       updateData.rawJD = rawJD;
+      // JD text changed — cached extraction is no longer authoritative (same as apply-suggestion).
+      const hadKit =
+        existingJob.interviewKitStatus !== InterviewKitStatus.NOT_STARTED ||
+        !!existingJob.interviewKitJson;
+      updateData.jdAnalysisStatus = JDAnalysisStatus.OUTDATED;
+      updateData.jdLastError = null;
+      if (hadKit) {
+        updateData.interviewKitStatus = InterviewKitStatus.OUTDATED;
+        updateData.interviewKitLastError = null;
+      } else {
+        updateData.interviewKitStatus = InterviewKitStatus.NOT_STARTED;
+        updateData.interviewKitLastError = null;
+      }
     }
 
     if (status !== undefined) {
@@ -352,6 +374,11 @@ export const POST = withOrgContext(async (request: NextRequest, orgId: string, {
         analyzedAt: analysisResult.analyzedAt,
         promptVersion: analysisResult.promptVersion,
         meta: undefined,
+        ...(analysisResult.fallbackUsed != null && {
+          fallbackUsed: analysisResult.fallbackUsed,
+          fallbackType: analysisResult.fallbackType,
+          providerUsed: analysisResult.providerUsed,
+        }),
       });
 
     } catch (error) {

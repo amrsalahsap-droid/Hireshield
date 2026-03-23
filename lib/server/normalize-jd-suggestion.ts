@@ -17,11 +17,15 @@ const FENCE_RE = /^```(?:json|text|markdown)?\s*\n?([\s\S]*?)\n?```$/im;
 const DROP_LINE_RE = [
   /^#{1,6}\s*(generated\s+suggestion|suggestion|improvement|draft|output)\b.*$/i,
   /^\*{0,2}generated\s+suggestion\*{0,2}\s*:?\s*$/i,
+  /^generated\s+suggestion\s*:?\s*$/i,
+  /^suggestion\s*:?\s*$/i,
   /^(suggested\s+(change|text|copy|wording)|draft\s+text|paste[- ]ready\s+text)\s*:?\s*$/i,
-  /^note:\s*/i,
+  /^note:\s*(?:this|the following|here|that\s+you)\b/i,
   /^tip:\s*/i,
   /^important:\s*/i,
   /^\(optional\)\s*/i,
+  /^keep\s+in\s+mind\s*[,:]?\s*$/i,
+  /^consider\s+adding\s*:?\s*$/i,
   /^for\s+example\s*[,:]?\s*$/i,
   /^(specifically|alternatively)\s*[,:]?\s*$/i,
 ];
@@ -30,6 +34,7 @@ const DROP_LINE_RE = [
 const STRIP_PREFIX_LINE_RE = [
   /^here(?:'s| is)\s+(?:the|a)\s+(?:suggested|updated|revised)\s+.*?:\s*$/i,
   /^you can\s+(?:use|paste)\s+(?:the\s+following|this)\s*:?\s*$/i,
+  /^(?:the\s+following|below\s+is)\s+(?:is\s+)?(?:a\s+)?(?:suggested|updated|revised)\s+.*?:\s*$/i,
 ];
 
 function trimAndUnfence(text: string): string {
@@ -54,6 +59,8 @@ function extractAfterMetaLabels(text: string): string {
     /(?:^|\n)\s*for\s+example\s*[,:]?\s*\n([\s\S]+)/i,
     /(?:^|\n)\s*for\s+example\s*[,:]\s*([^\n]+(?:\n(?!\n)[^\n]+)*)/i,
     /(?:^|\n)\s*replace\s+(?:the\s+)?(?:vague|ambiguous)\s+[^.:\n]+[.:]\s*\n([\s\S]+)/i,
+    // Inline: "For example: bullet text" on one line
+    /(?:^|\n)\s*[^\n]*?\bfor\s+example\s*[,:]\s*(.+)$/im,
   ];
   for (const re of patterns) {
     const m = text.match(re);
@@ -112,8 +119,19 @@ function stripLeadingCoachingParagraphs(text: string): string {
     const lines = p.split("\n");
     const looksLikeBullets = lines.some((l) => /^[\s]*[•\-*]\s+\S/.test(l));
     const hasExperienceYears = /\d+\s*[-–]\s*\d+\s*(?:years?|yrs?)\b/i.test(p);
-    if (looksLikeBullets || p.length > 420 || hasExperienceYears) break;
-    if (coachingRe.test(p) && !/^[\s]*[•\-*]\s/m.test(p)) {
+    const looksLikeJdSnippet =
+      looksLikeBullets ||
+      hasExperienceYears ||
+      /^\s*#{1,6}\s+\S/.test(p);
+    // Do not treat "$..." alone as JD-done: coaching paragraphs often mention salary.
+    if (looksLikeJdSnippet || p.length > 360) break;
+    const explanatoryLeadIn =
+      /^(?:this\s+section|the\s+following|below)\s+(?:should|could|would|will|is)\b/i.test(p) ||
+      /^in\s+order\s+to\b/i.test(p);
+    if (
+      (coachingRe.test(p) || explanatoryLeadIn) &&
+      !/^[\s]*[•\-*]\s/m.test(p)
+    ) {
       const salvaged = salvageCompensationFromCoaching(p);
       if (salvaged) {
         parts[start] = salvaged;
@@ -154,6 +172,16 @@ function filterLines(text: string): string {
     ) {
       continue;
     }
+    if (
+      /^replace\s+your\s+/i.test(t) &&
+      t.length < 220 &&
+      !/^[\s]*[•\-*]\s/m.test(t)
+    ) {
+      continue;
+    }
+    if (/^consider\s+(adding|including|updating)\b/i.test(t) && t.length < 200 && !/[•\-*]\s/.test(t)) {
+      continue;
+    }
     out.push(line);
   }
   return out.join("\n").replace(/\n{3,}/g, "\n\n").trim();
@@ -174,35 +202,6 @@ function isResponsibilityContext(ctx: NormalizeJdSuggestionContext): boolean {
       h
     ) || (ctx.issueType === "ambiguity" && /\bvague|placeholder|responsibilit/.test(h))
   );
-}
-
-function isSectionContext(ctx: NormalizeJdSuggestionContext): boolean {
-  const h = `${ctx.issueTitle} ${ctx.targetSection ?? ""}`.toLowerCase();
-  return /\bsalary|compensation|benefit|skill|qualification|requirement|experience\s+year|location|remote|hybrid|work\s+environment|culture|timezone\b/.test(
-    h
-  );
-}
-
-function deriveSectionHeading(ctx: NormalizeJdSuggestionContext): string | null {
-  const ts = ctx.targetSection?.trim();
-  if (ts && ts.length < 80) return titleCaseSection(ts.replace(/[:#*_]+/g, "").trim());
-
-  const h = ctx.issueTitle.toLowerCase();
-  if (/\bsalary|compensation|pay\b/.test(h)) return "Compensation";
-  if (/\bbenefit/.test(h)) return "Benefits";
-  if (/\bskill|technolog|stack|tool/.test(h)) return "Skills & Technologies";
-  if (/\bqualification|requirement|education|degree/.test(h)) return "Qualifications";
-  if (/\bexperience\b/.test(h)) return "Experience";
-  if (/\blocation|remote|hybrid|on[- ]?site|work\s+environment|culture|timezone/.test(h))
-    return "Location & Work Arrangement";
-  return null;
-}
-
-function titleCaseSection(s: string): string {
-  return s
-    .split(/\s+/)
-    .map((w) => (w.length ? w[0].toUpperCase() + w.slice(1).toLowerCase() : w))
-    .join(" ");
 }
 
 /** Normalize bullets to • and ensure one item per non-empty line */
@@ -235,15 +234,6 @@ function formatAsResponsibilityBullets(body: string): string {
   }
 
   return items.length ? items.join("\n") : body.trim();
-}
-
-function formatSectionBlock(heading: string, body: string): string {
-  const b = body.trim();
-  if (!b) return "";
-  // Avoid duplicating heading if body already starts with same line
-  const first = b.split("\n")[0].trim().toLowerCase();
-  if (first === heading.toLowerCase()) return b;
-  return `${heading}\n\n${b}`;
 }
 
 /**
@@ -280,18 +270,11 @@ export function normalizeJdSuggestionForRawJd(
   text = text.replace(/\n{3,}/g, "\n\n").trim();
   if (!text) return "";
 
-  const heading = deriveSectionHeading(ctx);
-
+  // Body only: section titles come from insertJdSuggestionIntoRawJd (defaultHeading / merge),
+  // avoiding double headings (e.g. "Compensation" here + "Compensation & Benefits" there).
   if (isResponsibilityContext(ctx) && ctx.issueType !== "missing") {
     const bullets = formatAsResponsibilityBullets(text);
-    if (bullets) {
-      text =
-        ctx.issueType === "ambiguity" && heading && !/^responsibilit/i.test(heading)
-          ? formatSectionBlock("Key Responsibilities", bullets)
-          : bullets;
-    }
-  } else if (heading && isSectionContext(ctx)) {
-    text = formatSectionBlock(heading, text);
+    if (bullets) text = bullets;
   }
 
   return text.trim();

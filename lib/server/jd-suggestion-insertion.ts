@@ -55,9 +55,11 @@ const MAJOR_SECTION_PATTERNS: RegExp[] = [
   /^remote\b/i,
   /^hybrid\b/i,
   /^about\s+(the\s+)?(role|position|company)\b/i,
+  /^about\s+the\s+role\b/i,
   /^overview\b/i,
   /^position\s+summary\b/i,
   /^role\s+summary\b/i,
+  /^the\s+opportunity\b/i,
   /^summary\b/i,
   /^what\s+we\s+offer\b/i,
   /^how\s+to\s+apply\b/i,
@@ -108,11 +110,13 @@ const WORK_ENV_PATTERNS = [
 
 const OPENING_PATTERNS = [
   /^about\s+(the\s+)?(role|position)$/i,
+  /^about\s+the\s+role$/i,
   /^overview$/i,
   /^position\s+summary$/i,
   /^role\s+summary$/i,
   /^summary$/i,
   /^the\s+role$/i,
+  /^the\s+opportunity$/i,
 ];
 
 function patternsForTarget(target: InsertTarget): RegExp[] {
@@ -143,7 +147,7 @@ function defaultHeading(target: InsertTarget): string {
     case "work_environment":
       return "Work Environment";
     case "opening":
-      return "";
+      return "About the Role";
     default:
       return "";
   }
@@ -158,8 +162,10 @@ export function classifyInsertionTarget(ctx: InsertionContext): InsertTarget {
 
   if (ctx.targetSection?.trim()) {
     const ts = ctx.targetSection.toLowerCase();
+    // Salary/comp wins over skills when both appear in a combined hint.
     if (/salary|compensation|pay|benefit/.test(ts)) return "compensation";
     if (/remote|hybrid|location|environment|on[- ]?site|office|work\s+setup/.test(ts)) return "work_environment";
+    if (/role\s+summary|about\s+the\s+role|position\s+summary/.test(ts)) return "opening";
     if (/skill|requirement|qualification|technology|stack/.test(ts)) return "skills";
     if (/responsibilit|duty|what\s+you/.test(ts)) return "responsibilities";
   }
@@ -188,7 +194,7 @@ export function classifyInsertionTarget(ctx: InsertionContext): InsertTarget {
     return "responsibilities";
   }
   if (
-    /\bculture\b|\bteam\b|\babout\s+the\s+role\b|\bcompany\b|\bmission\b|\bwho\s+we\s+are\b|\boverview\b|\broles?\s+summary\b/.test(
+    /\bculture\b|\bteam\b|\babout\s+the\s+role\b|\bcompany\b|\bmission\b|\bwho\s+we\s+are\b|\boverview\b|\bposition\s+summary\b|\broles?\s+summary\b|\bthe\s+opportunity\b/.test(
       t
     )
   ) {
@@ -240,6 +246,63 @@ function joinWithSpacing(before: string, insert: string, after: string): string 
   return out.replace(/\n{4,}/g, "\n\n\n").trimEnd() + (after.endsWith("\n") ? "\n" : "");
 }
 
+/** Collapse whitespace for comparing bullets/lines (duplicate detection). */
+function normalizeLineForDedupe(line: string): string {
+  const t = line.trim().replace(/\s+/g, " ");
+  if (!t) return "";
+  return t.replace(/^[•\-*]\s+/, "").toLowerCase();
+}
+
+/** Drop consecutive duplicate lines (same normalized text). */
+function dedupeLinesInBlock(text: string): string {
+  const lines = text.split("\n");
+  const out: string[] = [];
+  let prevKey = "";
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      out.push(line);
+      prevKey = "";
+      continue;
+    }
+    const key = normalizeLineForDedupe(line);
+    if (key && key === prevKey) continue;
+    prevKey = key || prevKey;
+    out.push(line);
+  }
+  return out.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+/** Skip new lines that already appear in the target section (exact normalized match). */
+function filterAgainstExistingSection(newBlock: string, existingSectionText: string): string {
+  const existingKeys = new Set(
+    existingSectionText
+      .split("\n")
+      .map((l) => normalizeLineForDedupe(l))
+      .filter(Boolean)
+  );
+  const lines = newBlock.split("\n");
+  const out: string[] = [];
+  const seenNew = new Set<string>();
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      out.push("");
+      continue;
+    }
+    const key = normalizeLineForDedupe(line);
+    if (key && existingKeys.has(key)) continue;
+    if (key && seenNew.has(key)) continue;
+    if (key) seenNew.add(key);
+    out.push(line);
+  }
+  return out.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+function collapseExcessBlankLines(text: string): string {
+  return text.replace(/\n{4,}/g, "\n\n\n").trimEnd();
+}
+
 /**
  * Remove first line if it duplicates the section heading we're inserting under.
  */
@@ -252,7 +315,13 @@ function stripRedundantHeading(content: string, target: InsertTarget): string {
     skills: [/^requirements$/i, /^skills(\s*&\s*technologies)?$/i, /^qualifications$/i],
     compensation: [/^compensation(\s*[&+]\s*benefits)?$/i, /^compensation$/i, /^salary$/i],
     work_environment: [/^work\s+environment$/i, /^location$/i],
-    opening: [/^about\s+(the\s+)?(role|position)$/i, /^overview$/i],
+    opening: [
+      /^about\s+(the\s+)?(role|position)$/i,
+      /^about\s+the\s+role$/i,
+      /^overview$/i,
+      /^role\s+summary$/i,
+      /^position\s+summary$/i,
+    ],
   };
   if (checks[target].some((p) => p.test(first))) {
     return lines.slice(1).join("\n").replace(/^\n+/, "").trim();
@@ -274,7 +343,12 @@ function appendInsideExistingSection(
   const endBody = nextMajor > hi + 1 ? nextMajor - 1 : lines.length - 1;
   const insertAfter = lastNonEmptyInRange(lines, hi, endBody);
 
-  const body = stripRedundantHeading(content, target);
+  const sectionExisting = lines.slice(hi, endBody + 1).join("\n");
+  let body = stripRedundantHeading(content, target);
+  body = dedupeLinesInBlock(body);
+  body = filterAgainstExistingSection(body, sectionExisting);
+  if (!body.trim()) return rawJD;
+
   const before = lines.slice(0, insertAfter + 1).join("\n");
   const after = lines.slice(insertAfter + 1).join("\n");
   return joinWithSpacing(before, body, after);
@@ -335,12 +409,12 @@ function findAnchorForNewSection(lines: string[], target: InsertTarget): number 
 
 function insertNewSectionBlock(rawJD: string, target: InsertTarget, content: string): string {
   const lines = rawJD.replace(/\r\n/g, "\n").split("\n");
-  const body = stripRedundantHeading(content, target);
+  let body = stripRedundantHeading(content, target);
+  body = dedupeLinesInBlock(body);
+  if (!body.trim()) return rawJD.replace(/\r\n/g, "\n");
+
   const heading = defaultHeading(target);
-  const block =
-    target === "opening"
-      ? body
-      : `${heading}\n\n${body}`.trim();
+  const block = `${heading}\n\n${body}`.trim();
 
   if (lines.length === 0 || !lines.some((l) => l.trim())) {
     return block;
@@ -368,7 +442,7 @@ export function insertJdSuggestionIntoRawJd(
   const patterns = patternsForTarget(target);
 
   const existing = appendInsideExistingSection(rawJD, patterns, content, target);
-  if (existing !== null) return existing;
+  if (existing !== null) return collapseExcessBlankLines(existing);
 
-  return insertNewSectionBlock(rawJD, target, content);
+  return collapseExcessBlankLines(insertNewSectionBlock(rawJD, target, content));
 }

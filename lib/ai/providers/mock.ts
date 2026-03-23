@@ -2184,13 +2184,13 @@ If you're looking for an opportunity to grow your career while making a meaningf
     switch (issueType) {
       case "missing":
         if (issueDescription.toLowerCase().includes("salary")) {
-          suggestion = `Compensation\n\nSalary range: $${this.generateSalaryRange()} per year, depending on experience and location.\n\nBenefits include medical, dental, and vision insurance; 401(k) with employer match; flexible PTO; and a professional development stipend.`;
+          suggestion = `Salary range: $${this.generateSalaryRange()} per year, depending on experience and location.\n• Medical, dental, and vision insurance\n• 401(k) with employer match\n• Flexible PTO\n• Professional development stipend`;
         } else if (issueDescription.toLowerCase().includes("skills")) {
-          suggestion = `Skills & Technologies\n\nRequired:\n• ${this.generateRelevantSkills(jobTitle)}\n\nPreferred:\n• Cloud deployment experience\n• Automated testing and CI/CD familiarity`;
+          suggestion = `Required:\n• ${this.generateRelevantSkills(jobTitle)}\n\nPreferred:\n• Cloud deployment experience\n• Automated testing and CI/CD familiarity`;
         } else if (issueDescription.toLowerCase().includes("experience")) {
-          suggestion = `3–5 years of professional experience in ${jobTitle.toLowerCase()} or a closely related role, including at least 2 years hands-on with ${this.generateRelevantSkills(jobTitle)}.\n\nEquivalent experience or a strong portfolio may substitute for formal years where outcomes are clearly demonstrated.`;
+          suggestion = `• 3–5 years of professional experience in ${jobTitle.toLowerCase()} or a closely related role\n• Hands-on work with ${this.generateRelevantSkills(jobTitle)}\n• Strong portfolio or equivalent experience may substitute for part of the year requirement`;
         } else {
-          suggestion = `About the team\n\nYou will join a collaborative group focused on shipping high-quality work with clear ownership. Reporting structure and growth paths are discussed during interviews.\n\nWork arrangement (remote, hybrid, or on-site) and core hours will be confirmed with the hiring manager.`;
+          suggestion = `You will join a collaborative team focused on shipping high-quality work with clear ownership. Reporting structure and growth paths are discussed during interviews. Work arrangement and core hours are confirmed with the hiring manager.`;
         }
         break;
 
@@ -2206,16 +2206,16 @@ If you're looking for an opportunity to grow your career while making a meaningf
 
       case "unrealistic":
         if (issueDescription.toLowerCase().includes("experience")) {
-          suggestion = `3–5 years of professional experience with ${this.generateRelevantSkills(jobTitle)}, or 2+ years with a strong portfolio demonstrating equivalent depth.\n\nWe value demonstrated impact and learning agility over a fixed year count.`;
+          suggestion = `• 3–5 years of professional experience with ${this.generateRelevantSkills(jobTitle)}, or 2+ years with a portfolio demonstrating equivalent depth`;
         } else if (issueDescription.toLowerCase().includes("skills")) {
-          suggestion = `Required:\n• ${this.generateRelevantSkills(jobTitle)}\n\nWe welcome candidates with depth in a subset of these tools if they can ramp quickly on the rest. Related frameworks and transferable experience are acceptable when outcomes are comparable.`;
+          suggestion = `Required:\n• ${this.generateRelevantSkills(jobTitle)}\n\nPreferred:\n• Depth in a subset of these tools with ability to ramp on the rest\n• Related frameworks and transferable experience when outcomes are comparable`;
         } else {
-          suggestion = `Requirements are aligned with typical ${jobTitle} roles in our market. Must-haves reflect day-one needs; nice-to-haves are weighted flexibly when hiring.`;
+          suggestion = `• Must-haves reflect day-one needs for typical ${jobTitle} roles in our market\n• Nice-to-haves are weighted flexibly during hiring`;
         }
         break;
 
       default:
-        suggestion = `This role emphasizes clear ownership, measurable outcomes, and collaboration across teams. Expect regular feedback, defined milestones, and support for professional growth.`;
+        suggestion = `• Clear ownership of assigned scope\n• Measurable outcomes and collaboration across teams\n• Regular feedback and defined milestones`;
     }
     
     return {

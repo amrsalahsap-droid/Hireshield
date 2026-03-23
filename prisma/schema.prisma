@@ -75,6 +75,7 @@ model Job {
   seniorityLevel            String?
   evaluations               Evaluation[]
   interviews                Interview[]
+  jobCandidates             JobCandidate[]
   skills                    JobSkill[]
   org                       Org                @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
@@ -84,19 +85,40 @@ model Job {
 }
 
 model Candidate {
-  id          String       @id @default(cuid())
+  id          String         @id @default(cuid())
   email       String?
   orgId       String
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
   fullName    String
-  rawCVText   String       @default("")
-  org         Org          @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  rawCVText   String         @default("")
+  org         Org            @relation(fields: [orgId], references: [id], onDelete: Cascade)
   evaluations Evaluation[]
   interviews  Interview[]
+  jobCandidates JobCandidate[]
 
   @@index([orgId])
   @@map("candidates")
+}
+
+model JobCandidate {
+  id          String           @id @default(cuid())
+  jobId       String
+  candidateId String
+  stage       CandidateStage   @default(ADDED)
+  source      AssignmentSource @default(MANUAL)
+  addedBy     String?
+  notes       String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  job         Job              @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  candidate   Candidate        @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, candidateId])
+  @@index([jobId])
+  @@index([candidateId])
+  @@index([jobId, stage])
+  @@map("job_candidates")
 }
 
 model Interview {
@@ -187,6 +209,23 @@ model JobSkill {
   @@index([jobId])
   @@index([skillId])
   @@map("job_skills")
+}
+
+enum AssignmentSource {
+  MANUAL
+  IMPORT
+  REFERRAL
+  APPLIED
+}
+
+enum CandidateStage {
+  ADDED
+  AWAITING_INTERVIEW
+  INTERVIEW_SCHEDULED
+  INTERVIEW_COMPLETED
+  EVALUATION_PENDING
+  EVALUATED
+  DECISION_MADE
 }
 
 enum Role {

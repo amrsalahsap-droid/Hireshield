@@ -9,6 +9,7 @@ import { z } from 'zod';
 const aiConfigSchema = z.object({
   // Provider selection
   LLM_PROVIDER: z.enum(['mock', 'openrouter', 'groq', 'openai']).default('mock'),
+  LLM_FALLBACK_PROVIDER: z.enum(['mock', 'openrouter', 'groq', 'openai']).optional(),
   
   // Mock provider settings
   MOCK_AI_SCENARIO: z.enum(['frontend', 'backend', 'sales', 'data', 'product', 'marketing', 'hr', 'engineering-manager', 'qa', 'generic']).optional(),
@@ -40,6 +41,7 @@ const aiConfigSchema = z.object({
 function parseConfig() {
   const rawConfig = aiConfigSchema.parse({
     LLM_PROVIDER: process.env.LLM_PROVIDER,
+    LLM_FALLBACK_PROVIDER: process.env.LLM_FALLBACK_PROVIDER || undefined,
     MOCK_AI_SCENARIO: process.env.MOCK_AI_SCENARIO,
     MOCK_AI_FAILURE_MODE: process.env.MOCK_AI_FAILURE_MODE,
     OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY,

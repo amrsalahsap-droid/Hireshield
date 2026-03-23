@@ -443,6 +443,7 @@ Be objective and realistic in your assessment. Consider both strengths and poten
 
   /**
    * Pick paste-ready output shape from issue type + title text (matches analyzer issue labels).
+   * Host insertion already chooses section headings — contracts favor body-only, bullets, and short prose.
    */
   private inferTargetedImprovementOutputContract(
     issueType: string,
@@ -450,51 +451,64 @@ Be objective and realistic in your assessment. Consider both strengths and poten
   ): string {
     const d = (issueDescription || "").toLowerCase();
 
+    const roleSummaryOrContext =
+      /\babout\s+the\s+role|role\s+summary|join\s+our\s+team|team\s+overview|company\s+mission|who\s+we\s+are|culture\b/.test(d) ||
+      (issueType === "missing" &&
+        /\bteam|culture|overview|mission|values|about\s+us\b/.test(d) &&
+        !/\bresponsibilit|skill|qualification|requirement\b/.test(d));
+    if (roleSummaryOrContext) {
+      return `OUTPUT FORMAT — Role summary / team context (prose allowed)
+Write 2–4 short sentences only (max ~550 characters). Candidate-facing third person. No section heading lines. No bullets unless 2–3 very short facts on separate "• " lines. No "for example", "e.g.", or instructional phrasing.`;
+    }
+
     const responsibility =
-      /\bresponsibilit|vague\s+bullet|placeholder|duty|duties|day[- ]to[- ]day|what\s+you(?:'ll|\s+will)\s+do|role\s+overview\b/.test(
-        d
-      ) ||
+      /\bresponsibilit|vague\s+bullet|placeholder|duty|duties|day[- ]to[- ]day|what\s+you(?:'ll|\s+will)\s+do\b/.test(d) ||
       (issueType === "ambiguity" && /\bvague|placeholder|responsibilit|bullet/.test(d));
     if (responsibility) {
       return `OUTPUT FORMAT — Responsibilities
-Write 4–10 lines only. Each line MUST start with "• " and state a concrete outcome, scope, or duty (candidate-facing). No section title unless one short line like "Key responsibilities" immediately followed by bullets. No preamble.`;
+Write 3–8 lines only. Each line MUST start with "• " and be one concrete outcome, scope, or duty (≤ ~120 characters per line). No standalone section title (do not output "Responsibilities", "Key responsibilities", etc.). No preamble or prose block.`;
+    }
+
+    if (/\bqualification|minimum\s+qual|education|degree|certification|must\s+have\b/.test(d)) {
+      return `OUTPUT FORMAT — Qualifications / requirements
+Use "• " lines only (3–8 bullets). One requirement per bullet; keep each line concise. Optional single line "Required:" or "Preferred:" immediately above its bullets. No standalone section title lines.`;
     }
 
     if (/\bskill|technolog|tech\s*stack|stack|framework|language|tool|platform\b/.test(d)) {
-      return `OUTPUT FORMAT — Skills / requirements
-Write JD-ready lines only: use "Required:" and optional "Preferred:" labels with comma or bullet lists, OR only "• " lines listing skills. No advice about how to organize — just the final text.`;
+      return `OUTPUT FORMAT — Skills
+Use "• " lines only (3–10 bullets): one skill or short phrase per bullet. No comma-separated mega-lines. Optional "Required:" / "Preferred:" label lines immediately above their bullets. No "Skills" or "Requirements" title line alone.`;
     }
 
     if (
-      /\blocation|remote|hybrid|on[- ]?site|in[- ]?office|work\s+environment|culture|timezone|distributed\b/.test(
+      /\blocation|remote|hybrid|on[- ]?site|in[- ]?office|work\s+environment|work\s+arrangement|timezone|distributed\b/.test(
         d
       )
     ) {
       return `OUTPUT FORMAT — Work arrangement / environment
-Write one short paragraph (2–5 sentences): location, remote/hybrid/on-site, and optional core hours or travel. Reads as part of a job posting — not instructions to the employer.`;
+Write one short paragraph only (2–5 sentences, max ~550 characters): location, remote/hybrid/on-site, time zone or core hours if relevant. No section heading line. No bullets unless exactly 2–3 "• " facts. No instructional tone.`;
     }
 
     if (/\bsalary|compensation|pay\s*range|benefit|equity|rsu|401\b/.test(d)) {
       return `OUTPUT FORMAT — Compensation / benefits
-Write paste-ready lines: realistic range or wording for this title when possible, plus brief benefits if appropriate. No "add a section" commentary.`;
+Line 1: salary or compensation wording (range or honest TBD phrasing). Then optional up to 6 lines starting with "• " for benefits. No title line like "Compensation" alone. No "for example" or tips. Keep total under ~700 characters.`;
     }
 
     if (/\bexperience\b/.test(d) && /\b(year|yr|years?|senior|junior|mid|lead)\b/.test(d)) {
       return `OUTPUT FORMAT — Experience
-Write 1–3 sentences as under Qualifications / Requirements (years, level, domain). No coaching.`;
+Prefer 2–5 "• " lines (years, domains, scope). If one sentence is enough, cap at ~200 characters. No heading line, no coaching.`;
     }
 
     if (issueType === "missing") {
       return `OUTPUT FORMAT — Missing content
-Write only the JD fragment (paragraph and/or bullets) that fills the gap.`;
+Write only the fragment that fills the gap. Default to "• " bullets (3–8) unless the issue clearly needs role-summary or work-environment prose (then 2–4 sentences, max ~550 characters). No repeated JD section titles.`;
     }
     if (issueType === "unrealistic") {
-      return `OUTPUT FORMAT — Realistic wording
-Write only replacement requirement text — balanced and market-appropriate. No explanation of why the old text was wrong.`;
+      return `OUTPUT FORMAT — Realistic replacement
+Write only replacement JD text: prefer "• " bullets or 1–2 very short sentences. Balanced, market-appropriate wording. No explanation of why prior text was wrong; no "we changed this because".`;
     }
 
     return `OUTPUT FORMAT — General
-Write only the revised or added passage for the job description (paragraph and/or bullets).`;
+Prefer 3–8 "• " bullets. If a single clarifying sentence is enough, cap at ~220 characters. No section heading lines, no long prose blocks.`;
   }
 
   private buildTargetedImprovementPrompt(input: {
@@ -524,13 +538,19 @@ Write only the revised or added passage for the job description (paragraph and/o
 Respond with exactly one JSON object and no other text:
 {"suggestion":"<string>"}
 
-The "suggestion" value must be FINAL job-description copy only — the exact wording candidates see after the fix. Third-person or neutral JD voice.
+The "suggestion" value must be FINAL job-description copy only — exact wording candidates read in the posting. Third-person or neutral JD voice ("you" as the candidate is OK). No language addressed to the hiring manager.
 
-STRICTLY FORBIDDEN inside "suggestion" (including as a prefix or label line):
+STRUCTURE (critical for safe insertion):
+• Output body lines only. Do NOT output a line that is only a section heading or duplicate of common JD titles (e.g. "Responsibilities", "Requirements", "Qualifications", "Skills", "Compensation", "Benefits", "About the Role") — those are already in the document; repeating them breaks layout.
+• Stay section-specific: only content that addresses the issue; do not paste unrelated sections.
+• Prefer concise "• " bullets for responsibilities, skills, and qualifications. Use a short paragraph (2–5 sentences) only for work arrangement / environment or role summary / team context when the issue calls for it.
+• Default length: keep "suggestion" under ~900 characters unless the contract explicitly allows prose (then cap prose at ~550 characters).
+
+STRICTLY FORBIDDEN inside "suggestion" (anywhere, including prefixes):
 • Imperatives to the employer: "Replace…", "Instead of…", "Consider…", "You should…", "We recommend…", "Try to…", "Make sure…", "Add a section…"
-• Meta labels: "Generated Suggestion", "Suggested wording:", "Draft:", "For example:", "Here is", "Below is", "The following"
-• Explanations, rationale, tips, or numbered advice about what to do
-• Markdown code fences or nested JSON
+• Instructional / meta framing: "For example:", "For instance", "E.g.", "e.g.", "Such as:", "Here is", "Below is", "The following", "Note:", "Tip:", "Important:", "Suggested wording:", "Draft:", "Generated Suggestion"
+• Explanations, rationale, tips, or numbered how-to steps (1. 2. 3.) telling someone what to do
+• Markdown code fences, markdown headings (##), or nested JSON
 
 ${contract}
 
@@ -541,7 +561,7 @@ Role title: ${input.jobTitle}${noteBlock}
 ${jdBody}
 ---
 
-"suggestion" = paste-ready body only. Single JSON object; "suggestion" is the only key.`;
+"suggestion" = paste-ready body only (no JSON inside the string). Single JSON object; "suggestion" is the only key.`;
   }
 
   private parseTargetedImprovementResponse(response: any): any {

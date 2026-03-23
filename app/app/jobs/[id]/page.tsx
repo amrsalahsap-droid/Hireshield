@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { ErrorState, LoadingState } from "@/components/ui/ErrorState";
 import JDExtractionViewer from "@/components/jobs/jd-extraction-viewer";
 import { InterviewKitViewer } from "@/components/jobs/interview-kit-viewer";
+import { AddCandidateToJobModal } from "@/components/jobs/add-candidate-to-job-modal";
+import { JobCandidatesSection } from "@/components/jobs/job-candidates-section";
 import { orgFetchHeaders } from "@/lib/client/org-fetch-headers";
 import { fingerprintJdExtractionJson } from "@/lib/client/jd-extraction-fingerprint";
 
@@ -26,6 +28,21 @@ interface Job {
   interviewKitPromptVersion: string | null;
   interviewKitStatus: 'NOT_STARTED' | 'RUNNING' | 'DONE' | 'FAILED' | 'OUTDATED';
   interviewKitLastError: string | null;
+}
+
+interface JobAssignmentRow {
+  id: string;
+  stage: string;
+  source?: string | null;
+  addedBy?: string | null;
+  notes?: string | null;
+  createdAt: string;
+  candidate: {
+    id: string;
+    fullName: string;
+    email: string | null;
+    createdAt?: string;
+  };
 }
 
 interface Interview {
@@ -100,6 +117,7 @@ export default function JobDetailsPage() {
   const [analysisError, setAnalysisError] = useState<string | null>(null);
   const [analysisRequestId, setAnalysisRequestId] = useState<string | null>(null);
   const [refinedJdReanalysisError, setRefinedJdReanalysisError] = useState<string | null>(null);
+  const [analysisFallbackNotice, setAnalysisFallbackNotice] = useState<string | null>(null);
   const [kitError, setKitError] = useState<string | null>(null);
   const [kitRequestId, setKitRequestId] = useState<string | null>(null);
   const [formErrors, setFormErrors] = useState({
@@ -107,6 +125,8 @@ export default function JobDetailsPage() {
     transcript: "",
     evaluationCandidate: ""
   });
+  const [jobAssignments, setJobAssignments] = useState<JobAssignmentRow[]>([]);
+  const [showAddCandidateModal, setShowAddCandidateModal] = useState(false);
 
   // Fetch job details
   const fetchJob = async () => {
@@ -192,6 +212,40 @@ export default function JobDetailsPage() {
     }
   };
 
+  const fetchJobAssignments = async () => {
+    if (!params.id) return;
+    try {
+      const response = await fetch(`/api/jobs/${params.id}/candidates`, {
+        headers: { ...orgFetchHeaders() },
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setJobAssignments(data.assignments || []);
+      } else {
+        setJobAssignments([]);
+      }
+    } catch (e) {
+      console.error("Error fetching job assignments:", e);
+      setJobAssignments([]);
+    }
+  };
+
+  const assignedCandidateIds = useMemo(
+    () => new Set(jobAssignments.map((a) => a.candidate.id)),
+    [jobAssignments]
+  );
+
+  const refreshAfterCandidateAssigned = async () => {
+    await Promise.all([
+      fetchJob(),
+      fetchJobAssignments(),
+      fetchInterviews(),
+      fetchEvaluations(),
+      fetchCandidates(),
+    ]);
+    router.refresh();
+  };
+
   // Analyze JD function
   const analyzeJD = async () => {
     if (!job) return;
@@ -215,6 +269,13 @@ export default function JobDetailsPage() {
       if (response.ok) {
         const data = await response.json();
         setJob((prev) => (prev ? mergeJobFromAnalyzePost(prev, data) : prev));
+        if (data.fallbackUsed) {
+          const msg = data.fallbackType === 'local'
+            ? 'Basic analysis generated while AI capacity is limited.'
+            : 'Analysis processed using fallback provider due to high demand.';
+          setAnalysisFallbackNotice(msg);
+          setTimeout(() => setAnalysisFallbackNotice(null), 10_000);
+        }
         await fetchJob();
       } else {
         // Handle non-JSON responses properly
@@ -266,6 +327,13 @@ export default function JobDetailsPage() {
       if (response.ok) {
         const data = await response.json();
         setJob((prev) => (prev ? mergeJobFromAnalyzePost(prev, data) : prev));
+        if (data.fallbackUsed) {
+          const msg = data.fallbackType === 'local'
+            ? 'Basic analysis generated while AI capacity is limited.'
+            : 'Analysis processed using fallback provider due to high demand.';
+          setAnalysisFallbackNotice(msg);
+          setTimeout(() => setAnalysisFallbackNotice(null), 10_000);
+        }
         await fetchJob();
       } else {
         // Handle non-JSON responses properly
@@ -409,8 +477,13 @@ export default function JobDetailsPage() {
   const refreshData = async () => {
     setLoading(true);
     setError(null);
-    await Promise.all([fetchJob(), fetchInterviews(), fetchEvaluations(), fetchCandidates()])
-      .finally(() => setLoading(false));
+    await Promise.all([
+      fetchJob(),
+      fetchInterviews(),
+      fetchEvaluations(),
+      fetchCandidates(),
+      fetchJobAssignments(),
+    ]).finally(() => setLoading(false));
   };
 
   useEffect(() => {
@@ -779,6 +852,24 @@ export default function JobDetailsPage() {
         </div>
       )}
 
+      {analysisFallbackNotice && (
+        <div
+          className="mb-6 rounded-md border border-amber-200 bg-amber-50 p-4"
+          role="alert"
+        >
+          <div className="flex items-start justify-between gap-4">
+            <p className="text-sm text-amber-950">{analysisFallbackNotice}</p>
+            <button
+              type="button"
+              onClick={() => setAnalysisFallbackNotice(null)}
+              className="shrink-0 text-sm font-medium text-amber-900 hover:text-amber-950 underline"
+            >
+              Dismiss
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Job Status Management */}
       <div className="mb-8 bg-white shadow rounded-lg p-6">
         <div className="flex items-center justify-between mb-4">
@@ -844,22 +935,19 @@ export default function JobDetailsPage() {
 
       {/* Action Buttons */}
       <div className="mb-8 flex flex-wrap gap-3">
-        <Link
-          href="/app/candidates"
-          className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md transition-colors ${
-            canReceiveCandidates() 
-              ? 'text-white bg-green-600 hover:bg-green-700' 
-              : 'text-gray-400 bg-gray-300 cursor-not-allowed'
-          }`}
-          onClick={(e) => {
-            if (!canReceiveCandidates()) {
-              e.preventDefault();
-            }
-          }}
+        <button
+          type="button"
+          onClick={() => canReceiveCandidates() && setShowAddCandidateModal(true)}
+          disabled={!canReceiveCandidates()}
           title={!canReceiveCandidates() ? "Job must be Active to add candidates" : ""}
+          className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md transition-colors ${
+            canReceiveCandidates()
+              ? "text-white bg-green-600 hover:bg-green-700"
+              : "text-gray-400 bg-gray-300 cursor-not-allowed"
+          }`}
         >
           👤 Add Candidate
-        </Link>
+        </button>
         <button
           onClick={() => setShowInterviewModal(true)}
           disabled={!canReceiveCandidates()}
@@ -1053,6 +1141,25 @@ export default function JobDetailsPage() {
             />
           )}
 
+          {/* Candidates assigned to this job */}
+          <JobCandidatesSection
+            jobId={job.id}
+            jobStatus={job.status}
+            assignments={jobAssignments}
+            onAddCandidate={() => canReceiveCandidates() && setShowAddCandidateModal(true)}
+            onRefresh={async () => {
+              await Promise.all([fetchJobAssignments(), fetchJob()]);
+            }}
+            onCreateInterview={(candidateId) => {
+              setSelectedCandidate(candidateId);
+              setShowInterviewModal(true);
+            }}
+            onCreateEvaluation={(candidateId) => {
+              setSelectedCandidate(candidateId);
+              setShowEvaluationModal(true);
+            }}
+          />
+
           {/* Linked Interviews & Evaluations */}
           <div className="bg-white shadow rounded-lg">
             <div className="px-6 py-4 border-b border-border">
@@ -1064,22 +1171,19 @@ export default function JobDetailsPage() {
                   <div className="text-muted-foreground text-4xl mb-3">📋</div>
                   <p className="text-muted-foreground mb-4">No interviews or evaluations yet</p>
                   <div className="space-x-3">
-                    <Link
-                      href="/app/candidates"
-                      className={`inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md transition-colors ${
-                        canReceiveCandidates() 
-                          ? 'text-white bg-green-600 hover:bg-green-700' 
-                          : 'text-gray-400 bg-gray-300 cursor-not-allowed'
-                      }`}
-                      onClick={(e) => {
-                        if (!canReceiveCandidates()) {
-                          e.preventDefault();
-                        }
-                      }}
+                    <button
+                      type="button"
+                      onClick={() => canReceiveCandidates() && setShowAddCandidateModal(true)}
+                      disabled={!canReceiveCandidates()}
                       title={!canReceiveCandidates() ? "Job must be Active to add candidates" : ""}
+                      className={`inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md transition-colors ${
+                        canReceiveCandidates()
+                          ? "text-white bg-green-600 hover:bg-green-700"
+                          : "text-gray-400 bg-gray-300 cursor-not-allowed"
+                      }`}
                     >
                       Add Candidate
-                    </Link>
+                    </button>
                     <button
                       onClick={() => setShowInterviewModal(true)}
                       disabled={!canReceiveCandidates()}
@@ -1327,15 +1431,25 @@ export default function JobDetailsPage() {
                 <span className="text-sm font-medium text-foreground">{evaluations.length}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-sm text-muted-foreground">Candidates</span>
+                <span className="text-sm text-muted-foreground">Candidates on job</span>
                 <span className="text-sm font-medium text-foreground">
-                  {new Set([...interviews.map(i => i.candidateId), ...evaluations.map(e => e.candidateId)]).size}
+                  {jobAssignments.length}
                 </span>
               </div>
             </div>
           </div>
         </div>
       </div>
+
+      {job && (
+        <AddCandidateToJobModal
+          open={showAddCandidateModal}
+          onClose={() => setShowAddCandidateModal(false)}
+          jobId={job.id}
+          assignedIds={assignedCandidateIds}
+          onAssigned={refreshAfterCandidateAssigned}
+        />
+      )}
 
       {/* Create Interview Modal */}
       {showInterviewModal && (

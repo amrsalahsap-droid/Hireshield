@@ -215,6 +215,13 @@ export interface ImproveJDResult {
   qualityFocus?: string[];
 }
 
+// Fallback metadata attached to results when the primary provider was bypassed
+export interface FallbackMeta {
+  fallbackUsed: boolean;
+  fallbackType: 'provider' | 'local' | null;
+  providerUsed: string;
+}
+
 // Provider interface
 export interface LLMProvider {
   name: string;
@@ -236,19 +243,3 @@ export interface ProviderConfig {
   temperature?: number;
 }
 
-// Export all types for easy importing
-export type {
-  BaseAIInput,
-  BaseAIResult,
-  AIMeta,
-  AnalyzeJDInput,
-  AnalyzeJDResult,
-  InterviewKitInput,
-  InterviewKitResult,
-  CandidateSignalsInput,
-  CandidateSignalsResult,
-  RefineJDInput,
-  RefineJDResult,
-  LLMProvider,
-  ProviderConfig,
-};

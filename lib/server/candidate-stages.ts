@@ -113,28 +113,31 @@ export async function getCandidateStage(jobId: string, candidateId: string): Pro
 
 export async function initializeCandidateStagesForJob(jobId: string): Promise<void> {
   try {
-    // Get all candidates linked to this job
-    const candidates = await prisma.candidate.findMany({
-      where: {
-        jobId
-      }
-    });
+    const [interviews, evaluations] = await Promise.all([
+      prisma.interview.findMany({ where: { jobId }, select: { candidateId: true } }),
+      prisma.evaluation.findMany({ where: { jobId }, select: { candidateId: true } }),
+    ]);
+    const candidateIds = [
+      ...new Set([
+        ...interviews.map((i) => i.candidateId),
+        ...evaluations.map((e) => e.candidateId),
+      ]),
+    ];
 
-    // Create job-candidate relationships for any that don't exist
-    for (const candidate of candidates) {
+    for (const candidateId of candidateIds) {
       await prisma.jobCandidate.upsert({
         where: {
           jobId_candidateId: {
             jobId,
-            candidateId: candidate.id
-          }
+            candidateId,
+          },
         },
-        update: {}, // Don't change existing stage
+        update: {},
         create: {
           jobId,
-          candidateId: candidate.id,
-          stage: CandidateStage.ADDED
-        }
+          candidateId,
+          stage: CandidateStage.ADDED,
+        },
       });
     }
   } catch (error) {

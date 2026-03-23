@@ -162,6 +162,11 @@ export const POST = withOrgContext(async (request: NextRequest, orgId: string, {
           id: job.id,
           title: job.title,
         },
+        ...(result.fallbackUsed != null && {
+          fallbackUsed: result.fallbackUsed,
+          fallbackType: result.fallbackType,
+          providerUsed: result.providerUsed,
+        }),
       });
 
     } catch (error) {

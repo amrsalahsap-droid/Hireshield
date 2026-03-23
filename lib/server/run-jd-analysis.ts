@@ -16,6 +16,9 @@ export type RunJdAnalysisResult =
       extraction: unknown;
       analyzedAt: Date;
       promptVersion: string | null;
+      fallbackUsed?: boolean;
+      fallbackType?: 'provider' | 'local' | null;
+      providerUsed?: string;
     }
   | { ok: false; error: unknown };
 
@@ -89,7 +92,14 @@ export async function runJdAnalysisForJob(params: {
         action: AUDIT_ACTIONS.JOB_JD_ANALYZE_COMPLETED,
         entityType: "JOB",
         entityId: jobId,
-        metadata: { requestId },
+        metadata: {
+          requestId,
+          ...(result.fallbackUsed != null && {
+            fallbackUsed: result.fallbackUsed,
+            fallbackType: result.fallbackType,
+            providerUsed: result.providerUsed,
+          }),
+        },
       });
     }
 
@@ -98,6 +108,9 @@ export async function runJdAnalysisForJob(params: {
       extraction: result,
       analyzedAt: updatedJob.jdAnalyzedAt!,
       promptVersion: updatedJob.jdPromptVersion,
+      fallbackUsed: result.fallbackUsed,
+      fallbackType: result.fallbackType,
+      providerUsed: result.providerUsed,
     };
   } catch (error) {
     console.error("Error analyzing job description:", error);

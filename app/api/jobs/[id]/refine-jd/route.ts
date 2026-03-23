@@ -128,6 +128,11 @@ export const POST = withOrgContext(
             summary: result.summary,
             changesMade: result.changesMade,
           },
+          ...(result.fallbackUsed != null && {
+            fallbackUsed: result.fallbackUsed,
+            fallbackType: result.fallbackType,
+            providerUsed: result.providerUsed,
+          }),
         });
       } catch (error) {
         if (actorUserId) {

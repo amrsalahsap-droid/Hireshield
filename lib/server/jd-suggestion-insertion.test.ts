@@ -28,6 +28,15 @@ describe("classifyInsertionTarget", () => {
       })
     ).toBe("work_environment");
   });
+
+  it("prefers compensation when salary and skills both appear in title", () => {
+    expect(
+      classifyInsertionTarget({
+        issueType: "missing",
+        issueTitle: "Missing salary range and required skills",
+      })
+    ).toBe("compensation");
+  });
 });
 
 describe("insertJdSuggestionIntoRawJd", () => {
@@ -63,13 +72,31 @@ describe("insertJdSuggestionIntoRawJd", () => {
     expect(out.indexOf("401(k)")).toBeGreaterThan(out.indexOf("Compensation"));
   });
 
-  it("inserts opening-style content after first paragraph", () => {
+  it("inserts opening-style content with About the Role heading after first paragraph", () => {
     const jd = "Senior PM\n\nOwn roadmap and metrics for the growth team.";
     const out = insertJdSuggestionIntoRawJd(jd, "You will partner closely with Sales and Design.", {
       issueType: "missing",
       issueTitle: "Company culture and team context",
     });
+    expect(out).toMatch(/About the Role/);
     expect(out).toContain("partner closely");
     expect(out.indexOf("partner closely")).toBeGreaterThan(out.indexOf("growth team"));
+  });
+
+  it("does not duplicate an existing bullet when appending to Key Responsibilities", () => {
+    const jd =
+      "Engineer\n\nKey Responsibilities\n\n• Build features\n\nRequirements\n\n• TypeScript";
+    const out = insertJdSuggestionIntoRawJd(
+      jd,
+      "• Build features\n• Ship with quality",
+      {
+        issueType: "ambiguity",
+        issueTitle: "Vague responsibilities",
+      }
+    );
+    expect(out).toMatch(/Ship with quality/);
+    const idxFirst = out.indexOf("• Build features");
+    const idxSecond = out.indexOf("• Build features", idxFirst + 1);
+    expect(idxSecond).toBe(-1);
   });
 });

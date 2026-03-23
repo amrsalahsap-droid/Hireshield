@@ -1,5 +1,7 @@
+import { ClerkProvider } from "@clerk/nextjs";
 import { currentUser } from "@clerk/nextjs/server";
 import AppLayoutClient from "@/components/app/app-layout-client";
+import { clerkAppearance } from "@/lib/clerk-appearance";
 
 type ClientUser = {
   id: string;
@@ -38,5 +40,17 @@ export default async function AppLayout({
     user = null;
   }
 
-  return <AppLayoutClient user={user}>{children}</AppLayoutClient>;
+  const publishableKey =
+    process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY?.trim() || "";
+
+  return (
+    <ClerkProvider
+      appearance={clerkAppearance}
+      publishableKey={publishableKey}
+      signInFallbackRedirectUrl="/app"
+      signUpFallbackRedirectUrl="/app"
+    >
+      <AppLayoutClient user={user}>{children}</AppLayoutClient>
+    </ClerkProvider>
+  );
 }

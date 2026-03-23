@@ -6,6 +6,7 @@ import { ErrorState, EmptyState, LoadingState } from "@/components/ui/ErrorState
 import { Button } from "@/components/ui/button";
 import { GenerateJDButton } from "@/components/app/generate-jd-button";
 import { SkillsTagInput } from "@/components/app/skills-tag-input";
+import { orgFetchHeaders } from "@/lib/client/org-fetch-headers";
 
 interface Job {
   id: string;
@@ -24,6 +25,7 @@ interface Job {
   interviewKitPromptVersion: string | null;
   interviewKitStatus: 'NOT_STARTED' | 'RUNNING' | 'DONE' | 'FAILED';
   interviewKitLastError: string | null;
+  _count?: { jobCandidates: number };
 }
 
 interface JobTemplate {
@@ -152,8 +154,9 @@ export default function JobsPage() {
       setError(null);
       const response = await fetch("/api/jobs", {
         headers: {
-          "Content-Type": "application/json"
-        }
+          "Content-Type": "application/json",
+          ...orgFetchHeaders(),
+        },
       });
       
       if (response.ok) {
@@ -172,6 +175,12 @@ export default function JobsPage() {
 
   useEffect(() => {
     fetchJobs();
+  }, []);
+
+  useEffect(() => {
+    const onFocus = () => fetchJobs();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
   }, []);
 
   // Handle form input changes
@@ -420,6 +429,9 @@ export default function JobsPage() {
                     Interview Kit
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider font-body">
+                    Candidates
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider font-body">
                     Created
                   </th>
                   <th className="relative px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider font-body">
@@ -448,6 +460,9 @@ export default function JobsPage() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-body-size text-muted-foreground font-body">
                       {job.interviewKitGeneratedAt ? new Date(job.interviewKitGeneratedAt).toLocaleDateString() : "Not generated"}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-body-size text-muted-foreground font-body">
+                      {job._count?.jobCandidates ?? 0}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-body-size text-muted-foreground font-body">
                       {new Date(job.createdAt).toLocaleDateString()}
