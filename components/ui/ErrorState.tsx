@@ -1,7 +1,24 @@
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
+export type ErrorVariant = "generic" | "db-unavailable";
+
+const VARIANT_DEFAULTS: Record<ErrorVariant, { icon: string; title: string; message: string }> = {
+  generic: {
+    icon: "⚠️",
+    title: "Something went wrong",
+    message: "We encountered an unexpected error. Please try again.",
+  },
+  "db-unavailable": {
+    icon: "🔌",
+    title: "Database Unavailable",
+    message:
+      "The database server cannot be reached right now. This usually resolves on its own — try again in a few seconds.",
+  },
+};
+
 interface ErrorStateProps {
+  variant?: ErrorVariant;
   title?: string;
   message?: string;
   onRetry?: () => void;
@@ -12,20 +29,26 @@ interface ErrorStateProps {
 }
 
 export function ErrorState({
-  title = "Something went wrong",
-  message = "We encountered an unexpected error. Please try again.",
+  variant = "generic",
+  title,
+  message,
   onRetry,
   onBack,
   backText = "Go Back",
   retryText = "Try Again",
-  icon = "⚠️"
+  icon,
 }: ErrorStateProps) {
+  const defaults = VARIANT_DEFAULTS[variant];
+  const resolvedIcon = icon ?? defaults.icon;
+  const resolvedTitle = title ?? defaults.title;
+  const resolvedMessage = message ?? defaults.message;
+
   return (
     <div className="flex items-center justify-center min-h-screen">
       <div className="text-center max-w-md mx-auto p-6">
-        <div className="text-destructive text-6xl mb-4">{icon}</div>
-        <h1 className="text-2xl font-bold text-foreground font-display mb-2">{title}</h1>
-        <p className="text-muted-foreground font-body mb-6">{message}</p>
+        <div className="text-destructive text-6xl mb-4">{resolvedIcon}</div>
+        <h1 className="text-2xl font-bold text-foreground font-display mb-2">{resolvedTitle}</h1>
+        <p className="text-muted-foreground font-body mb-6">{resolvedMessage}</p>
         <div className="space-x-3 flex justify-center flex-wrap gap-2">
           {onRetry && (
             <Button variant="destructive" onClick={onRetry}>

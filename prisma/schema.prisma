@@ -87,6 +87,8 @@ model Job {
 model Candidate {
   id          String         @id @default(cuid())
   email       String?
+  phone       String?
+  profileUrl  String?
   orgId       String
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt

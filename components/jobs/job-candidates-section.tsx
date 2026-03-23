@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
+import { toast } from "sonner";
 import { orgFetchHeaders } from "@/lib/client/org-fetch-headers";
 
 export interface JobAssignmentRow {
@@ -37,7 +38,11 @@ const ALL_STAGES: { value: string; label: string }[] = [
   { value: "EVALUATION_PENDING", label: "Evaluation Pending" },
   { value: "EVALUATED", label: "Evaluated" },
   { value: "DECISION_MADE", label: "Decision Made" },
+  { value: "HIRED", label: "Hired" },
+  { value: "REJECTED", label: "Rejected" },
 ];
+
+const TERMINAL_STAGES = new Set(["HIRED", "REJECTED"]);
 
 function stageLabel(stage: string): string {
   return ALL_STAGES.find((s) => s.value === stage)?.label ?? stage.replace(/_/g, " ");
@@ -52,72 +57,140 @@ function stageBadgeClass(stage: string): string {
     case "EVALUATION_PENDING": return "bg-orange-50 text-orange-700";
     case "EVALUATED": return "bg-purple-50 text-purple-700";
     case "DECISION_MADE": return "bg-green-50 text-green-700";
+    case "HIRED": return "bg-emerald-100 text-emerald-800";
+    case "REJECTED": return "bg-red-50 text-red-700";
     default: return "bg-muted text-muted-foreground";
   }
 }
+
+interface LoadingState {
+  stage: string | null;
+  remove: string | null;
+  interview: string | null;
+  evaluation: string | null;
+}
+
+const IDLE: LoadingState = { stage: null, remove: null, interview: null, evaluation: null };
 
 type Props = {
   jobId: string;
   jobStatus: string;
   assignments: JobAssignmentRow[];
   onAddCandidate: () => void;
-  onRefresh: () => Promise<void>;
-  onCreateInterview: (candidateId: string) => void;
-  onCreateEvaluation: (candidateId: string) => void;
+  onCreateInterview: (candidateId: string, assignmentId: string) => void;
+  onCreateEvaluation: (candidateId: string, assignmentId: string) => void;
 };
 
 export function JobCandidatesSection({
   jobId,
   jobStatus,
-  assignments,
+  assignments: propAssignments,
   onAddCandidate,
-  onRefresh,
   onCreateInterview,
   onCreateEvaluation,
 }: Props) {
   const isActive = jobStatus === "ACTIVE";
+
+  const [rows, setRows] = useState<JobAssignmentRow[]>(propAssignments);
+  const inflightRef = useRef(false);
+
+  useEffect(() => {
+    if (!inflightRef.current) setRows(propAssignments);
+  }, [propAssignments]);
+
   const [movingStage, setMovingStage] = useState<string | null>(null);
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
-  const [busy, setBusy] = useState<string | null>(null);
+  const [ld, setLd] = useState<LoadingState>(IDLE);
 
-  const handleMoveStage = async (assignmentId: string, newStage: string) => {
-    setBusy(assignmentId);
-    try {
-      const res = await fetch(`/api/jobs/${jobId}/candidates`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json", ...orgFetchHeaders() },
-        body: JSON.stringify({ assignmentId, stage: newStage }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        console.error("Failed to move stage:", data.error ?? res.status);
-      } else {
-        await onRefresh();
+  const isRowBusy = (id: string) =>
+    ld.stage === id || ld.remove === id || ld.interview === id || ld.evaluation === id;
+
+  // --- Move Stage (optimistic) ---
+  const handleMoveStage = useCallback(
+    async (assignmentId: string, newStage: string) => {
+      const prev = rows;
+      const row = rows.find((r) => r.id === assignmentId);
+      if (!row || row.stage === newStage) {
+        setMovingStage(null);
+        return;
       }
-    } finally {
-      setBusy(null);
+
+      inflightRef.current = true;
+      setRows((cur) => cur.map((r) => (r.id === assignmentId ? { ...r, stage: newStage } : r)));
+      setLd((l) => ({ ...l, stage: assignmentId }));
       setMovingStage(null);
-    }
+
+      try {
+        const res = await fetch(`/api/jobs/${jobId}/candidates`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json", ...orgFetchHeaders() },
+          body: JSON.stringify({ assignmentId, stage: newStage }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          setRows(prev);
+          toast.error(data.error ?? "Failed to update stage");
+        } else {
+          toast.success(`Moved ${row.candidate.fullName} to ${stageLabel(newStage)}`);
+        }
+      } catch {
+        setRows(prev);
+        toast.error("Network error — stage change reverted");
+      } finally {
+        setLd((l) => ({ ...l, stage: null }));
+        inflightRef.current = false;
+      }
+    },
+    [rows, jobId],
+  );
+
+  // --- Remove (optimistic) ---
+  const handleRemove = useCallback(
+    async (assignmentId: string) => {
+      const prev = rows;
+      const row = rows.find((r) => r.id === assignmentId);
+      if (!row) return;
+
+      inflightRef.current = true;
+      setRows((cur) => cur.filter((r) => r.id !== assignmentId));
+      setLd((l) => ({ ...l, remove: assignmentId }));
+      setConfirmRemove(null);
+
+      try {
+        const res = await fetch(`/api/jobs/${jobId}/candidates`, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json", ...orgFetchHeaders() },
+          body: JSON.stringify({ assignmentId }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          setRows(prev);
+          toast.error(data.error ?? "Failed to remove candidate");
+        } else {
+          toast.success(`${row.candidate.fullName} removed from job`);
+        }
+      } catch {
+        setRows(prev);
+        toast.error("Network error — removal reverted");
+      } finally {
+        setLd((l) => ({ ...l, remove: null }));
+        inflightRef.current = false;
+      }
+    },
+    [rows, jobId],
+  );
+
+  // --- Interview / Evaluation delegates ---
+  const handleInterview = (row: JobAssignmentRow) => {
+    setLd((l) => ({ ...l, interview: row.id }));
+    onCreateInterview(row.candidate.id, row.id);
+    setTimeout(() => setLd((l) => ({ ...l, interview: null })), 400);
   };
 
-  const handleRemove = async (assignmentId: string) => {
-    setBusy(assignmentId);
-    try {
-      const res = await fetch(`/api/jobs/${jobId}/candidates`, {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json", ...orgFetchHeaders() },
-        body: JSON.stringify({ assignmentId }),
-      });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        console.error("Failed to remove candidate:", data.error ?? res.status);
-      } else {
-        await onRefresh();
-      }
-    } finally {
-      setBusy(null);
-      setConfirmRemove(null);
-    }
+  const handleEvaluation = (row: JobAssignmentRow) => {
+    setLd((l) => ({ ...l, evaluation: row.id }));
+    onCreateEvaluation(row.candidate.id, row.id);
+    setTimeout(() => setLd((l) => ({ ...l, evaluation: null })), 400);
   };
 
   return (
@@ -125,7 +198,7 @@ export function JobCandidatesSection({
       {/* Header */}
       <div className="px-6 py-4 border-b border-border flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-lg font-medium text-foreground font-display">
-          Candidates for This Job ({assignments.length})
+          Candidates for This Job ({rows.length})
         </h2>
         <button
           type="button"
@@ -143,8 +216,7 @@ export function JobCandidatesSection({
       </div>
 
       <div className="px-6 py-4">
-        {/* Empty state */}
-        {assignments.length === 0 ? (
+        {rows.length === 0 ? (
           <div className="text-center py-8">
             <p className="text-sm text-muted-foreground mb-4">
               No candidates assigned to this job yet.
@@ -160,7 +232,6 @@ export function JobCandidatesSection({
             )}
           </div>
         ) : (
-          /* Table */
           <div className="overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead>
@@ -173,8 +244,9 @@ export function JobCandidatesSection({
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {assignments.map((row) => {
-                  const isBusy = busy === row.id;
+                {rows.map((row) => {
+                  const busy = isRowBusy(row.id);
+                  const isTerminal = TERMINAL_STAGES.has(row.stage);
                   const isConfirmingRemove = confirmRemove === row.id;
                   const isMovingThisStage = movingStage === row.id;
 
@@ -193,7 +265,7 @@ export function JobCandidatesSection({
                         {isMovingThisStage ? (
                           <select
                             defaultValue={row.stage}
-                            disabled={isBusy}
+                            disabled={busy}
                             autoFocus
                             onBlur={() => setMovingStage(null)}
                             onChange={(e) => handleMoveStage(row.id, e.target.value)}
@@ -229,11 +301,11 @@ export function JobCandidatesSection({
                             <span className="text-xs text-muted-foreground mr-1">Remove?</span>
                             <button
                               type="button"
-                              disabled={isBusy}
+                              disabled={busy}
                               onClick={() => handleRemove(row.id)}
                               className="text-xs px-2 py-0.5 rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
                             >
-                              {isBusy ? "…" : "Yes"}
+                              {busy ? "…" : "Yes"}
                             </button>
                             <button
                               type="button"
@@ -246,14 +318,14 @@ export function JobCandidatesSection({
                         ) : (
                           <span className="inline-flex flex-wrap items-center gap-1">
                             <Link
-                              href={`/app/candidates/${row.candidate.id}`}
+                              href={`/app/candidates/${row.candidate.id}?jobId=${jobId}`}
                               className="text-xs px-2 py-0.5 rounded border border-border text-indigo-600 hover:bg-muted transition-colors"
                             >
                               View
                             </Link>
                             <button
                               type="button"
-                              disabled={isBusy}
+                              disabled={busy}
                               onClick={() => setMovingStage(row.id)}
                               className="text-xs px-2 py-0.5 rounded border border-border text-foreground hover:bg-muted disabled:opacity-50 transition-colors"
                             >
@@ -261,25 +333,25 @@ export function JobCandidatesSection({
                             </button>
                             <button
                               type="button"
-                              disabled={!isActive || isBusy}
-                              title={!isActive ? "Job must be Active" : undefined}
-                              onClick={() => onCreateInterview(row.candidate.id)}
+                              disabled={!isActive || busy || isTerminal}
+                              title={isTerminal ? "Candidate is in a terminal stage" : !isActive ? "Job must be Active" : undefined}
+                              onClick={() => handleInterview(row)}
                               className="text-xs px-2 py-0.5 rounded border border-border text-blue-600 hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                             >
                               Interview
                             </button>
                             <button
                               type="button"
-                              disabled={!isActive || isBusy}
-                              title={!isActive ? "Job must be Active" : undefined}
-                              onClick={() => onCreateEvaluation(row.candidate.id)}
+                              disabled={!isActive || busy || isTerminal}
+                              title={isTerminal ? "Candidate is in a terminal stage" : !isActive ? "Job must be Active" : undefined}
+                              onClick={() => handleEvaluation(row)}
                               className="text-xs px-2 py-0.5 rounded border border-border text-purple-600 hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                             >
                               Evaluate
                             </button>
                             <button
                               type="button"
-                              disabled={isBusy}
+                              disabled={busy}
                               onClick={() => setConfirmRemove(row.id)}
                               className="text-xs px-2 py-0.5 rounded border border-border text-red-500 hover:bg-muted disabled:opacity-50 transition-colors"
                             >

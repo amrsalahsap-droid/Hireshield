@@ -8,8 +8,64 @@ import { updateCandidateStage } from "@/lib/server/candidate-stages";
 import { createAuditLog, AUDIT_ACTIONS } from "@/lib/audit";
 import { getAuthUserFromRequest } from "@/lib/server/auth-request";
 import { resolveJobCandidatesRouteError } from "@/lib/server/job-candidates-api-errors";
+import { parseAndValidateCandidateCreate } from "@/lib/candidate-profile";
 
 const VALID_STAGES = new Set(Object.values(CandidateStage));
+
+type DuplicateMatch = {
+  id: string;
+  fullName: string;
+  email: string | null;
+  matchType: "email" | "name";
+};
+
+async function findPossibleDuplicates(
+  orgId: string,
+  parsed: { fullName: string; email: string | null }
+): Promise<DuplicateMatch[]> {
+  const matches: DuplicateMatch[] = [];
+  const seen = new Set<string>();
+
+  if (parsed.email) {
+    const byEmail = await prisma.candidate.findFirst({
+      where: {
+        orgId,
+        email: { equals: parsed.email, mode: "insensitive" },
+      },
+      select: { id: true, fullName: true, email: true },
+    });
+    if (byEmail) {
+      matches.push({
+        id: byEmail.id,
+        fullName: byEmail.fullName,
+        email: byEmail.email,
+        matchType: "email",
+      });
+      seen.add(byEmail.id);
+    }
+  }
+
+  const byName = await prisma.candidate.findMany({
+    where: {
+      orgId,
+      fullName: { equals: parsed.fullName, mode: "insensitive" },
+    },
+    take: 10,
+    select: { id: true, fullName: true, email: true },
+  });
+  for (const c of byName) {
+    if (seen.has(c.id)) continue;
+    matches.push({
+      id: c.id,
+      fullName: c.fullName,
+      email: c.email,
+      matchType: "name",
+    });
+    seen.add(c.id);
+  }
+
+  return matches;
+}
 
 /** GET /api/jobs/[id]/candidates — candidates assigned to this job */
 export const GET = withOrgContext(
@@ -162,42 +218,39 @@ export const POST = withOrgContext(
         );
       }
 
-      const { fullName, email, rawCVText } = body;
+      const bodyRecord = body as Record<string, unknown>;
+      const forceCreate = bodyRecord.forceCreate === true;
 
-      if (!fullName || typeof fullName !== "string" || fullName.trim().length === 0) {
+      const parsed = parseAndValidateCandidateCreate(bodyRecord);
+      if (!parsed.ok) {
         return NextResponse.json(
-          { error: "Full name is required and must be a non-empty string" },
+          { error: parsed.error, field: parsed.field },
           { status: 400 }
         );
       }
-      if (fullName.length > 200) {
-        return NextResponse.json(
-          { error: "Full name must be less than 200 characters" },
-          { status: 400 }
-        );
-      }
-      if (email != null && typeof email !== "string") {
-        return NextResponse.json({ error: "Email must be a string" }, { status: 400 });
-      }
-      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-        return NextResponse.json({ error: "Email must be a valid email address" }, { status: 400 });
-      }
-      if (rawCVText != null && typeof rawCVText !== "string") {
-        return NextResponse.json({ error: "rawCVText must be a string" }, { status: 400 });
-      }
-      if (rawCVText && rawCVText.length > 20000) {
-        return NextResponse.json(
-          { error: "CV text must be less than 20,000 characters" },
-          { status: 400 }
-        );
+      const v = parsed.value;
+
+      if (!forceCreate) {
+        const dupMatches = await findPossibleDuplicates(orgId, {
+          fullName: v.fullName,
+          email: v.email,
+        });
+        if (dupMatches.length > 0) {
+          return NextResponse.json(
+            { code: "POSSIBLE_DUPLICATE", matches: dupMatches },
+            { status: 422 }
+          );
+        }
       }
 
       const result = await prisma.$transaction(async (tx) => {
         const candidate = await tx.candidate.create({
           data: {
-            fullName: fullName.trim(),
-            email: email?.trim() || null,
-            rawCVText: typeof rawCVText === "string" ? rawCVText : "",
+            fullName: v.fullName,
+            email: v.email,
+            phone: v.phone,
+            profileUrl: v.profileUrl,
+            rawCVText: v.rawCVText,
             orgId,
           },
           select: { id: true, fullName: true, email: true },
@@ -287,7 +340,7 @@ export const PATCH = withOrgContext(
       }
       if (!stage || !VALID_STAGES.has(stage)) {
         return NextResponse.json(
-          { error: `stage must be one of: ${[...VALID_STAGES].join(", ")}` },
+          { error: `stage must be one of: ${Array.from(VALID_STAGES).join(", ")}` },
           { status: 400 }
         );
       }

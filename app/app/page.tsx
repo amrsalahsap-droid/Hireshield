@@ -26,6 +26,7 @@ import { AIInsightCards } from "@/components/app/ai-insight-cards";
 import { InsightCard } from "@/components/app/insight-card";
 import { LiveActivityPulse, useLiveActivity } from "@/components/app/live-activity-pulse";
 import { orgFetchHeaders } from "@/lib/client/org-fetch-headers";
+import { parseApiError, isDbUnreachableResponse } from "@/lib/client/api-error";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Briefcase, UserPlus, FileSearch, ShieldAlert, Inbox, CheckCircle, AlertTriangle, Clock, Users, Mic, FileCheck, Timer, Calendar, ChevronRight, Info, TrendingUp, TrendingDown, Minus, RefreshCw, Play, FileText, UserCheck, AlertCircle, Zap, Expand, Maximize2, Brain, Lightbulb, Target, Activity, Wifi } from "lucide-react";
 import type {
@@ -344,7 +345,12 @@ export default function AppPage() {
 
           // Handle dashboard response
           if (!dashboardRes.ok) {
-            setDiagStep("api-error");
+            const parsed = await parseApiError(dashboardRes);
+            if (isDbUnreachableResponse(parsed)) {
+              setDiagStep("api-503:db-unreachable");
+            } else {
+              setDiagStep("api-error");
+            }
             throw new Error("Failed to load dashboard");
           }
 

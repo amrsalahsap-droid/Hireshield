@@ -2,11 +2,12 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { ErrorState, EmptyState, LoadingState } from "@/components/ui/ErrorState";
+import { ErrorState, EmptyState, LoadingState, type ErrorVariant } from "@/components/ui/ErrorState";
 import { Button } from "@/components/ui/button";
 import { GenerateJDButton } from "@/components/app/generate-jd-button";
 import { SkillsTagInput } from "@/components/app/skills-tag-input";
 import { orgFetchHeaders } from "@/lib/client/org-fetch-headers";
+import { parseApiError, isDbUnreachableResponse } from "@/lib/client/api-error";
 
 interface Job {
   id: string;
@@ -114,6 +115,7 @@ export default function JobsPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [errorVariant, setErrorVariant] = useState<ErrorVariant>("generic");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [createdJob, setCreatedJob] = useState<any>(null);
@@ -152,6 +154,7 @@ export default function JobsPage() {
   const fetchJobs = async () => {
     try {
       setError(null);
+      setErrorVariant("generic");
       const response = await fetch("/api/jobs", {
         headers: {
           "Content-Type": "application/json",
@@ -163,7 +166,13 @@ export default function JobsPage() {
         const data = await response.json();
         setJobs(data.jobs || []);
       } else {
-        throw new Error("Failed to load jobs");
+        const parsed = await parseApiError(response);
+        if (isDbUnreachableResponse(parsed)) {
+          setErrorVariant("db-unavailable");
+          setError(parsed.message);
+        } else {
+          setError(parsed.message || "Unable to load jobs. Please try again.");
+        }
       }
     } catch (error) {
       console.error("Error fetching jobs:", error);
@@ -490,7 +499,8 @@ export default function JobsPage() {
   if (error) {
     return (
       <ErrorState
-        title="Unable to Load Jobs"
+        variant={errorVariant}
+        title={errorVariant === "generic" ? "Unable to Load Jobs" : undefined}
         message={error}
         onRetry={fetchJobs}
         onBack={() => window.location.href = "/app"}

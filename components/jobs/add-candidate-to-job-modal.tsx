@@ -4,17 +4,64 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { X } from "lucide-react";
 import { orgFetchHeaders } from "@/lib/client/org-fetch-headers";
+import {
+  parseAndValidateCandidateCreate,
+  identityRequirementMessage,
+  MIN_CV_IDENTITY_LENGTH,
+} from "@/lib/candidate-profile";
+import type { JobAssignmentRow } from "@/components/jobs/job-candidates-section";
 
-export type CandidateListItem = { id: string; fullName: string; email: string | null };
+export type CandidateListItem = {
+  id: string;
+  fullName: string;
+  email: string | null;
+  phone?: string | null;
+  profileUrl?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  source: string | null;
+};
 
 type Tab = "existing" | "new";
+
+type FieldKey =
+  | "fullName"
+  | "email"
+  | "phone"
+  | "profileUrl"
+  | "rawCVText"
+  | "source";
 
 type Props = {
   open: boolean;
   onClose: () => void;
   jobId: string;
   assignedIds: Set<string>;
-  onAssigned: () => void | Promise<void>;
+  onAssigned: (payload: { assignment: JobAssignmentRow }) => void | Promise<void>;
+};
+
+const ASSIGNMENT_SOURCES = ["MANUAL", "IMPORT", "REFERRAL", "APPLIED"] as const;
+
+function sourceLabel(source?: string | null): string {
+  switch (source) {
+    case "MANUAL":
+      return "Manual";
+    case "IMPORT":
+      return "Import";
+    case "REFERRAL":
+      return "Referral";
+    case "APPLIED":
+      return "Applied";
+    default:
+      return "—";
+  }
+}
+
+type DupMatch = {
+  id: string;
+  fullName: string;
+  email: string | null;
+  matchType: "email" | "name";
 };
 
 export function AddCandidateToJobModal({
@@ -31,10 +78,24 @@ export function AddCandidateToJobModal({
   const [loadingList, setLoadingList] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<FieldKey, string>>>({});
 
   const [newFullName, setNewFullName] = useState("");
   const [newEmail, setNewEmail] = useState("");
+  const [newPhone, setNewPhone] = useState("");
+  const [newProfileUrl, setNewProfileUrl] = useState("");
   const [newNotes, setNewNotes] = useState("");
+  const [newSource, setNewSource] = useState<(typeof ASSIGNMENT_SOURCES)[number]>("MANUAL");
+
+  const [duplicateMatches, setDuplicateMatches] = useState<DupMatch[] | null>(null);
+
+  const clearFieldError = (key: FieldKey) => {
+    setFieldErrors((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
 
   useEffect(() => {
     if (!open) return;
@@ -42,13 +103,27 @@ export function AddCandidateToJobModal({
     setSearch("");
     setSelectedId("");
     setError(null);
+    setFieldErrors({});
+    setDuplicateMatches(null);
     setNewFullName("");
     setNewEmail("");
+    setNewPhone("");
+    setNewProfileUrl("");
     setNewNotes("");
+    setNewSource("MANUAL");
     setLoadingList(true);
     void fetch("/api/candidates?limit=100", { headers: { ...orgFetchHeaders() } })
       .then((r) => r.json())
-      .then((d: { candidates?: CandidateListItem[] }) => setAllCandidates(d.candidates ?? []))
+      .then((d: { candidates?: CandidateListItem[] }) => {
+        setAllCandidates(
+          (d.candidates ?? []).map((c) => ({
+            ...c,
+            source: c.source ?? null,
+            createdAt: c.createdAt ?? "",
+            updatedAt: c.updatedAt ?? c.createdAt ?? "",
+          }))
+        );
+      })
       .catch(() => setAllCandidates([]))
       .finally(() => setLoadingList(false));
   }, [open]);
@@ -56,20 +131,36 @@ export function AddCandidateToJobModal({
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return allCandidates;
-    return allCandidates.filter(
-      (c) =>
-        c.fullName.toLowerCase().includes(q) ||
-        (c.email && c.email.toLowerCase().includes(q))
+    const tokens = q.split(/\s+/).filter(Boolean);
+    return allCandidates.filter((c) =>
+      tokens.every(
+        (t) =>
+          c.fullName.toLowerCase().includes(t) ||
+          (c.email && c.email.toLowerCase().includes(t))
+      )
     );
   }, [allCandidates, search]);
 
-  const submitExisting = async () => {
-    if (!selectedId) {
+  function buildCreateBody(forceCreate?: boolean): Record<string, unknown> {
+    const body: Record<string, unknown> = {
+      fullName: newFullName,
+      email: newEmail.trim() || undefined,
+      phone: newPhone.trim() || undefined,
+      profileUrl: newProfileUrl.trim() || undefined,
+      rawCVText: newNotes.trim(),
+      source: newSource,
+    };
+    if (forceCreate) body.forceCreate = true;
+    return body;
+  }
+
+  const assignExistingById = async (candidateId: string) => {
+    if (!candidateId) {
       setError("Select a candidate.");
       return;
     }
-    if (assignedIds.has(selectedId)) {
-      setError("This candidate is already assigned to this job.");
+    if (assignedIds.has(candidateId)) {
+      toast.error("This candidate is already assigned to this job.");
       return;
     }
     setSubmitting(true);
@@ -78,56 +169,93 @@ export function AddCandidateToJobModal({
       const res = await fetch(`/api/jobs/${jobId}/candidates`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...orgFetchHeaders() },
-        body: JSON.stringify({ candidateId: selectedId }),
+        body: JSON.stringify({ candidateId }),
       });
       const data = (await res.json().catch(() => ({}))) as {
         error?: string;
-        assignment?: { candidate?: { fullName?: string } };
+        assignment?: JobAssignmentRow;
       };
       if (!res.ok) {
-        setError(typeof data.error === "string" ? data.error : "Could not assign candidate.");
+        const msg = typeof data.error === "string" ? data.error : "Could not assign candidate.";
+        setError(msg);
+        toast.error(msg);
+        return;
+      }
+      if (!data.assignment) {
+        toast.error("Unexpected response from server.");
         return;
       }
       toast.success(
-        `${data.assignment?.candidate?.fullName ?? "Candidate"} added to this job.`
+        `${data.assignment.candidate?.fullName ?? "Candidate"} added to this job.`
       );
-      await onAssigned();
+      await onAssigned({ assignment: data.assignment });
+      setDuplicateMatches(null);
       onClose();
     } finally {
       setSubmitting(false);
     }
   };
 
-  const submitNew = async () => {
-    const name = newFullName.trim();
-    if (!name) {
-      setError("Full name is required.");
+  const submitExisting = async () => {
+    await assignExistingById(selectedId);
+  };
+
+  const submitNew = async (forceCreate?: boolean) => {
+    setError(null);
+    const body = buildCreateBody(forceCreate);
+    const parsed = parseAndValidateCandidateCreate(body);
+    if (!parsed.ok) {
+      setFieldErrors(
+        parsed.field ? { [parsed.field]: parsed.error } : { rawCVText: parsed.error }
+      );
+      if (parsed.field === "rawCVText" || !parsed.field) {
+        setError(parsed.error);
+      }
       return;
     }
+    setFieldErrors({});
     setSubmitting(true);
-    setError(null);
     try {
       const res = await fetch(`/api/jobs/${jobId}/candidates`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...orgFetchHeaders() },
-        body: JSON.stringify({
-          fullName: name,
-          email: newEmail.trim() || undefined,
-          rawCVText: newNotes.trim() || undefined,
-        }),
+        body: JSON.stringify(body),
       });
       const data = (await res.json().catch(() => ({}))) as {
         error?: string;
+        field?: string;
+        code?: string;
+        matches?: DupMatch[];
         candidate?: { fullName?: string };
+        assignment?: JobAssignmentRow;
       };
-      if (!res.ok) {
-        setError(typeof data.error === "string" ? data.error : "Could not create candidate.");
+
+      if (res.status === 422 && data.code === "POSSIBLE_DUPLICATE" && data.matches?.length) {
+        setDuplicateMatches(data.matches);
+        toast.message("Possible duplicate — review below.");
         return;
       }
+
+      if (!res.ok) {
+        const msg = typeof data.error === "string" ? data.error : "Could not create candidate.";
+        if (data.field && typeof data.field === "string") {
+          setFieldErrors({ [data.field as FieldKey]: msg });
+        }
+        setError(msg);
+        toast.error(msg);
+        return;
+      }
+
+      if (!data.assignment) {
+        toast.error("Unexpected response from server.");
+        return;
+      }
+
       toast.success(
         `${data.candidate?.fullName ?? "Candidate"} created and assigned to this job.`
       );
-      await onAssigned();
+      setDuplicateMatches(null);
+      await onAssigned({ assignment: data.assignment });
       onClose();
     } finally {
       setSubmitting(false);
@@ -136,6 +264,8 @@ export function AddCandidateToJobModal({
 
   if (!open) return null;
 
+  const showDupWarning = tab === "new" && duplicateMatches && duplicateMatches.length > 0;
+
   return (
     <div
       className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4"
@@ -143,7 +273,7 @@ export function AddCandidateToJobModal({
       aria-modal="true"
       aria-labelledby="add-candidate-modal-title"
     >
-      <div className="flex max-h-[90vh] w-full max-w-lg flex-col overflow-hidden rounded-lg border border-border bg-card shadow-xl">
+      <div className="flex max-h-[90vh] w-full max-w-xl flex-col overflow-hidden rounded-lg border border-border bg-card shadow-xl">
         <div className="flex items-start justify-between border-b border-border px-5 py-4">
           <h2 id="add-candidate-modal-title" className="text-lg font-semibold text-foreground">
             Add candidate to job
@@ -166,6 +296,8 @@ export function AddCandidateToJobModal({
               onClick={() => {
                 setTab("existing");
                 setError(null);
+                setFieldErrors({});
+                setDuplicateMatches(null);
               }}
               className={`flex-1 rounded px-3 py-2 text-sm font-medium transition-colors ${
                 tab === "existing"
@@ -180,6 +312,7 @@ export function AddCandidateToJobModal({
               onClick={() => {
                 setTab("new");
                 setError(null);
+                setFieldErrors({});
               }}
               className={`flex-1 rounded px-3 py-2 text-sm font-medium transition-colors ${
                 tab === "new"
@@ -203,14 +336,14 @@ export function AddCandidateToJobModal({
                 type="search"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Name or email…"
+                placeholder="Name or email (all words must match)…"
                 className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 autoComplete="off"
               />
               <div className="text-xs text-muted-foreground">
                 Select one candidate. Already assigned people are marked and cannot be selected again.
               </div>
-              <div className="max-h-52 overflow-y-auto rounded-md border border-border">
+              <div className="max-h-64 overflow-y-auto rounded-md border border-border">
                 {loadingList ? (
                   <p className="p-4 text-sm text-muted-foreground">Loading candidates…</p>
                 ) : filtered.length === 0 ? (
@@ -220,6 +353,7 @@ export function AddCandidateToJobModal({
                     {filtered.map((c) => {
                       const assigned = assignedIds.has(c.id);
                       const selected = selectedId === c.id;
+                      const updated = c.updatedAt || c.createdAt;
                       return (
                         <li key={c.id}>
                           <button
@@ -237,7 +371,7 @@ export function AddCandidateToJobModal({
                             }`}
                           >
                             <span
-                              className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-input"
+                              className="mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full border border-input"
                               aria-hidden
                             >
                               {selected && !assigned ? (
@@ -246,11 +380,24 @@ export function AddCandidateToJobModal({
                             </span>
                             <span className="min-w-0 flex-1">
                               <span className="font-medium text-foreground">{c.fullName}</span>
-                              {c.email ? (
-                                <span className="block truncate text-muted-foreground">{c.email}</span>
-                              ) : null}
+                              <span className="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+                                {c.email ? <span className="truncate">{c.email}</span> : <span>No email</span>}
+                                <span className="text-border">·</span>
+                                <span>Source: {sourceLabel(c.source)}</span>
+                                <span className="text-border">·</span>
+                                <span>
+                                  Updated{" "}
+                                  {updated
+                                    ? new Date(updated).toLocaleDateString(undefined, {
+                                        year: "numeric",
+                                        month: "short",
+                                        day: "numeric",
+                                      })
+                                    : "—"}
+                                </span>
+                              </span>
                               {assigned ? (
-                                <span className="mt-0.5 block text-xs font-medium text-amber-800">
+                                <span className="mt-1 block text-xs font-medium text-amber-800">
                                   Already on this job
                                 </span>
                               ) : null}
@@ -263,10 +410,70 @@ export function AddCandidateToJobModal({
                 )}
               </div>
             </div>
+          ) : showDupWarning ? (
+            <div className="space-y-4">
+              <div
+                className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100"
+                role="alert"
+              >
+                <p className="font-medium">Possible duplicate</p>
+                <p className="mt-1 text-amber-900/90 dark:text-amber-100/90">
+                  We found existing profiles that may match. Assign one of them to avoid duplicates, or
+                  create a new record if you are sure.
+                </p>
+              </div>
+              <ul className="space-y-2">
+                {duplicateMatches!.map((m) => {
+                  const onJob = assignedIds.has(m.id);
+                  return (
+                    <li
+                      key={`${m.id}-${m.matchType}`}
+                      className="flex flex-col gap-2 rounded-md border border-border p-3 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div>
+                        <div className="font-medium text-foreground">{m.fullName}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {m.email ?? "No email"} · Match: {m.matchType === "email" ? "same email" : "same name"}
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={submitting || onJob}
+                        onClick={() => void assignExistingById(m.id)}
+                        className="shrink-0 rounded-md bg-green-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {onJob ? "Already on job" : "Assign this candidate"}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={submitting}
+                  onClick={() => void submitNew(true)}
+                  className="rounded-md border border-border bg-background px-4 py-2 text-sm font-medium hover:bg-muted"
+                >
+                  Create new anyway
+                </button>
+                <button
+                  type="button"
+                  disabled={submitting}
+                  onClick={() => {
+                    setDuplicateMatches(null);
+                    setError(null);
+                  }}
+                  className="rounded-md px-4 py-2 text-sm text-muted-foreground hover:text-foreground"
+                >
+                  Back to form
+                </button>
+              </div>
+            </div>
           ) : (
             <div className="space-y-3">
               <p className="text-sm text-muted-foreground">
-                Create a minimal profile and assign to this job in one step.
+                Full name and resume/CV text are required. {identityRequirementMessage()}
               </p>
               <div>
                 <label className="mb-1 block text-sm font-medium text-foreground" htmlFor="new-candidate-name">
@@ -275,10 +482,16 @@ export function AddCandidateToJobModal({
                 <input
                   id="new-candidate-name"
                   value={newFullName}
-                  onChange={(e) => setNewFullName(e.target.value)}
+                  onChange={(e) => {
+                    setNewFullName(e.target.value);
+                    clearFieldError("fullName");
+                  }}
                   className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                   placeholder="Jane Doe"
                 />
+                {fieldErrors.fullName ? (
+                  <p className="mt-1 text-xs text-red-600">{fieldErrors.fullName}</p>
+                ) : null}
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-foreground" htmlFor="new-candidate-email">
@@ -288,28 +501,100 @@ export function AddCandidateToJobModal({
                   id="new-candidate-email"
                   type="email"
                   value={newEmail}
-                  onChange={(e) => setNewEmail(e.target.value)}
+                  onChange={(e) => {
+                    setNewEmail(e.target.value);
+                    clearFieldError("email");
+                  }}
                   className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  placeholder="optional"
+                  placeholder="name@company.com"
                 />
+                {fieldErrors.email ? (
+                  <p className="mt-1 text-xs text-red-600">{fieldErrors.email}</p>
+                ) : null}
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-foreground" htmlFor="new-candidate-phone">
+                  Phone
+                </label>
+                <input
+                  id="new-candidate-phone"
+                  type="tel"
+                  value={newPhone}
+                  onChange={(e) => {
+                    setNewPhone(e.target.value);
+                    clearFieldError("phone");
+                  }}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  placeholder="+1 555 123 4567"
+                />
+                {fieldErrors.phone ? (
+                  <p className="mt-1 text-xs text-red-600">{fieldErrors.phone}</p>
+                ) : null}
+              </div>
+              <div>
+                <label
+                  className="mb-1 block text-sm font-medium text-foreground"
+                  htmlFor="new-candidate-profile"
+                >
+                  LinkedIn / profile URL
+                </label>
+                <input
+                  id="new-candidate-profile"
+                  type="url"
+                  value={newProfileUrl}
+                  onChange={(e) => {
+                    setNewProfileUrl(e.target.value);
+                    clearFieldError("profileUrl");
+                  }}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  placeholder="https://linkedin.com/in/…"
+                />
+                {fieldErrors.profileUrl ? (
+                  <p className="mt-1 text-xs text-red-600">{fieldErrors.profileUrl}</p>
+                ) : null}
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-foreground" htmlFor="new-candidate-source">
+                  Assignment source
+                </label>
+                <select
+                  id="new-candidate-source"
+                  value={newSource}
+                  onChange={(e) =>
+                    setNewSource(e.target.value as (typeof ASSIGNMENT_SOURCES)[number])
+                  }
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  {ASSIGNMENT_SOURCES.map((s) => (
+                    <option key={s} value={s}>
+                      {sourceLabel(s)}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-foreground" htmlFor="new-candidate-notes">
-                  Notes / CV excerpt
+                  Resume / CV text *
                 </label>
                 <textarea
                   id="new-candidate-notes"
                   value={newNotes}
-                  onChange={(e) => setNewNotes(e.target.value)}
+                  onChange={(e) => {
+                    setNewNotes(e.target.value);
+                    clearFieldError("rawCVText");
+                  }}
                   rows={4}
                   className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  placeholder="Optional short notes or pasted resume snippet"
+                  placeholder={`Paste resume or CV (${MIN_CV_IDENTITY_LENGTH}+ characters required)`}
                 />
+                {fieldErrors.rawCVText ? (
+                  <p className="mt-1 text-xs text-red-600">{fieldErrors.rawCVText}</p>
+                ) : null}
               </div>
             </div>
           )}
 
-          {error ? (
+          {error && !fieldErrors.rawCVText ? (
             <p className="mt-3 text-sm text-red-600" role="alert">
               {error}
             </p>
@@ -334,10 +619,10 @@ export function AddCandidateToJobModal({
             >
               {submitting ? "Adding…" : "Add to job"}
             </button>
-          ) : (
+          ) : showDupWarning ? null : (
             <button
               type="button"
-              onClick={() => void submitNew()}
+              onClick={() => void submitNew(false)}
               disabled={submitting || !newFullName.trim()}
               className="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-50"
             >

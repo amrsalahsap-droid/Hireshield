@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { ErrorState, EmptyState, LoadingState } from "@/components/ui/ErrorState";
+import { ErrorState, EmptyState, LoadingState, type ErrorVariant } from "@/components/ui/ErrorState";
 import { Button } from "@/components/ui/button";
 import { orgFetchHeaders } from "@/lib/client/org-fetch-headers";
+import { parseApiError, isDbUnreachableResponse } from "@/lib/client/api-error";
 
 interface Candidate {
   id: string;
@@ -18,6 +19,7 @@ export default function CandidatesPage() {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [errorVariant, setErrorVariant] = useState<ErrorVariant>("generic");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [formData, setFormData] = useState({
     fullName: "",
@@ -34,6 +36,7 @@ export default function CandidatesPage() {
   const fetchCandidates = async () => {
     try {
       setError(null);
+      setErrorVariant("generic");
       const response = await fetch("/api/candidates", {
         headers: {
           ...orgFetchHeaders(),
@@ -44,7 +47,13 @@ export default function CandidatesPage() {
         const data = await response.json();
         setCandidates(data.candidates || []);
       } else {
-        throw new Error("Failed to load candidates");
+        const parsed = await parseApiError(response);
+        if (isDbUnreachableResponse(parsed)) {
+          setErrorVariant("db-unavailable");
+          setError(parsed.message);
+        } else {
+          setError(parsed.message || "Unable to load candidates. Please try again.");
+        }
       }
     } catch (error) {
       console.error("Error fetching candidates:", error);
@@ -165,7 +174,8 @@ export default function CandidatesPage() {
   if (error) {
     return (
       <ErrorState
-        title="Unable to Load Candidates"
+        variant={errorVariant}
+        title={errorVariant === "generic" ? "Unable to Load Candidates" : undefined}
         message={error}
         onRetry={fetchCandidates}
         onBack={() => window.location.href = "/app"}

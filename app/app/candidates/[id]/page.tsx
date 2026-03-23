@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { toast } from "sonner";
 import { ErrorState, LoadingState } from "@/components/ui/ErrorState";
 import { Button } from "@/components/ui/button";
 import { orgFetchHeaders } from "@/lib/client/org-fetch-headers";
@@ -11,8 +12,18 @@ interface Candidate {
   id: string;
   fullName: string;
   email: string | null;
+  phone: string | null;
+  profileUrl: string | null;
   createdAt: string;
   updatedAt: string;
+  rawCVText: string;
+}
+
+interface EditForm {
+  fullName: string;
+  email: string;
+  phone: string;
+  profileUrl: string;
   rawCVText: string;
 }
 
@@ -47,6 +58,64 @@ export default function CandidateDetailsPage() {
   const [evaluations, setEvaluations] = useState<Evaluation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editForm, setEditForm] = useState<EditForm>({
+    fullName: "",
+    email: "",
+    phone: "",
+    profileUrl: "",
+    rawCVText: "",
+  });
+
+  const startEditing = useCallback(() => {
+    if (!candidate) return;
+    setEditForm({
+      fullName: candidate.fullName,
+      email: candidate.email ?? "",
+      phone: candidate.phone ?? "",
+      profileUrl: candidate.profileUrl ?? "",
+      rawCVText: candidate.rawCVText,
+    });
+    setEditing(true);
+  }, [candidate]);
+
+  const cancelEditing = () => setEditing(false);
+
+  const saveCandidate = async () => {
+    if (!candidate) return;
+    const trimmedName = editForm.fullName.trim();
+    if (!trimmedName) {
+      toast.error("Full name is required.");
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/candidates/${candidate.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...orgFetchHeaders() },
+        body: JSON.stringify({
+          fullName: editForm.fullName,
+          email: editForm.email.trim() || null,
+          phone: editForm.phone.trim() || null,
+          profileUrl: editForm.profileUrl.trim() || null,
+          rawCVText: editForm.rawCVText,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(data.error ?? "Failed to update candidate.");
+        return;
+      }
+      setCandidate(data.candidate);
+      setEditing(false);
+      toast.success("Candidate updated.");
+    } catch {
+      toast.error("Network error — could not save.");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   // Fetch candidate details
   const fetchCandidate = async () => {
@@ -172,11 +241,22 @@ export default function CandidateDetailsPage() {
             <h1 className="text-2xl font-bold text-foreground font-display">{candidate.fullName}</h1>
           </div>
           <div className="flex items-center space-x-3">
-            <Button>Edit Candidate</Button>
+            {editing ? (
+              <>
+                <Button variant="outline" onClick={cancelEditing} disabled={saving}>
+                  Cancel
+                </Button>
+                <Button onClick={() => void saveCandidate()} disabled={saving}>
+                  {saving ? "Saving…" : "Save"}
+                </Button>
+              </>
+            ) : (
+              <Button onClick={startEditing}>Edit Candidate</Button>
+            )}
           </div>
         </div>
         <p className="text-muted-foreground">
-          View candidate details and manage interview process.
+          {editing ? "Edit candidate details below." : "View candidate details and manage interview process."}
         </p>
       </div>
 
@@ -189,15 +269,23 @@ export default function CandidateDetailsPage() {
             <div className="px-6 py-4 border-b border-border flex justify-between items-center">
               <h2 className="text-lg font-medium text-foreground font-display">CV Text</h2>
               <span className="text-sm text-muted-foreground">
-                {candidate.rawCVText.length} characters
+                {(editing ? editForm.rawCVText : candidate.rawCVText).length} characters
               </span>
             </div>
             <div className="px-6 py-4">
-              <div className="prose max-w-none">
-                <pre className="whitespace-pre-wrap text-sm text-foreground font-mono bg-muted p-4 rounded-md max-h-96 overflow-y-auto">
-                  {candidate.rawCVText}
-                </pre>
-              </div>
+              {editing ? (
+                <textarea
+                  value={editForm.rawCVText}
+                  onChange={(e) => setEditForm((f) => ({ ...f, rawCVText: e.target.value }))}
+                  className="w-full min-h-[24rem] rounded-md border border-input bg-background px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring"
+                />
+              ) : (
+                <div className="prose max-w-none">
+                  <pre className="whitespace-pre-wrap text-sm text-foreground font-mono bg-muted p-4 rounded-md max-h-96 overflow-y-auto">
+                    {candidate.rawCVText}
+                  </pre>
+                </div>
+              )}
             </div>
           </div>
 
@@ -285,13 +373,75 @@ export default function CandidateDetailsPage() {
             <div className="px-6 py-4 space-y-4">
               <div>
                 <dt className="text-sm font-medium text-muted-foreground">Full Name</dt>
-                <dd className="mt-1 text-sm text-foreground">{candidate.fullName}</dd>
+                {editing ? (
+                  <input
+                    type="text"
+                    value={editForm.fullName}
+                    onChange={(e) => setEditForm((f) => ({ ...f, fullName: e.target.value }))}
+                    className="mt-1 w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                ) : (
+                  <dd className="mt-1 text-sm text-foreground">{candidate.fullName}</dd>
+                )}
               </div>
               <div>
                 <dt className="text-sm font-medium text-muted-foreground">Email</dt>
-                <dd className="mt-1 text-sm text-foreground">
-                  {candidate.email || "No email provided"}
-                </dd>
+                {editing ? (
+                  <input
+                    type="email"
+                    value={editForm.email}
+                    onChange={(e) => setEditForm((f) => ({ ...f, email: e.target.value }))}
+                    placeholder="email@example.com"
+                    className="mt-1 w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                ) : (
+                  <dd className="mt-1 text-sm text-foreground">
+                    {candidate.email || <span className="text-muted-foreground">—</span>}
+                  </dd>
+                )}
+              </div>
+              <div>
+                <dt className="text-sm font-medium text-muted-foreground">Phone</dt>
+                {editing ? (
+                  <input
+                    type="tel"
+                    value={editForm.phone}
+                    onChange={(e) => setEditForm((f) => ({ ...f, phone: e.target.value }))}
+                    placeholder="+1 555 123 4567"
+                    className="mt-1 w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                ) : (
+                  <dd className="mt-1 text-sm text-foreground">
+                    {candidate.phone || <span className="text-muted-foreground">—</span>}
+                  </dd>
+                )}
+              </div>
+              <div>
+                <dt className="text-sm font-medium text-muted-foreground">Profile URL</dt>
+                {editing ? (
+                  <input
+                    type="url"
+                    value={editForm.profileUrl}
+                    onChange={(e) => setEditForm((f) => ({ ...f, profileUrl: e.target.value }))}
+                    placeholder="linkedin.com/in/…"
+                    className="mt-1 w-full rounded-md border border-input bg-background px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  />
+                ) : (
+                  <dd className="mt-1 text-sm text-foreground">
+                    {candidate.profileUrl ? (
+                      <a
+                        href={candidate.profileUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-primary hover:underline break-all"
+                      >
+                        {candidate.profileUrl}
+                      </a>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </dd>
+                )}
               </div>
               <div>
                 <dt className="text-sm font-medium text-muted-foreground">Created</dt>
@@ -352,9 +502,11 @@ export default function CandidateDetailsPage() {
               <Button asChild className="w-full">
                 <Link href="/app/jobs">Create Interview</Link>
               </Button>
-              <Button variant="outline" className="w-full">
-                Edit Candidate
-              </Button>
+              {!editing && (
+                <Button variant="outline" className="w-full" onClick={startEditing}>
+                  Edit Candidate
+                </Button>
+              )}
               <Button variant="destructive" className="w-full">
                 Remove Candidate
               </Button>

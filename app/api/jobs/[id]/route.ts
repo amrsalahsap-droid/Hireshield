@@ -13,6 +13,7 @@ import { incrementInterviewKitUsage, getUsageSnapshot } from "@/lib/usage";
 import { handleAIRouteError } from "@/lib/server/ai-error-mapping";
 import { createRouteLogContext } from "@/lib/server/route-ai-logging";
 import { runJdAnalysisForJob } from "@/lib/server/run-jd-analysis";
+import { dbErrorResponse } from "@/lib/server/db-error";
 
 // GET /api/jobs/[id] - Get job details or JD analysis status
 export const GET = withOrgContext(async (request: NextRequest, orgId: string, { params }: { params: { id: string } }) => {
@@ -82,10 +83,7 @@ export const GET = withOrgContext(async (request: NextRequest, orgId: string, { 
     });
   } catch (error) {
     console.error("Error fetching job:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch job" },
-      { status: 500 }
-    );
+    return dbErrorResponse(error, "Failed to fetch job");
   }
 });
 
@@ -195,10 +193,7 @@ export const PATCH = withOrgContext(async (request: NextRequest, orgId: string, 
     return NextResponse.json({ job: updatedJob });
   } catch (error) {
     console.error("Error updating job:", error);
-    return NextResponse.json(
-      { error: "Failed to update job" },
-      { status: 500 }
-    );
+    return dbErrorResponse(error, "Failed to update job");
   }
 });
 
@@ -238,10 +233,7 @@ export const DELETE = withOrgContext(async (request: NextRequest, orgId: string,
     });
   } catch (error) {
     console.error("Error archiving job:", error);
-    return NextResponse.json(
-      { error: "Failed to archive job" },
-      { status: 500 }
-    );
+    return dbErrorResponse(error, "Failed to archive job");
   }
 });
 

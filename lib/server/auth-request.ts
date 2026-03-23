@@ -5,6 +5,7 @@ import {
   ensureProvisionedFromClerkData,
   getProvisionedUserByClerkId,
 } from "./auth";
+import { isDbUnreachable } from "./db-error";
 
 /**
  * Authenticate from request using Clerk Backend SDK (no Next.js middleware required).
@@ -63,7 +64,7 @@ export async function getAuthUserFromRequestWithReason(
         console.error("Failed to provision user (bearer path):", err);
         return {
           user: null,
-          reason: isDbUnavailableError(err) ? "db-unreachable" : "provision-failed",
+          reason: isDbUnreachable(err) ? "db-unreachable" : "provision-failed",
         };
       }
     } catch (err) {
@@ -125,7 +126,7 @@ export async function getAuthUserFromRequestWithReason(
     console.error("Failed to provision user (cookie path):", err);
     return {
       user: null,
-      reason: isDbUnavailableError(err) ? "db-unreachable" : "provision-failed",
+      reason: isDbUnreachable(err) ? "db-unreachable" : "provision-failed",
     };
   }
 }
@@ -215,12 +216,3 @@ function getRequestOrigin(request: NextRequest): string | null {
   }
 }
 
-function isDbUnavailableError(err: unknown): boolean {
-  const e = err as { name?: string; message?: string };
-  const name = e?.name ?? "";
-  const message = e?.message ?? "";
-  return (
-    name === "PrismaClientInitializationError" ||
-    message.includes("Can't reach database server")
-  );
-}

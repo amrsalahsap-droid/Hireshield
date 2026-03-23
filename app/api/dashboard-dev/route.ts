@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDashboardJobsSummary } from "@/lib/server/dashboard";
+import { dbErrorResponse } from "@/lib/server/db-error";
 
 // Development-only endpoint to bypass authentication for testing
 export async function GET(request: NextRequest) {
@@ -22,9 +23,6 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error("GET /api/dashboard-dev error:", error);
-    return NextResponse.json(
-      { error: "Failed to load dashboard data" },
-      { status: 500 }
-    );
+    return dbErrorResponse(error, "Failed to load dashboard data");
   }
 }

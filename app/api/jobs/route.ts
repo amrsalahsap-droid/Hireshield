@@ -3,6 +3,7 @@ import { withOrgContext } from "@/lib/server/org-context";
 import { prisma } from "@/lib/prisma";
 import { getJobCandidateCountsForJobs } from "@/lib/server/job-candidate-count";
 import { assertMaxLen, assertNonEmpty, assertLengthBounds, isGuardViolation, formatGuardError } from "@/lib/guards";
+import { dbErrorResponse } from "@/lib/server/db-error";
 
 // GET /api/jobs - List jobs for the organization
 export const GET = withOrgContext(async (request: NextRequest, orgId: string) => {
@@ -52,10 +53,7 @@ export const GET = withOrgContext(async (request: NextRequest, orgId: string) =>
     });
   } catch (error) {
     console.error("Error fetching jobs:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch jobs" },
-      { status: 500 }
-    );
+    return dbErrorResponse(error, "Failed to fetch jobs");
   }
 });
 
@@ -114,9 +112,6 @@ export const POST = withOrgContext(async (request: NextRequest, orgId: string) =
     return NextResponse.json({ job: result }, { status: 201 });
   } catch (error) {
     console.error("Job creation failed:", error);
-    return NextResponse.json(
-      { error: "Failed to create job" },
-      { status: 500 }
-    );
+    return dbErrorResponse(error, "Failed to create job");
   }
 });

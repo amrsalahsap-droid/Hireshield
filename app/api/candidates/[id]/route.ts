@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withOrgContext } from "@/lib/server/org-context";
 import { prisma } from "@/lib/prisma";
+import { normalizeEmail, normalizePhone, normalizeProfileUrl } from "@/lib/candidate-profile";
 
 // GET /api/candidates/[id] - Get candidate details
 export const GET = withOrgContext(async (request: NextRequest, orgId: string, { params }: { params: { id: string } }) => {
@@ -43,7 +44,7 @@ export const PATCH = withOrgContext(async (request: NextRequest, orgId: string, 
   try {
     const { id } = params;
     const body = await request.json();
-    const { fullName, email, rawCVText } = body;
+    const { fullName, email, phone, profileUrl, rawCVText } = body;
 
     if (!id) {
       return NextResponse.json(
@@ -52,7 +53,6 @@ export const PATCH = withOrgContext(async (request: NextRequest, orgId: string, 
       );
     }
 
-    // Check if candidate exists and belongs to the organization
     const existingCandidate = await prisma.candidate.findFirst({
       where: { id, orgId },
     });
@@ -64,8 +64,7 @@ export const PATCH = withOrgContext(async (request: NextRequest, orgId: string, 
       );
     }
 
-    // Validation for updates
-    const updateData: any = {};
+    const updateData: Record<string, unknown> = {};
 
     if (fullName !== undefined) {
       if (typeof fullName !== "string" || fullName.trim().length === 0) {
@@ -84,21 +83,62 @@ export const PATCH = withOrgContext(async (request: NextRequest, orgId: string, 
     }
 
     if (email !== undefined) {
-      if (email === null) {
-        // Allow setting email to null
+      if (email === null || email === "") {
         updateData.email = null;
       } else if (typeof email !== "string") {
         return NextResponse.json(
           { error: "Email must be a string or null" },
           { status: 400 }
         );
-      } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      } else {
+        const norm = normalizeEmail(email);
+        if (norm && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(norm)) {
+          return NextResponse.json(
+            { error: "Email must be a valid email address" },
+            { status: 400 }
+          );
+        }
+        updateData.email = norm || null;
+      }
+    }
+
+    if (phone !== undefined) {
+      if (phone === null || phone === "") {
+        updateData.phone = null;
+      } else if (typeof phone !== "string") {
         return NextResponse.json(
-          { error: "Email must be a valid email address" },
+          { error: "Phone must be a string or null" },
           { status: 400 }
         );
       } else {
-        updateData.email = email;
+        const norm = normalizePhone(phone);
+        if (norm && norm.length > 40) {
+          return NextResponse.json(
+            { error: "Phone is too long" },
+            { status: 400 }
+          );
+        }
+        updateData.phone = norm || null;
+      }
+    }
+
+    if (profileUrl !== undefined) {
+      if (profileUrl === null || profileUrl === "") {
+        updateData.profileUrl = null;
+      } else if (typeof profileUrl !== "string") {
+        return NextResponse.json(
+          { error: "Profile URL must be a string or null" },
+          { status: 400 }
+        );
+      } else {
+        const norm = normalizeProfileUrl(profileUrl);
+        if (norm.length > 2048) {
+          return NextResponse.json(
+            { error: "Profile URL is too long" },
+            { status: 400 }
+          );
+        }
+        updateData.profileUrl = norm || null;
       }
     }
 
@@ -118,7 +158,6 @@ export const PATCH = withOrgContext(async (request: NextRequest, orgId: string, 
       updateData.rawCVText = rawCVText;
     }
 
-    // Ensure there's something to update
     if (Object.keys(updateData).length === 0) {
       return NextResponse.json(
         { error: "At least one field must be provided for update" },

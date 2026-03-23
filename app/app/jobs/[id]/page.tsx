@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
+import { toast } from "sonner";
 import { ErrorState, LoadingState } from "@/components/ui/ErrorState";
 import JDExtractionViewer from "@/components/jobs/jd-extraction-viewer";
 import { InterviewKitViewer } from "@/components/jobs/interview-kit-viewer";
@@ -108,6 +109,7 @@ export default function JobDetailsPage() {
   const [showEvaluationModal, setShowEvaluationModal] = useState(false);
   const [candidates, setCandidates] = useState<any[]>([]);
   const [selectedCandidate, setSelectedCandidate] = useState("");
+  const [selectedAssignmentId, setSelectedAssignmentId] = useState<string | null>(null);
   const [transcript, setTranscript] = useState("");
   const [isCreatingInterview, setIsCreatingInterview] = useState(false);
   const [isCreatingEvaluation, setIsCreatingEvaluation] = useState(false);
@@ -127,6 +129,25 @@ export default function JobDetailsPage() {
   });
   const [jobAssignments, setJobAssignments] = useState<JobAssignmentRow[]>([]);
   const [showAddCandidateModal, setShowAddCandidateModal] = useState(false);
+
+  const advanceAssignmentStage = useCallback(
+    async (assignmentId: string, newStage: string) => {
+      setJobAssignments((prev) =>
+        prev.map((a) => (a.id === assignmentId ? { ...a, stage: newStage } : a)),
+      );
+      try {
+        await fetch(`/api/jobs/${params.id}/candidates`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json", ...orgFetchHeaders() },
+          body: JSON.stringify({ assignmentId, stage: newStage }),
+        });
+      } catch {
+        // Optimistic local update already applied; a silent failure here is acceptable
+        // because the component will sync from props on next data fetch.
+      }
+    },
+    [params.id],
+  );
 
   // Fetch job details
   const fetchJob = async () => {
@@ -235,15 +256,15 @@ export default function JobDetailsPage() {
     [jobAssignments]
   );
 
-  const refreshAfterCandidateAssigned = async () => {
-    await Promise.all([
-      fetchJob(),
-      fetchJobAssignments(),
-      fetchInterviews(),
-      fetchEvaluations(),
-      fetchCandidates(),
-    ]);
-    router.refresh();
+  const handleCandidateAssigned = ({
+    assignment,
+  }: {
+    assignment: JobAssignmentRow;
+  }) => {
+    setJobAssignments((prev) => {
+      if (prev.some((a) => a.id === assignment.id)) return prev;
+      return [assignment, ...prev];
+    });
   };
 
   // Analyze JD function
@@ -559,27 +580,29 @@ export default function JobDetailsPage() {
       });
 
       if (response.ok) {
-        // Reset form and close modal
         setSelectedCandidate("");
         setTranscript("");
         setShowInterviewModal(false);
         setFormErrors({ candidate: "", transcript: "", evaluationCandidate: "" });
-        
-        // Refresh interviews list
+
+        if (selectedAssignmentId) {
+          await advanceAssignmentStage(selectedAssignmentId, "INTERVIEW_SCHEDULED");
+          setSelectedAssignmentId(null);
+        }
+
+        toast.success("Interview created successfully");
         await fetchInterviews();
       } else {
         const error = await response.json();
         console.error("Error creating interview:", error);
-        
-        // Handle validation errors from server
+        toast.error(error.error ?? "Failed to create interview");
+
         if (error.error && response.status === 400) {
-          // Parse error message to set appropriate field errors
           if (error.error.includes("candidate")) {
             setFormErrors(prev => ({ ...prev, candidate: error.error }));
           } else if (error.error.includes("transcript") || error.error.includes("characters")) {
             setFormErrors(prev => ({ ...prev, transcript: error.error }));
           } else {
-            // Generic error
             setFormErrors({ candidate: error.error, transcript: "", evaluationCandidate: "" });
           }
         }
@@ -634,19 +657,25 @@ export default function JobDetailsPage() {
       });
 
       if (response.ok) {
-        // Reset form and close modal
         setSelectedCandidate("");
         setShowEvaluationModal(false);
         setFormErrors({ candidate: "", transcript: "", evaluationCandidate: "" });
-        
-        // Refresh evaluations list
+
+        if (selectedAssignmentId) {
+          await advanceAssignmentStage(selectedAssignmentId, "EVALUATION_PENDING");
+          setSelectedAssignmentId(null);
+        }
+
+        toast.success("Evaluation created successfully");
         await fetchEvaluations();
       } else {
         const error = await response.json();
         console.error("Error creating evaluation:", error);
+        toast.error(error.error ?? "Failed to create evaluation");
       }
     } catch (error) {
       console.error("Error creating evaluation:", error);
+      toast.error("Network error creating evaluation");
     } finally {
       setIsCreatingEvaluation(false);
     }
@@ -1147,15 +1176,14 @@ export default function JobDetailsPage() {
             jobStatus={job.status}
             assignments={jobAssignments}
             onAddCandidate={() => canReceiveCandidates() && setShowAddCandidateModal(true)}
-            onRefresh={async () => {
-              await Promise.all([fetchJobAssignments(), fetchJob()]);
-            }}
-            onCreateInterview={(candidateId) => {
+            onCreateInterview={(candidateId, assignmentId) => {
               setSelectedCandidate(candidateId);
+              setSelectedAssignmentId(assignmentId);
               setShowInterviewModal(true);
             }}
-            onCreateEvaluation={(candidateId) => {
+            onCreateEvaluation={(candidateId, assignmentId) => {
               setSelectedCandidate(candidateId);
+              setSelectedAssignmentId(assignmentId);
               setShowEvaluationModal(true);
             }}
           />
@@ -1447,7 +1475,7 @@ export default function JobDetailsPage() {
           onClose={() => setShowAddCandidateModal(false)}
           jobId={job.id}
           assignedIds={assignedCandidateIds}
-          onAssigned={refreshAfterCandidateAssigned}
+          onAssigned={handleCandidateAssigned}
         />
       )}
 
