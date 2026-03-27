@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAuthUserFromRequest } from "@/lib/server/auth-request";
+import { randomUUID } from "crypto";
 
 /**
  * Resolves organization ID from request context
@@ -15,42 +16,58 @@ import { getAuthUserFromRequest } from "@/lib/server/auth-request";
  * @throws Error if orgId cannot be resolved (unless in dev stub mode)
  */
 export async function getOrgId(request: NextRequest): Promise<string> {
+  console.log("[DEBUG] getOrgId called");
+  
   // 1. Prefer authenticated user's org to avoid cross-org mismatches
   // caused by stale hardcoded x-org-id headers on client pages.
   const authUser = await getAuthUserFromRequest(request);
+  console.log("[DEBUG] authUser:", authUser?.orgId);
   if (authUser?.orgId) {
     return authUser.orgId;
   }
 
   // 2. Fallback to x-org-id header (legacy/manual override)
   const orgIdHeader = request.headers.get("x-org-id");
+  console.log("[DEBUG] x-org-id header:", orgIdHeader);
   if (orgIdHeader) {
     return orgIdHeader;
   }
 
   // 3. Development: no session/header — pick a stable org for local API use
   if (process.env.NODE_ENV !== "production") {
-    const fromEnv = process.env.DEV_DEFAULT_ORG_ID?.trim();
+    const fromEnv = process.env.NEXT_PUBLIC_ORG_ID?.trim();
+    console.log("[DEBUG] NEXT_PUBLIC_ORG_ID from env:", fromEnv);
     if (fromEnv) {
-      const envOrg = await prisma.org.findUnique({ where: { id: fromEnv } });
-      if (envOrg) {
-        console.log("Using DEV_DEFAULT_ORG_ID for development:", envOrg.id);
-        return envOrg.id;
+      try {
+        const envOrg = await prisma.org.findUnique({ where: { id: fromEnv } });
+        console.log("[DEBUG] Found env org:", envOrg?.id);
+        if (envOrg) {
+          console.log("Using NEXT_PUBLIC_ORG_ID for development:", envOrg.id);
+          return envOrg.id;
+        }
+      } catch (e) {
+        console.error("[DEBUG] Error finding env org:", e);
       }
     }
 
-    let defaultOrg = await prisma.org.findFirst({
-      where: { name: "Demo Workspace" },
-    });
-    if (!defaultOrg) {
-      defaultOrg = await prisma.org.findFirst({
-        orderBy: { createdAt: "asc" },
+    try {
+      let defaultOrg = await prisma.org.findFirst({
+        where: { name: "Demo Workspace" },
       });
-    }
+      console.log("[DEBUG] Demo Workspace org:", defaultOrg?.id);
+      if (!defaultOrg) {
+        defaultOrg = await prisma.org.findFirst({
+          orderBy: { createdAt: "asc" },
+        });
+        console.log("[DEBUG] First org found:", defaultOrg?.id);
+      }
 
-    if (defaultOrg) {
-      console.log("Using default org for development:", defaultOrg.id);
-      return defaultOrg.id;
+      if (defaultOrg) {
+        console.log("Using default org for development:", defaultOrg.id);
+        return defaultOrg.id;
+      }
+    } catch (e) {
+      console.error("[DEBUG] Error finding default org:", e);
     }
   }
 
@@ -66,11 +83,39 @@ export function withOrgContext<T extends unknown[]>(
   handler: (request: NextRequest, orgId: string, ...args: T) => Promise<Response>
 ) {
   return async (request: NextRequest, ...args: T): Promise<Response> => {
+    const requestId = randomUUID();
+    const routePath = new URL(request.url).pathname;
+    const routeStart = performance.now();
+    console.log(`[PERF] ${requestId} ${request.method} ${routePath} ROUTE_START 0.00ms`);
+    
     try {
+      const orgContextStart = performance.now();
+      console.log(`[PERF] ${requestId} ${request.method} ${routePath} ORG_CONTEXT_START ${(orgContextStart - routeStart).toFixed(2)}ms`);
+      
       const orgId = await getOrgId(request);
-      return await handler(request, orgId, ...args);
+      
+      const orgContextDone = performance.now();
+      console.log(`[PERF] ${requestId} ${request.method} ${routePath} ORG_CONTEXT_DONE ${(orgContextDone - routeStart).toFixed(2)}ms`);
+      
+      // Add requestId to request headers for route handlers to use
+      const requestWithId = new Request(request, {
+        headers: {
+          ...Object.fromEntries(request.headers.entries()),
+          'x-request-id': requestId
+        }
+      }) as NextRequest;
+      
+      const response = await handler(requestWithId, orgId, ...args);
+      
+      const routeEnd = performance.now();
+      console.log(`[PERF] ${requestId} ${request.method} ${routePath} ROUTE_DONE ${(routeEnd - routeStart).toFixed(2)}ms`);
+      
+      return response;
     } catch (error) {
       if (error instanceof Error && error.message.includes("Organization context required")) {
+        const routeEnd = performance.now();
+        console.log(`[PERF] ${requestId} ${request.method} ${routePath} ROUTE_DONE ${(routeEnd - routeStart).toFixed(2)}ms`);
+        
         return new Response(
           JSON.stringify({ 
             error: "Organization context required",
@@ -85,6 +130,10 @@ export function withOrgContext<T extends unknown[]>(
 
       const message = error instanceof Error ? error.message : String(error);
       console.error("[withOrgContext]", error);
+      
+      const routeEnd = performance.now();
+      console.log(`[PERF] ${requestId} ${request.method} ${routePath} ROUTE_DONE ${(routeEnd - routeStart).toFixed(2)}ms`);
+      
       return NextResponse.json(
         {
           error: "Service unavailable",

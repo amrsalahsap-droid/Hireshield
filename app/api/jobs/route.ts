@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getJobCandidateCountsForJobs } from "@/lib/server/job-candidate-count";
 import { assertMaxLen, assertNonEmpty, assertLengthBounds, isGuardViolation, formatGuardError } from "@/lib/guards";
 import { dbErrorResponse } from "@/lib/server/db-error";
+import cache from "@/lib/cache/simple-cache";
 
 // GET /api/jobs - List jobs for the organization
 export const GET = withOrgContext(async (request: NextRequest, orgId: string) => {
@@ -13,6 +14,18 @@ export const GET = withOrgContext(async (request: NextRequest, orgId: string) =>
     const status = searchParams.get("status");
     const limit = parseInt(searchParams.get("limit") || "20");
     const offset = parseInt(searchParams.get("offset") || "0");
+
+    // Create cache key
+    const cacheKey = `jobs:${orgId}:${status || 'all'}:${limit}:${offset}`;
+    
+    // Try to get from cache first
+    const cached = cache.get(cacheKey);
+    if (cached) {
+      console.log(`[CACHE] Jobs cache hit for ${cacheKey}`);
+      return NextResponse.json(cached);
+    }
+    
+    console.log(`[CACHE] Jobs cache miss for ${cacheKey}, fetching from database`);
 
     const where: any = { orgId };
     if (status) {
@@ -42,7 +55,7 @@ export const GET = withOrgContext(async (request: NextRequest, orgId: string) =>
       _count: { jobCandidates: counts[j.id] ?? 0 },
     }));
 
-    return NextResponse.json({
+    const response = {
       jobs: jobsWithCounts,
       pagination: {
         total,
@@ -50,7 +63,13 @@ export const GET = withOrgContext(async (request: NextRequest, orgId: string) =>
         offset,
         hasMore: offset + limit < total,
       },
-    });
+    };
+    
+    // Cache the response for 30 seconds
+    cache.set(cacheKey, response, 30000);
+    console.log(`[CACHE] Jobs cached for ${cacheKey} (30s TTL)`);
+    
+    return NextResponse.json(response);
   } catch (error) {
     console.error("Error fetching jobs:", error);
     return dbErrorResponse(error, "Failed to fetch jobs");
@@ -90,6 +109,7 @@ export const POST = withOrgContext(async (request: NextRequest, orgId: string) =
     // Create job with skills in a transaction
     const result = await prisma.$transaction(async (tx) => {
       // Create the job first
+      console.log("Creating job with orgId:", orgId);
       const job = await tx.job.create({
         data: {
           title: title.trim(),

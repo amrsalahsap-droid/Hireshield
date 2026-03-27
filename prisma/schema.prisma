@@ -7,54 +7,145 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User {
-  id             String      @id @default(cuid())
-  clerkUserId    String      @unique
-  email          String
-  name           String?
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
-  orgMemberships OrgMember[]
+model audit_logs {
+  id           String   @id
+  orgId        String
+  actorUserId  String
+  action       String
+  entityType   String
+  entityId     String
+  createdAt    DateTime @default(now())
+  metadataJson Json?
 
-  @@map("users")
+  @@index([actorUserId])
+  @@index([createdAt])
+  @@index([entityType, entityId])
+  @@index([orgId])
 }
 
-model Org {
-  id                String       @id @default(cuid())
-  name              String
-  createdAt         DateTime     @default(now())
-  updatedAt         DateTime     @updatedAt
-  jdAnalysisCount   Int          @default(0)
-  interviewKitCount Int          @default(0)
-  candidates        Candidate[]
-  evaluations       Evaluation[]
-  interviews        Interview[]
-  jobs              Job[]
-  members           OrgMember[]
+model candidates {
+  id             String           @id
+  email          String?
+  orgId          String
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime
+  fullName       String
+  rawCVText      String           @default("")
+  phone          String?
+  profileUrl     String?
+  orgs           orgs             @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  evaluations    evaluations[]
+  interviews     interviews[]
+  job_candidates job_candidates[]
 
-  @@map("orgs")
+  @@index([orgId, createdAt])
+  @@index([orgId, fullName])
+  @@index([orgId])
 }
 
-model OrgMember {
-  id        String   @id @default(cuid())
-  orgId     String
-  userId    String
-  role      Role     @default(MEMBER)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  org       Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+model evaluations {
+  id                    String               @id
+  orgId                 String
+  jobId                 String
+  candidateId           String
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime
+  finalScoreJson        Json?
+  signalsJson           Json?
+  rawModelOutputSnippet String?
+  signalsGeneratedAt    DateTime?
+  signalsPromptVersion  String?
+  status                EvaluationStatus     @default(PENDING)
+  completedAt           DateTime?
+  riskLevel             EvaluationRiskLevel?
+  candidates            candidates           @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  jobs                  jobs                 @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  orgs                  orgs                 @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
-  @@unique([orgId, userId])
-  @@map("org_members")
+  @@unique([orgId, jobId, candidateId])
+  @@index([candidateId])
+  @@index([jobId])
+  @@index([orgId])
+  @@index([orgId, jobId, candidateId])
+  @@index([orgId, jobId, status])
+  @@index([orgId, riskLevel, completedAt])
+  @@index([orgId, status, completedAt])
 }
 
-model Job {
-  id                        String             @id @default(cuid())
+model interviews {
+  id              String                  @id
+  orgId           String
+  jobId           String
+  candidateId     String
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime
+  transcriptText  String                  @default("")
+  type            InterviewType           @default(SCREENING)
+  status          InterviewStatus         @default(SCHEDULED)
+  scheduledAt     DateTime?
+  durationMinutes Int                     @default(45)
+  interviewers    String                  @default("")
+  locationOrLink  String                  @default("")
+  notes           String                  @default("")
+  outcomeResult   InterviewOutcomeResult?
+  outcomeSummary  String                  @default("")
+  strengths       String[]                @default([])
+  concerns        String[]                @default([])
+  candidates      candidates              @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  jobs            jobs                    @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  orgs            orgs                    @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([candidateId])
+  @@index([jobId, candidateId, status])
+  @@index([jobId])
+  @@index([orgId])
+  @@index([orgId, scheduledAt])
+  @@index([orgId, status, scheduledAt])
+}
+
+model job_candidates {
+  id          String           @id
+  jobId       String
+  candidateId String
+  stage       CandidateStage   @default(ADDED)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime
+  source      AssignmentSource @default(MANUAL)
+  addedBy     String?
+  notes       String?
+  candidates  candidates       @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  jobs        jobs             @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, candidateId])
+  @@index([candidateId])
+  @@index([candidateId, jobId])
+  @@index([jobId])
+  @@index([jobId, stage, createdAt])
+  @@index([jobId, stage])
+}
+
+model job_skills {
+  id              String          @id
+  jobId           String
+  skillId         String
+  experienceLevel ExperienceLevel
+  requirementType RequirementType
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime
+  jobs            jobs            @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  skills          skills          @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, skillId])
+  @@index([jobId])
+  @@index([skillId])
+}
+
+model jobs {
+  id                        String             @id
   title                     String
   orgId                     String
   createdAt                 DateTime           @default(now())
-  updatedAt                 DateTime           @updatedAt
+  updatedAt                 DateTime
   rawJD                     String             @default("")
   status                    JobStatus          @default(DRAFT)
   jdAnalyzedAt              DateTime?
@@ -73,144 +164,64 @@ model Job {
   location                  String?
   numberOfOpenings          Int?
   seniorityLevel            String?
-  evaluations               Evaluation[]
-  interviews                Interview[]
-  jobCandidates             JobCandidate[]
-  skills                    JobSkill[]
-  org                       Org                @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  evaluations               evaluations[]
+  interviews                interviews[]
+  job_candidates            job_candidates[]
+  job_skills                job_skills[]
+  orgs                      orgs               @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
-  @@index([orgId])
   @@index([jdAnalyzedAt])
-  @@map("jobs")
-}
-
-model Candidate {
-  id          String         @id @default(cuid())
-  email       String?
-  phone       String?
-  profileUrl  String?
-  orgId       String
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
-  fullName    String
-  rawCVText   String         @default("")
-  org         Org            @relation(fields: [orgId], references: [id], onDelete: Cascade)
-  evaluations Evaluation[]
-  interviews  Interview[]
-  jobCandidates JobCandidate[]
-
+  @@index([orgId, createdAt])
   @@index([orgId])
-  @@map("candidates")
+  @@index([orgId, jdAnalysisStatus])
+  @@index([orgId, status, createdAt])
+  @@index([orgId, status])
+  @@index([orgId, updatedAt])
 }
 
-model JobCandidate {
-  id          String           @id @default(cuid())
-  jobId       String
-  candidateId String
-  stage       CandidateStage   @default(ADDED)
-  source      AssignmentSource @default(MANUAL)
-  addedBy     String?
-  notes       String?
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
-  job         Job              @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  candidate   Candidate        @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+model org_members {
+  id        String   @id
+  orgId     String
+  userId    String
+  role      Role     @default(MEMBER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime
+  orgs      orgs     @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  users     users    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@unique([jobId, candidateId])
-  @@index([jobId])
-  @@index([candidateId])
-  @@index([jobId, stage])
-  @@map("job_candidates")
+  @@unique([orgId, userId])
 }
 
-model Interview {
-  id             String    @id @default(cuid())
-  orgId          String
-  jobId          String
-  candidateId    String
-  createdAt      DateTime  @default(now())
-  updatedAt      DateTime  @updatedAt
-  transcriptText String    @default("")
-  candidate      Candidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
-  job            Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  org            Org       @relation(fields: [orgId], references: [id], onDelete: Cascade)
-
-  @@index([orgId])
-  @@index([jobId])
-  @@index([candidateId])
-  @@map("interviews")
+model orgs {
+  id                String        @id
+  name              String
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime
+  jdAnalysisCount   Int           @default(0)
+  interviewKitCount Int           @default(0)
+  candidates        candidates[]
+  evaluations       evaluations[]
+  interviews        interviews[]
+  jobs              jobs[]
+  org_members       org_members[]
 }
 
-model Evaluation {
-  id                    String               @id @default(cuid())
-  orgId                 String
-  jobId                 String
-  candidateId           String
-  createdAt             DateTime             @default(now())
-  updatedAt             DateTime             @updatedAt
-  finalScoreJson        Json?
-  signalsJson           Json?
-  rawModelOutputSnippet String?
-  signalsGeneratedAt    DateTime?
-  signalsPromptVersion  String?
-  status                EvaluationStatus     @default(PENDING)
-  completedAt           DateTime?
-  riskLevel             EvaluationRiskLevel?
-  candidate             Candidate            @relation(fields: [candidateId], references: [id], onDelete: Cascade)
-  job                   Job                  @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  org                   Org                  @relation(fields: [orgId], references: [id], onDelete: Cascade)
-
-  @@unique([orgId, jobId, candidateId])
-  @@index([orgId])
-  @@index([orgId, status, completedAt])
-  @@index([orgId, riskLevel, completedAt])
-  @@index([jobId])
-  @@index([candidateId])
-  @@map("evaluations")
+model skills {
+  id         String       @id
+  name       String       @unique
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime
+  job_skills job_skills[]
 }
 
-model AuditLog {
-  id           String   @id @default(cuid())
-  orgId        String
-  actorUserId  String
-  action       String
-  entityType   String
-  entityId     String
-  createdAt    DateTime @default(now())
-  metadataJson Json?
-
-  @@index([orgId])
-  @@index([actorUserId])
-  @@index([entityType, entityId])
-  @@index([createdAt])
-  @@map("audit_logs")
-}
-
-model Skill {
-  id        String     @id @default(cuid())
-  name      String     @unique
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-  jobSkills JobSkill[]
-
-  @@map("skills")
-}
-
-model JobSkill {
-  id              String          @id @default(cuid())
-  jobId           String
-  skillId         String
-  experienceLevel ExperienceLevel
-  requirementType RequirementType
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
-  job             Job             @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  skill           Skill           @relation(fields: [skillId], references: [id], onDelete: Cascade)
-
-  @@unique([jobId, skillId])
-  @@index([jobId])
-  @@index([skillId])
-  @@map("job_skills")
+model users {
+  id          String        @id
+  clerkUserId String        @unique
+  email       String
+  name        String?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime
+  org_members org_members[]
 }
 
 enum AssignmentSource {
@@ -230,23 +241,22 @@ enum CandidateStage {
   DECISION_MADE
 }
 
-enum Role {
-  OWNER
-  MEMBER
+enum EvaluationRiskLevel {
+  LOW
+  MEDIUM
+  HIGH
 }
 
-enum JobStatus {
-  DRAFT
-  ACTIVE
-  ARCHIVED
+enum EvaluationStatus {
+  PENDING
+  COMPLETED
 }
 
-enum JDAnalysisStatus {
-  NOT_STARTED
-  RUNNING
-  DONE
-  FAILED
-  OUTDATED
+enum ExperienceLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+  EXPERT
 }
 
 enum InterviewKitStatus {
@@ -257,25 +267,51 @@ enum InterviewKitStatus {
   OUTDATED
 }
 
-enum EvaluationStatus {
-  PENDING
+enum InterviewOutcomeResult {
+  STRONG_YES
+  YES
+  MIXED
+  NO
+  STRONG_NO
+}
+
+enum InterviewStatus {
+  SCHEDULED
   COMPLETED
+  CANCELLED
+  NO_SHOW
 }
 
-enum EvaluationRiskLevel {
-  LOW
-  MEDIUM
-  HIGH
+enum InterviewType {
+  SCREENING
+  TECHNICAL
+  MANAGERIAL
+  HR
+  FINAL
+  CULTURE_FIT
+  CUSTOM
 }
 
-enum ExperienceLevel {
-  BEGINNER
-  INTERMEDIATE
-  ADVANCED
-  EXPERT
+enum JDAnalysisStatus {
+  NOT_STARTED
+  RUNNING
+  DONE
+  FAILED
+  OUTDATED
+}
+
+enum JobStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
 }
 
 enum RequirementType {
   REQUIRED
   OPTIONAL
+}
+
+enum Role {
+  OWNER
+  MEMBER
 }
