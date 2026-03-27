@@ -39,11 +39,7 @@ export default function EvaluationDetailsPage() {
   // Fetch evaluation details
   const fetchEvaluation = async () => {
     try {
-      const response = await fetch(`/api/evaluations/${params.id}`, {
-        headers: {
-          "x-org-id": "cmm87bloy0000v9nvvzyt6aqn" // Demo org ID
-        }
-      });
+      const response = await fetch(`/api/evaluations/${params.id}`);
       
       if (response.ok) {
         const data = await response.json();
@@ -79,8 +75,7 @@ export default function EvaluationDetailsPage() {
       const response = await fetch(`/api/evaluations/${evaluation.id}/generate-signals`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'x-org-id': 'cmm87bloy0000v9nvvzyt6aqn'
+          'Content-Type': 'application/json'
         }
       });
       

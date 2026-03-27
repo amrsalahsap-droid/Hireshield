@@ -82,11 +82,7 @@ export default function JobDetailsPage() {
   // Fetch job details
   const fetchJob = async () => {
     try {
-      const response = await fetch(`/api/jobs/${params.id}`, {
-        headers: {
-          "x-org-id": "cmmk1zo40000212ymhwgz0di8" // Demo org ID
-        }
-      });
+      const response = await fetch(`/api/jobs/${params.id}`);
       
       if (response.ok) {
         const data = await response.json();
@@ -105,11 +101,7 @@ export default function JobDetailsPage() {
   // Fetch interviews for this job
   const fetchInterviews = async () => {
     try {
-      const response = await fetch(`/api/interviews?jobId=${params.id}`, {
-        headers: {
-          "x-org-id": "cmmk1zo40000212ymhwgz0di8"
-        }
-      });
+      const response = await fetch(`/api/interviews?jobId=${params.id}`);
       
       if (response.ok) {
         const data = await response.json();
@@ -125,11 +117,7 @@ export default function JobDetailsPage() {
   // Fetch evaluations for this job
   const fetchEvaluations = async () => {
     try {
-      const response = await fetch(`/api/evaluations?jobId=${params.id}`, {
-        headers: {
-          "x-org-id": "cmmk1zo40000212ymhwgz0di8"
-        }
-      });
+      const response = await fetch(`/api/evaluations?jobId=${params.id}`);
       
       if (response.ok) {
         const data = await response.json();
@@ -145,11 +133,7 @@ export default function JobDetailsPage() {
   // Fetch candidates for interview creation
   const fetchCandidates = async () => {
     try {
-      const response = await fetch("/api/candidates", {
-        headers: {
-          "x-org-id": "cmmk1zo40000212ymhwgz0di8"
-        }
-      });
+      const response = await fetch("/api/candidates");
       
       if (response.ok) {
         const data = await response.json();
@@ -174,8 +158,7 @@ export default function JobDetailsPage() {
       const response = await fetch(`/api/jobs/${job.id}/analyze-jd`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'x-org-id': 'cmmk1zo40000212ymhwgz0di8'
+          'Content-Type': 'application/json'
         }
       });
       
@@ -209,8 +192,7 @@ export default function JobDetailsPage() {
       const response = await fetch(`/api/jobs/${job.id}/analyze-jd?force=1`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'x-org-id': 'cmmk1zo40000212ymhwgz0di8'
+          'Content-Type': 'application/json'
         }
       });
       
@@ -248,8 +230,7 @@ export default function JobDetailsPage() {
       const response = await fetch(url, {
         method: 'PUT',
         headers: {
-          'Content-Type': 'application/json',
-          'x-org-id': 'cmmk1zo40000212ymhwgz0di8'
+          'Content-Type': 'application/json'
         }
       });
       
@@ -281,8 +262,7 @@ export default function JobDetailsPage() {
       const response = await fetch(`/api/jobs/${job.id}`, {
         method: 'PATCH',
         headers: {
-          'Content-Type': 'application/json',
-          'x-org-id': 'cmmk1zo40000212ymhwgz0di8'
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
           status: newStatus
@@ -380,8 +360,7 @@ export default function JobDetailsPage() {
       const response = await fetch("/api/interviews", {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
-          "x-org-id": "cmmk1zo40000212ymhwgz0di8"
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({
           jobId: params.id,
@@ -456,8 +435,7 @@ export default function JobDetailsPage() {
       const response = await fetch("/api/evaluations", {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
-          "x-org-id": "cmmk1zo40000212ymhwgz0di8"
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({
           jobId: params.id,

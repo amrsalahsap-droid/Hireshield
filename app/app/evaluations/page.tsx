@@ -42,10 +42,9 @@ export default function EvaluationsPage() {
   const fetchEvaluations = async () => {
     try {
       setError(null);
-      const headers = { "x-org-id": "cmm87bloy0000v9nvvzyt6aqn" };
       const [allResponse, recentResponse] = await Promise.all([
-        fetch("/api/evaluations", { headers }),
-        fetch("/api/evaluations?recentCompleted=1", { headers }),
+        fetch("/api/evaluations"),
+        fetch("/api/evaluations?recentCompleted=1"),
       ]);
 
       if (!allResponse.ok || !recentResponse.ok) {

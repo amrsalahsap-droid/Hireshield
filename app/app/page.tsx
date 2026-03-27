@@ -333,9 +333,7 @@ export default function AppPage() {
               headers: {},
             }),
             fetch(`/api/activity-dev?page=${activityPage}&pageSize=${activityPageSize}`, {
-              headers: {
-                "x-org-id": "cmmk1zo40000212ymhwgz0di8",
-              },
+              headers: {},
             })
           ]);
 
@@ -404,8 +402,7 @@ export default function AppPage() {
           }),
           fetch(`/api/activity?page=${activityPage}&pageSize=${activityPageSize}`, {
             headers: {
-              Authorization: `Bearer ${token}`,
-              "x-org-id": "cmmk1zo40000212ymhwgz0di8",
+              Authorization: `Bearer ${token}`
             },
           })
         ]);
@@ -467,9 +464,7 @@ export default function AppPage() {
       setActivityLoading(true);
       try {
         const res = await fetch(`/api/activity-dev?page=${page}&pageSize=${pageSize}`, {
-          headers: {
-            "x-org-id": "cmmk1zo40000212ymhwgz0di8",
-          },
+          headers: {},
         });
         if (res.ok) {
           const data = await res.json();
@@ -497,9 +492,7 @@ export default function AppPage() {
           headers: process.env.NODE_ENV === "development" ? {} : { Authorization: `Bearer ${token}` },
         }),
         fetch(`/api/activity-dev?page=${activityPage}&pageSize=${activityPageSize}`, {
-          headers: {
-            "x-org-id": "cmmk1zo40000212ymhwgz0di8",
-          },
+          headers: {},
         })
       ]);
       

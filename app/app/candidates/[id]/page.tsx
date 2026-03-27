@@ -50,11 +50,7 @@ export default function CandidateDetailsPage() {
   // Fetch candidate details
   const fetchCandidate = async () => {
     try {
-      const response = await fetch(`/api/candidates/${params.id}`, {
-        headers: {
-          "x-org-id": "cmm87bloy0000v9nvvzyt6aqn" // Demo org ID
-        }
-      });
+      const response = await fetch(`/api/candidates/${params.id}`);
       
       if (response.ok) {
         const data = await response.json();
@@ -73,11 +69,7 @@ export default function CandidateDetailsPage() {
   // Fetch interviews for this candidate
   const fetchInterviews = async () => {
     try {
-      const response = await fetch(`/api/interviews?candidateId=${params.id}`, {
-        headers: {
-          "x-org-id": "cmm87bloy0000v9nvvzyt6aqn"
-        }
-      });
+      const response = await fetch(`/api/interviews?candidateId=${params.id}`);
       
       if (response.ok) {
         const data = await response.json();
@@ -93,11 +85,7 @@ export default function CandidateDetailsPage() {
   // Fetch evaluations for this candidate
   const fetchEvaluations = async () => {
     try {
-      const response = await fetch(`/api/evaluations?candidateId=${params.id}`, {
-        headers: {
-          "x-org-id": "cmm87bloy0000v9nvvzyt6aqn"
-        }
-      });
+      const response = await fetch(`/api/evaluations?candidateId=${params.id}`);
       
       if (response.ok) {
         const data = await response.json();

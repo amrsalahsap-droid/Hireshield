@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { GenerateJDButton } from "@/components/app/generate-jd-button";
 import { SkillsTagInput } from "@/components/app/skills-tag-input";
 import { Spinner } from "@/components/ui/spinner";
+import { useOrg } from "@/lib/hooks/use-org";
 
 interface Job {
   id: string;
@@ -238,11 +239,7 @@ export default function JobsPage() {
       params.append('sortBy', sortField);
       params.append('sortDirection', sortDirection);
       
-      const response = await fetch(`/api/jobs?${params.toString()}`, {
-        headers: {
-          "x-org-id": "cmmk1zo40000212ymhwgz0di8" // Demo org ID
-        }
-      });
+      const response = await fetch(`/api/jobs?${params.toString()}`);
       
       if (response.ok) {
         const data = await response.json();
@@ -368,8 +365,7 @@ export default function JobsPage() {
       const response = await fetch("/api/jobs", {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
-          "x-org-id": "cmmk1zo40000212ymhwgz0di8" // Demo org ID
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({
           title: formData.title.trim(),
@@ -507,8 +503,7 @@ export default function JobsPage() {
       const response = await fetch(`/api/jobs/${editingJob.id}`, {
         method: "PUT",
         headers: {
-          "Content-Type": "application/json",
-          "x-org-id": "cmmk1zo40000212ymhwgz0di8" // Demo org ID
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({
           title: formData.title.trim(),
@@ -593,8 +588,7 @@ export default function JobsPage() {
       const response = await fetch(`/api/jobs/${jobToDelete.id}`, {
         method: "DELETE",
         headers: {
-          "Content-Type": "application/json",
-          "x-org-id": "cmmk1zo40000212ymhwgz0di8" // Demo org ID
+          "Content-Type": "application/json"
         }
       });
 
@@ -643,8 +637,7 @@ export default function JobsPage() {
       const response = await fetch(`/api/jobs/${job.id}/duplicate`, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
-          "x-org-id": "cmmk1zo40000212ymhwgz0di8" // Demo org ID
+          "Content-Type": "application/json"
         }
       });
 
@@ -688,8 +681,7 @@ export default function JobsPage() {
       const response = await fetch(`/api/jobs/${job.id}`, {
         method: "PATCH",
         headers: {
-          "Content-Type": "application/json",
-          "x-org-id": "cmmk1zo40000212ymhwgz0di8" // Demo org ID
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({
           status: "ACTIVE"
@@ -735,8 +727,7 @@ export default function JobsPage() {
       const response = await fetch(`/api/jobs/${job.id}`, {
         method: "PATCH",
         headers: {
-          "Content-Type": "application/json",
-          "x-org-id": "cmmk1zo40000212ymhwgz0di8" // Demo org ID
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({
           status: "ARCHIVED"
@@ -1149,19 +1140,6 @@ export default function JobsPage() {
     </div>
   );
 
-  // Error state
-  if (error) {
-    return (
-      <ErrorState
-        title="Unable to Load Jobs"
-        message={error}
-        onRetry={fetchJobs}
-        onBack={() => window.location.href = "/app"}
-        backText="Back to Dashboard"
-      />
-    );
-  }
-
   // Success message (toast notification)
   useEffect(() => {
     if (success) {
@@ -1454,7 +1432,20 @@ export default function JobsPage() {
     </div>
   );
 
-  // Loading state
+  // Error state - check before rendering
+  if (error) {
+    return (
+      <ErrorState
+        title="Unable to Load Jobs"
+        message={error}
+        onRetry={fetchJobs}
+        onBack={() => window.location.href = "/app"}
+        backText="Back to Dashboard"
+      />
+    );
+  }
+
+  // Loading state - check before rendering
   if (loading) {
     return <SkeletonTable />;
   }
@@ -1463,149 +1454,28 @@ export default function JobsPage() {
     <div>
       <div className="mb-8">
         <div className="flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <span className="text-3xl">💼</span>
-            <div>
-              <h1 className="text-2xl font-bold text-foreground font-display">Jobs</h1>
-              <p className="text-muted-foreground font-body">
-                Manage your job postings and track applicant progress.
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="relative">
-              <input
-                type="text"
-                placeholder="Search jobs..."
-                className="w-64 pl-10 pr-4 py-2 border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <svg className="h-4 w-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
-              </div>
-            </div>
-            <div className="relative">
-              <button
-                type="button"
-                className="flex items-center gap-2 px-4 py-2 border border-border rounded-lg text-sm bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                onClick={() => setShowFilters(!showFilters)}
-              >
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.707A1 1 0 013 7V4z" />
-                </svg>
-                Filters
-                {(filters.status || filters.department || filters.hiringManager || filters.createdAfter || filters.createdBefore) && (
-                  <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
-                )}
-              </button>
-              
-              {/* Create Job Button */}
-              <Button
-                onClick={() => setShowCreateModal(true)}
-                className="bg-blue-600 hover:bg-blue-700 text-white border-blue-600"
-              >
-                Create Job
-              </Button>
-              
-              {/* Filter Dropdown */}
-              {showFilters && (
-                <div className="absolute right-0 mt-2 w-80 bg-white border border-border rounded-lg shadow-lg z-50 p-4">
-                  <h3 className="text-sm font-medium text-gray-900 mb-4">Filter Jobs</h3>
-                  
-                  {/* Status Filter */}
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
-                    <select
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      value={filters.status}
-                      onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
-                    >
-                      <option value="">All Statuses</option>
-                      <option value="DRAFT">Draft</option>
-                      <option value="ACTIVE">Active</option>
-                      <option value="ARCHIVED">Archived</option>
-                    </select>
-                  </div>
-                  
-                  {/* Department Filter */}
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Department</label>
-                    <input
-                      type="text"
-                      placeholder="Enter department..."
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      value={filters.department}
-                      onChange={(e) => setFilters(prev => ({ ...prev, department: e.target.value }))}
-                    />
-                  </div>
-                  
-                  {/* Hiring Manager Filter */}
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Hiring Manager</label>
-                    <input
-                      type="text"
-                      placeholder="Enter hiring manager..."
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      value={filters.hiringManager}
-                      onChange={(e) => setFilters(prev => ({ ...prev, hiringManager: e.target.value }))}
-                    />
-                  </div>
-                  
-                  {/* Creation Date Filters */}
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Created After</label>
-                    <input
-                      type="date"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      value={filters.createdAfter}
-                      onChange={(e) => setFilters(prev => ({ ...prev, createdAfter: e.target.value }))}
-                    />
-                  </div>
-                  
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Created Before</label>
-                    <input
-                      type="date"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      value={filters.createdBefore}
-                      onChange={(e) => setFilters(prev => ({ ...prev, createdBefore: e.target.value }))}
-                    />
-                  </div>
-                  
-                  {/* Filter Actions */}
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      className="flex-1 px-3 py-2 bg-gray-200 text-gray-800 rounded-md text-sm hover:bg-gray-300"
-                      onClick={() => setFilters({
-                        status: "",
-                        department: "",
-                        hiringManager: "",
-                        createdAfter: "",
-                        createdBefore: ""
-                      })}
-                    >
-                      Clear Filters
-                    </button>
-                    <button
-                      type="button"
-                      className="flex-1 px-3 py-2 bg-blue-500 text-white rounded-md text-sm hover:bg-blue-600"
-                      onClick={() => setShowFilters(false)}
-                    >
-                      Apply
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-            <Button onClick={() => setShowCreateModal(true)}>
-              Create New Job
-            </Button>
-          </div>
+          <h1 className="text-2xl font-bold text-foreground font-display">Jobs</h1>
+          <button
+            onClick={() => setShowCreateModal(true)}
+            style={{
+              backgroundColor: '#2563eb',
+              color: 'white',
+              padding: '8px 16px',
+              borderRadius: '6px',
+              fontWeight: '500',
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: '14px'
+            }}
+            onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#1d4ed8'}
+            onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#2563eb'}
+          >
+            + Create New Job
+          </button>
         </div>
+        <p className="text-muted-foreground font-body">
+          Manage your job postings and track applicant progress.
+        </p>
       </div>
 
       {/* Empty State */}

@@ -33,11 +33,7 @@ export default function CandidatesPage() {
   const fetchCandidates = async () => {
     try {
       setError(null);
-      const response = await fetch("/api/candidates", {
-        headers: {
-          "x-org-id": "cmmk1zo40000212ymhwgz0di8" // Demo org ID
-        }
-      });
+      const response = await fetch("/api/candidates");
       
       if (response.ok) {
         const data = await response.json();
@@ -103,8 +99,7 @@ export default function CandidatesPage() {
       const response = await fetch("/api/candidates", {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
-          "x-org-id": "cmmk1zo40000212ymhwgz0di8" // Demo org ID
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({
           fullName: formData.fullName.trim(),
